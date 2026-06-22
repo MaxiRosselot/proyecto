@@ -34,7 +34,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["googleapis", "jszip"]
+  external_node_modules = ["googleapis"]
 
 [[headers]]
   for = "/*"

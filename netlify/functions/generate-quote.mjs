@@ -1,11 +1,13 @@
 // netlify/functions/generate-quote.mjs
 // Porta la lógica de server.py: lee cotizacion.xlsx, rellena celdas, devuelve xlsx
 import { readFileSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { join } from 'path'
 import JSZip from 'jszip'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+// En Netlify Functions (Lambda), el bundle y los archivos incluidos
+// quedan en /var/task/. Cuando esbuild compila ESM → CJS, import.meta.url
+// queda undefined, por eso usamos LAMBDA_TASK_ROOT o /var/task como fallback.
+const FUNCTIONS_DIR = process.env.LAMBDA_TASK_ROOT || '/var/task'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,7 +72,7 @@ function num(obj, key) {
 // ── Generación del xlsx ───────────────────────────────────────────────────────
 
 async function generateXlsx(data) {
-  const baseBytes = readFileSync(join(__dirname, 'cotizacion.xlsx'))
+  const baseBytes = readFileSync(join(FUNCTIONS_DIR, 'cotizacion.xlsx'))
   const zip = await JSZip.loadAsync(baseBytes)
   let sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string')
 
