@@ -171,6 +171,16 @@
 
     <script>
       document.getElementById('year').textContent = new Date().getFullYear()
+      // En /admin, ocultar el shell estático y el container del agendador
+      if (window.location.pathname.startsWith('/admin')) {
+        document.querySelector('.container').style.display = 'none'
+        document.body.style.background = 'none'
+        document.body.style.backgroundImage = 'none'
+        // Mover el root fuera del container para que ocupe toda la pantalla
+        var root = document.getElementById('root')
+        document.body.appendChild(root)
+        root.style.display = 'block'
+      }
     </script>
 
     <!-- Netlify Forms (respaldo) -->
