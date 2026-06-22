@@ -175,7 +175,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           btoa(String.fromCharCode(...new Uint8Array(buf)))
         )
         const nombreInicial = (cliente.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
-        const pdfFileName = 'Cot' + cotNum + ' - Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
+        const pdfFileName = 'Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
         const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
           method: 'POST',
           body: JSON.stringify({ pdfBase64, fileName: pdfFileName, cotNum }),
