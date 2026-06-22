@@ -50,35 +50,47 @@ export async function handler(event) {
     if (SHEET_ID) {
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!A:Q`,
+        range: `${SHEET_NAME}!A:T`,
       }).catch(() => ({ data: { values: [] } }))
       const rows = res.data.values || []
       rows.slice(1).forEach(r => {
         const evId = r[12]
         if (evId) sheetData[evId] = {
+          subtotalRepisas:    parseFloat(r[8])  || 0,
+          subtotalAdicionales:parseFloat(r[9])  || 0,
           total:              parseFloat(r[10]) || 0,
           estado:             r[14] || '',
           motivoCancelacion:  r[15] || '',
           pago:               r[16] || 'Pendiente',
+          ajusteMonto:        parseFloat(r[17]) || 0,
+          ajusteNota:         r[18] || '',
+          adicionalesJSON:    r[19] || '',
         }
       })
     }
 
     const installations = (list.data.items || []).map(ev => {
       const sd = sheetData[ev.id] || {}
+      let adicionales = {}
+      if (sd.adicionalesJSON) { try { adicionales = JSON.parse(sd.adicionalesJSON) } catch {} }
       return {
-        id:                ev.id,
-        nombre:            ev.extendedProperties?.shared?.cliente || ev.summary?.match(/Instalación — (.+?) \(/)?.[1] || '',
-        cotNum:            ev.extendedProperties?.shared?.cot_num || '',
-        email:             ev.attendees?.[0]?.email || '',
-        summary:           ev.summary || '',
-        start:             ev.start?.dateTime || ev.start?.date || '',
-        end:               ev.end?.dateTime   || ev.end?.date   || '',
-        link:              ev.htmlLink || '',
-        total:             sd.total || 0,
-        estado:            sd.estado || '',
-        motivoCancelacion: sd.motivoCancelacion || '',
-        pago:              sd.pago || 'Pendiente',
+        id:                 ev.id,
+        nombre:             ev.extendedProperties?.shared?.cliente || ev.summary?.match(/Instalación — (.+?) \(/)?.[1] || '',
+        cotNum:             ev.extendedProperties?.shared?.cot_num || '',
+        email:              ev.attendees?.[0]?.email || '',
+        summary:            ev.summary || '',
+        start:              ev.start?.dateTime || ev.start?.date || '',
+        end:                ev.end?.dateTime   || ev.end?.date   || '',
+        link:               ev.htmlLink || '',
+        subtotalRepisas:    sd.subtotalRepisas || 0,
+        subtotalAdicionales:sd.subtotalAdicionales || 0,
+        total:              sd.total || 0,
+        estado:             sd.estado || '',
+        motivoCancelacion:  sd.motivoCancelacion || '',
+        pago:               sd.pago || 'Pendiente',
+        ajusteMonto:        sd.ajusteMonto || 0,
+        ajusteNota:         sd.ajusteNota || '',
+        adicionales,
       }
     })
 

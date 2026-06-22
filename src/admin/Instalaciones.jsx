@@ -41,12 +41,6 @@ function sameDay(d1, d2) {
 }
 const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb']
 
-function PagoBadge({ pago }) {
-  const map = { Pendiente: C.red, Parcial: C.yellow, Pagado: C.green }
-  const color = map[pago] || C.red
-  return <span style={{ padding:'2px 8px', borderRadius:99, fontSize:10, fontWeight:700, background:color+'18', color, border:'1px solid '+color+'30' }}>{pago || 'Pendiente'}</span>
-}
-
 // ── CalendarioSemanal ─────────────────────────────────────────────────────────
 function CalendarioSemanal({ installations, onClickInst }) {
   const [weekRef, setWeekRef] = useState(() => new Date())
@@ -124,9 +118,7 @@ function CalendarioSemanal({ installations, onClickInst }) {
 
 // ── Modal gestionar (reagendar + cancelar) ────────────────────────────────────
 function ModalGestionar({ inst, onClose, onSaved }) {
-  const [tab, setTab]               = useState('reagendar') // 'reagendar' | 'cancelar' | 'pago'
-  const [pago, setPago]             = useState(inst.pago || 'Pendiente')
-  const [savingPago, setSavingPago] = useState(false)
+  const [tab, setTab]               = useState('reagendar') // 'reagendar' | 'cancelar'
   const [fecha, setFecha]           = useState(isoToLocalDate(inst.start))
   const [horaInicio, setHoraInicio] = useState(isoToLocalTime(inst.start))
   const [horaFin, setHoraFin]       = useState(isoToLocalTime(inst.end))
@@ -137,18 +129,6 @@ function ModalGestionar({ inst, onClose, onSaved }) {
   function handleInicioChange(v) {
     setHoraInicio(v)
     setHoraFin(addHours(v, 3))
-  }
-
-  async function handlePago(nuevoPago) {
-    setSavingPago(true)
-    try {
-      const data = await apiFetch('/.netlify/functions/update-installation-payment', {
-        method: 'POST',
-        body: JSON.stringify({ eventId: inst.id, pago: nuevoPago }),
-      })
-      if (data.ok) { setPago(nuevoPago); onSaved() }
-    } catch (e) { console.error(e) }
-    finally { setSavingPago(false) }
   }
 
   async function handleReagendar() {
@@ -197,9 +177,6 @@ function ModalGestionar({ inst, onClose, onSaved }) {
           <button onClick={() => setTab('reagendar')} style={{ ...styles.tab, ...(tab==='reagendar' ? styles.tabActive : {}), fontSize:12 }}>
             Reagendar
           </button>
-          <button onClick={() => setTab('pago')} style={{ ...styles.tab, fontSize:12, ...(tab==='pago' ? styles.tabActive : {}) }}>
-            Pago
-          </button>
           <button onClick={() => setTab('cancelar')} style={{
             ...styles.tab, fontSize:12,
             ...(tab==='cancelar' ? { background:C.red, color:'white', borderColor:C.red } : {}),
@@ -234,38 +211,6 @@ function ModalGestionar({ inst, onClose, onSaved }) {
               </button>
               <button onClick={onClose} style={styles.btnSecondary}>Volver</button>
             </div>
-          </>
-        )}
-
-        {tab === 'pago' && (
-          <>
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:12, color:C.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Estado de pago</div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {['Pendiente','Parcial','Pagado'].map(op => {
-                  const colors = { Pendiente: C.red, Parcial: C.yellow, Pagado: C.green }
-                  const active = pago === op
-                  return (
-                    <button key={op} onClick={() => handlePago(op)} disabled={savingPago || active}
-                      style={{
-                        padding:'10px 20px', borderRadius:9, fontSize:13, fontWeight:700, cursor: active ? 'default' : 'pointer',
-                        border:'2px solid '+(active ? colors[op] : C.border),
-                        background: active ? colors[op]+'18' : C.surface,
-                        color: active ? colors[op] : C.textSub,
-                        opacity: savingPago ? .5 : 1, transition:'all .15s',
-                      }}>
-                      {op}
-                    </button>
-                  )
-                })}
-              </div>
-              {inst.total > 0 && (
-                <div style={{ marginTop:14, padding:'10px 14px', background:C.orangeLight, borderRadius:8, fontSize:13, fontWeight:600, color:C.orangeDark }}>
-                  Total: ${Number(inst.total).toLocaleString('es-CL')}
-                </div>
-              )}
-            </div>
-            <button onClick={onClose} style={{ ...styles.btnSecondary, width:'100%' }}>Cerrar</button>
           </>
         )}
 
@@ -390,7 +335,7 @@ export default function InstalacionesSection() {
       )}
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
-        <h2 style={styles.sectionTitle}>Instalaciones</h2>
+        <h2 style={styles.sectionTitle}>Agenda</h2>
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={() => setView('calendar')} style={{ ...styles.tab, ...(view==='calendar' ? styles.tabActive : {}) }}>Calendario</button>
           <button onClick={() => setView('list')}     style={{ ...styles.tab, ...(view==='list'     ? styles.tabActive : {}) }}>Lista</button>
@@ -518,10 +463,7 @@ export default function InstalacionesSection() {
                       <div key={i.id} style={{ ...styles.card, borderLeft:'3px solid '+C.orange }}>
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, flexWrap:'wrap' }}>
                           <div>
-                            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3 }}>
-                              <span style={{ fontWeight:700, fontSize:14, color:C.text }}>{i.nombre}</span>
-                              <PagoBadge pago={i.pago} />
-                            </div>
+                            <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{i.nombre}</div>
                             <div style={{ fontSize:13, color:C.textSub }}>{fmtDateLocal(i.start)}</div>
                             <div style={{ fontSize:13, color:C.textMuted }}>{fmtTime(i.start)} – {fmtTime(i.end)}{i.total > 0 ? ' · $' + Number(i.total).toLocaleString('es-CL') : ''}</div>
                           </div>
