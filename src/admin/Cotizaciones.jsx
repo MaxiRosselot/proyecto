@@ -435,7 +435,3 @@ export default function CotizacionesSection() {
     </div>
   )
 }
-iv>
-    </div>
-  )
-}
