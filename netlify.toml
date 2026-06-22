@@ -36,6 +36,9 @@
   node_bundler = "esbuild"
   external_node_modules = ["googleapis"]
 
+[functions.generate-quote]
+  included_files = ["netlify/functions/cotizacion.xlsx"]
+
 [[headers]]
   for = "/*"
   [headers.values]
