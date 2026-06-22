@@ -22,14 +22,15 @@ function StatusBtn({ current, target, label, onClick, loading }) {
 }
 
 export default function VisitasSection({ statuses, onStatusChange, navigateTo, onVisitsLoaded }) {
-  const [visits, setVisits]     = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState('')
-  const [tab, setTab]           = useState('por-realizar')
-  const [updating, setUpdating] = useState(null)
-  const [expanded, setExpanded] = useState(null)
-  const [sortAsc, setSortAsc]   = useState(false)
+  const [visits, setVisits]       = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
+  const [tab, setTab]             = useState('por-realizar')
+  const [updating, setUpdating]   = useState(null)
+  const [expanded, setExpanded]   = useState(null)
+  const [sortAsc, setSortAsc]     = useState(false)
   const [cotFechas, setCotFechas] = useState(new Set())
+  const [buscar, setBuscar]       = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -85,8 +86,9 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const realizadas  = visits.filter(v => new Date(v.start) < now  && statuses[v.id] !== 'cancelada').sort(sortFn)
   const canceladas  = visits.filter(v => statuses[v.id] === 'cancelada').sort(sortFn)
 
+  const q = buscar.trim().toLowerCase()
   const listMap = { 'por-realizar': porRealizar, realizadas, canceladas }
-  const list = listMap[tab] || []
+  const list = (listMap[tab] || []).filter(v => !q || (v.nombre || '').toLowerCase().includes(q))
 
   const TABS = [
     { key: 'por-realizar', label: 'Por realizar', count: porRealizar.length },
@@ -98,7 +100,9 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={styles.sectionTitle}>Visitas</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
+            style={{ ...styles.input, width: 180, padding: '7px 12px', fontSize: 13 }} />
           <button onClick={() => setSortAsc(v => !v)} style={{ ...styles.btnSecondary, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg>
             {sortAsc ? 'Mas antiguas' : 'Mas nuevas'}
@@ -122,7 +126,9 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
       {loading && <div style={styles.empty}>Cargando visitas...</div>}
       {error   && <div style={styles.errorBox}>{error}</div>}
-      {!loading && !error && list.length === 0 && <div style={styles.empty}>No hay visitas en esta seccion.</div>}
+      {!loading && !error && list.length === 0 && (
+        <div style={styles.empty}>{buscar ? 'Sin resultados para "' + buscar + '".' : 'No hay visitas en esta seccion.'}</div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {list.map(visit => {

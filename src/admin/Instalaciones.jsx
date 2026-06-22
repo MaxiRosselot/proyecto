@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { C, apiFetch, styles } from './utils.js'
 
-// ── helpers ──────────────────────────────────────────────────────────────────
 function fmtDateLocal(iso) {
   if (!iso) return ''
   try { return new Intl.DateTimeFormat('es-CL', { weekday:'long', day:'2-digit', month:'long', year:'numeric', timeZone:'America/Santiago' }).format(new Date(iso)) }
@@ -39,9 +38,8 @@ function getWeekDays(refDate) {
 function sameDay(d1, d2) {
   return d1.getFullYear()===d2.getFullYear() && d1.getMonth()===d2.getMonth() && d1.getDate()===d2.getDate()
 }
-const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb']
+const DIAS = ['Lun','Mar','Mie','Jue','Vie','Sab']
 
-// ── CalendarioSemanal ─────────────────────────────────────────────────────────
 function CalendarioSemanal({ installations, onClickInst }) {
   const [weekRef, setWeekRef] = useState(() => new Date())
   const days = getWeekDays(weekRef)
@@ -51,7 +49,7 @@ function CalendarioSemanal({ installations, onClickInst }) {
 
   const fmtWeekRange = () => {
     const opts = { day:'numeric', month:'short' }
-    return days[0].toLocaleDateString('es-CL',opts) + ' – ' + days[5].toLocaleDateString('es-CL',opts)
+    return days[0].toLocaleDateString('es-CL',opts) + ' - ' + days[5].toLocaleDateString('es-CL',opts)
   }
 
   return (
@@ -59,9 +57,9 @@ function CalendarioSemanal({ installations, onClickInst }) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
         <div style={styles.cardLabel}>Calendario de instalaciones</div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <button onClick={prev} style={{ ...styles.btnSecondary, padding:'5px 10px', fontSize:13 }}>‹</button>
+          <button onClick={prev} style={{ ...styles.btnSecondary, padding:'5px 10px', fontSize:13 }}>&#8249;</button>
           <span style={{ fontSize:13, fontWeight:600, color:C.textSub, minWidth:150, textAlign:'center' }}>{fmtWeekRange()}</span>
-          <button onClick={next} style={{ ...styles.btnSecondary, padding:'5px 10px', fontSize:13 }}>›</button>
+          <button onClick={next} style={{ ...styles.btnSecondary, padding:'5px 10px', fontSize:13 }}>&#8250;</button>
           <button onClick={() => setWeekRef(new Date())} style={{ ...styles.btnSecondary, fontSize:11, padding:'5px 10px' }}>Hoy</button>
         </div>
       </div>
@@ -93,7 +91,7 @@ function CalendarioSemanal({ installations, onClickInst }) {
               border: '1.5px solid ' + (sameDay(d,new Date()) ? C.orange+'40' : C.border),
             }}>
               {dayInstalls.length === 0
-                ? <div style={{ fontSize:10, color:C.textMuted, textAlign:'center', paddingTop:20 }}>—</div>
+                ? <div style={{ fontSize:10, color:C.textMuted, textAlign:'center', paddingTop:20 }}>-</div>
                 : dayInstalls.map((inst, j) => (
                   <div key={j} onClick={() => onClickInst(inst)}
                     style={{
@@ -103,7 +101,7 @@ function CalendarioSemanal({ installations, onClickInst }) {
                       cursor:'pointer', lineHeight:1.3,
                     }}>
                     <div style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{inst.nombre}</div>
-                    <div style={{ opacity:.85, fontWeight:400 }}>{fmtTime(inst.start)}–{fmtTime(inst.end)}</div>
+                    <div style={{ opacity:.85, fontWeight:400 }}>{fmtTime(inst.start)}-{fmtTime(inst.end)}</div>
                   </div>
                 ))
               }
@@ -111,14 +109,13 @@ function CalendarioSemanal({ installations, onClickInst }) {
           )
         })}
       </div>
-      <div style={{ fontSize:11, color:C.textMuted, marginTop:10 }}>Haz clic en una instalación para reagendar o cancelar.</div>
+      <div style={{ fontSize:11, color:C.textMuted, marginTop:10 }}>Haz clic en una instalacion para reagendar o cancelar.</div>
     </div>
   )
 }
 
-// ── Modal gestionar (reagendar + cancelar) ────────────────────────────────────
 function ModalGestionar({ inst, onClose, onSaved }) {
-  const [tab, setTab]               = useState('reagendar') // 'reagendar' | 'cancelar'
+  const [tab, setTab]               = useState('reagendar')
   const [fecha, setFecha]           = useState(isoToLocalDate(inst.start))
   const [horaInicio, setHoraInicio] = useState(isoToLocalTime(inst.start))
   const [horaFin, setHoraFin]       = useState(isoToLocalTime(inst.end))
@@ -167,69 +164,67 @@ function ModalGestionar({ inst, onClose, onSaved }) {
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
       <div style={{ ...styles.card, width:'100%', maxWidth:420, boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-          <div style={{ fontWeight:800, fontSize:15, color:C.text }}>Gestionar instalación</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:C.textMuted, fontSize:20, lineHeight:1 }}>×</button>
+          <div style={{ fontWeight:800, fontSize:15, color:C.text }}>Gestionar instalacion</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:C.textMuted, fontSize:20, lineHeight:1 }}>x</button>
         </div>
         <div style={{ fontSize:13, color:C.textSub, marginBottom:16, fontWeight:600 }}>{inst.nombre}</div>
 
-        {/* Tabs */}
         <div style={{ display:'flex', gap:8, marginBottom:18 }}>
           <button onClick={() => setTab('reagendar')} style={{ ...styles.tab, ...(tab==='reagendar' ? styles.tabActive : {}), fontSize:12 }}>
             Reagendar
           </button>
-          <button onClick={() => setTab('cancelar')} style={{
-            ...styles.tab, fontSize:12,
-            ...(tab==='cancelar' ? { background:C.red, color:'white', borderColor:C.red } : {}),
-          }}>
-            Cancelar instalación
+          <button onClick={() => setTab('cancelar')}
+            style={{ ...styles.tab, ...(tab==='cancelar' ? { ...styles.tabActive, background:C.red, borderColor:C.red } : {}), fontSize:12 }}>
+            Cancelar instalacion
           </button>
         </div>
 
         {tab === 'reagendar' && (
           <>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:14 }}>
-              <div style={{ gridColumn:'1/-1' }}>
+              <div>
                 <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Fecha</label>
                 <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-                  style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+                  style={{ ...styles.input, fontSize:13, padding:'7px 8px' }} />
               </div>
               <div>
                 <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Inicio</label>
                 <input type="time" value={horaInicio} onChange={e => handleInicioChange(e.target.value)}
-                  style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+                  style={{ ...styles.input, fontSize:13, padding:'7px 8px' }} />
               </div>
               <div>
                 <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Fin</label>
                 <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)}
-                  style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+                  style={{ ...styles.input, fontSize:13, padding:'7px 8px' }} />
               </div>
             </div>
             {err && <div style={{ ...styles.errorBox, marginBottom:12 }}>{err}</div>}
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={handleReagendar} disabled={saving} style={{ ...styles.btnPrimary, flex:1, padding:'11px', fontSize:13 }}>
-                {saving ? 'Guardando...' : 'Reagendar en Calendar'}
+              <button onClick={handleReagendar} disabled={saving}
+                style={{ ...styles.btnPrimary, flex:1, padding:'11px', fontSize:13 }}>
+                {saving ? 'Guardando...' : 'Confirmar reagendamiento'}
               </button>
-              <button onClick={onClose} style={styles.btnSecondary}>Volver</button>
+              <button onClick={onClose} style={styles.btnSecondary}>Cancelar</button>
             </div>
           </>
         )}
 
         {tab === 'cancelar' && (
           <>
-            <div style={{ background:C.red+'0A', border:'1px solid '+C.red+'30', borderRadius:10, padding:14, marginBottom:14 }}>
-              <div style={{ fontSize:13, color:C.red, fontWeight:600, marginBottom:10 }}>
-                Esta acción eliminará el evento de Google Calendar y notificará al cliente por email.
-              </div>
+            <div style={{ background:'#FEE2E2', border:'1px solid #FECACA', borderRadius:10, padding:'12px 14px', fontSize:13, color:'#B91C1C', marginBottom:14 }}>
+              Esta accion eliminara el evento de Google Calendar y notificara al cliente por email.
+            </div>
+            <div style={{ marginBottom:14 }}>
               <label style={{ ...styles.detailLabel, display:'block', marginBottom:6 }}>Motivo (opcional)</label>
               <input value={motivo} onChange={e => setMotivo(e.target.value)}
-                placeholder="Ej: cliente reprogramó, material no disponible..."
-                style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+                placeholder="Ej: cliente reprogramo, material no disponible..."
+                style={{ ...styles.input, fontSize:13 }} />
             </div>
             {err && <div style={{ ...styles.errorBox, marginBottom:12 }}>{err}</div>}
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={handleCancelar} disabled={saving}
                 style={{ ...styles.btnPrimary, flex:1, padding:'11px', fontSize:13, background:C.red, boxShadow:'none' }}>
-                {saving ? 'Cancelando...' : 'Confirmar cancelación'}
+                {saving ? 'Cancelando...' : 'Confirmar cancelacion'}
               </button>
               <button onClick={onClose} style={styles.btnSecondary}>Volver</button>
             </div>
@@ -240,7 +235,6 @@ function ModalGestionar({ inst, onClose, onSaved }) {
   )
 }
 
-// ── Sección principal ─────────────────────────────────────────────────────────
 export default function InstalacionesSection() {
   const [confirmedQuotes, setConfirmedQuotes] = useState([])
   const [selectedQuote, setSelectedQuote]     = useState(null)
@@ -256,6 +250,7 @@ export default function InstalacionesSection() {
   const [listError, setListError]             = useState('')
   const [gestionarInst, setGestionarInst]     = useState(null)
   const [view, setView]                       = useState('calendar')
+  const [buscar, setBuscar]                   = useState('')
 
   const loadInstallations = useCallback(async () => {
     setLoadingList(true); setListError('')
@@ -274,14 +269,11 @@ export default function InstalacionesSection() {
     loadInstallations()
   }, [loadInstallations])
 
-  // cotNums ya agendados (activos, no cancelados)
   const scheduledCotNums = new Set(
     installations.filter(i => i.estado !== 'Cancelada').map(i => String(i.cotNum)).filter(Boolean)
   )
 
-  // Cotizaciones confirmadas sin instalación aún
   const quotesDisponibles = confirmedQuotes.filter(q => !scheduledCotNums.has(String(q.cotNum)))
-  // Cotizaciones confirmadas con instalación
   const quotesAgendadas   = confirmedQuotes.filter(q =>  scheduledCotNums.has(String(q.cotNum)))
 
   function handleInicioChange(v) {
@@ -297,7 +289,7 @@ export default function InstalacionesSection() {
     const telefono  = selectedQuote?.telefono  || ''
     const direccion = selectedQuote?.direccion || ''
     const cotNum    = selectedQuote?.cotNum    || ''
-    if (!nombre) return setSubmitErr('Selecciona una cotización')
+    if (!nombre) return setSubmitErr('Selecciona una cotizacion')
     if (!fecha)  return setSubmitErr('Selecciona una fecha')
     if (horaFin <= horaInicio) return setSubmitErr('Hora fin debe ser posterior a hora inicio')
 
@@ -324,9 +316,11 @@ export default function InstalacionesSection() {
     finally { setSubmitting(false) }
   }
 
-  const upcoming = installations.filter(i => i.estado !== 'Cancelada' && (!i.end || new Date(i.end) >= new Date()))
-  const past     = installations.filter(i => i.estado !== 'Cancelada' && i.end && new Date(i.end) < new Date())
-  const cancelled = installations.filter(i => i.estado === 'Cancelada')
+  const bq = buscar.trim().toLowerCase()
+  const instFiltradas = installations.filter(i => !bq || (i.nombre || '').toLowerCase().includes(bq))
+  const upcoming  = instFiltradas.filter(i => i.estado !== 'Cancelada' && (!i.end || new Date(i.end) >= new Date()))
+  const past      = instFiltradas.filter(i => i.estado !== 'Cancelada' && i.end && new Date(i.end) < new Date())
+  const cancelled = instFiltradas.filter(i => i.estado === 'Cancelada')
 
   return (
     <div>
@@ -336,7 +330,11 @@ export default function InstalacionesSection() {
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <h2 style={styles.sectionTitle}>Agenda</h2>
-        <div style={{ display:'flex', gap:8 }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          {view === 'list' && (
+            <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
+              style={{ ...styles.input, width:180, padding:'7px 12px', fontSize:13 }} />
+          )}
           <button onClick={() => setView('calendar')} style={{ ...styles.tab, ...(view==='calendar' ? styles.tabActive : {}) }}>Calendario</button>
           <button onClick={() => setView('list')}     style={{ ...styles.tab, ...(view==='list'     ? styles.tabActive : {}) }}>Lista</button>
           <button onClick={loadInstallations} style={styles.btnSecondary}>Actualizar</button>
@@ -349,7 +347,7 @@ export default function InstalacionesSection() {
         </div>
       )}
 
-      {/* Formulario nueva instalación — solo cotizaciones disponibles */}
+      {/* Formulario nueva instalacion */}
       <div style={{ ...styles.card, marginBottom:20 }}>
         <div style={styles.cardLabel}>Agendar nueva instalacion</div>
 
@@ -369,7 +367,7 @@ export default function InstalacionesSection() {
                     background:selectedQuote?.cotNum===q.cotNum ? C.orangeLight : C.surface,
                     color:selectedQuote?.cotNum===q.cotNum ? C.orangeDark : C.textSub, transition:'all .15s',
                   }}>
-                  {q.nombre} N°{q.cotNum}
+                  {q.nombre} N{q.cotNum}
                 </button>
               ))}
             </div>
@@ -427,7 +425,7 @@ export default function InstalacionesSection() {
       {/* Cotizaciones ya agendadas */}
       {quotesAgendadas.length > 0 && (
         <div style={{ ...styles.card, marginBottom:20 }}>
-          <div style={styles.cardLabel}>Cotizaciones ya agendadas</div>
+          <div style={styles.cardLabel}>Cotizaciones ya agendadas ({quotesAgendadas.length})</div>
           <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:10 }}>
             {quotesAgendadas.map(q => {
               const inst = installations.find(i => String(i.cotNum) === String(q.cotNum) && i.estado !== 'Cancelada')
@@ -435,8 +433,8 @@ export default function InstalacionesSection() {
                 <div key={q.cotNum} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', padding:'10px 14px', background:C.bg, borderRadius:8, border:'1px solid '+C.border }}>
                   <div>
                     <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{q.nombre}</span>
-                    <span style={{ fontSize:12, color:C.textMuted, marginLeft:8 }}>N°{q.cotNum}</span>
-                    {inst && <div style={{ fontSize:12, color:C.textSub, marginTop:2 }}>{fmtDateLocal(inst.start)} · {fmtTime(inst.start)}–{fmtTime(inst.end)}</div>}
+                    <span style={{ fontSize:12, color:C.textMuted, marginLeft:8 }}>N{q.cotNum}</span>
+                    {inst && <div style={{ fontSize:12, color:C.textSub, marginTop:2 }}>{fmtDateLocal(inst.start)} - {fmtTime(inst.start)}-{fmtTime(inst.end)}</div>}
                   </div>
                   <span style={{ padding:'4px 10px', borderRadius:99, fontSize:11, fontWeight:700, background:C.orange+'18', color:C.orangeDark, border:'1px solid '+C.orange+'30' }}>
                     Agendada
@@ -465,7 +463,7 @@ export default function InstalacionesSection() {
                           <div>
                             <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{i.nombre}</div>
                             <div style={{ fontSize:13, color:C.textSub }}>{fmtDateLocal(i.start)}</div>
-                            <div style={{ fontSize:13, color:C.textMuted }}>{fmtTime(i.start)} – {fmtTime(i.end)}{i.total > 0 ? ' · $' + Number(i.total).toLocaleString('es-CL') : ''}</div>
+                            <div style={{ fontSize:13, color:C.textMuted }}>{fmtTime(i.start)} - {fmtTime(i.end)}{i.total > 0 ? ' - $' + Number(i.total).toLocaleString('es-CL') : ''}</div>
                           </div>
                           <button onClick={() => setGestionarInst(i)} style={{ ...styles.btnSecondary, fontSize:12, padding:'6px 14px' }}>Gestionar</button>
                         </div>
@@ -482,7 +480,7 @@ export default function InstalacionesSection() {
                       <div key={i.id} style={{ ...styles.card, opacity:.7, borderLeft:'3px solid #ddd' }}>
                         <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{i.nombre}</div>
                         <div style={{ fontSize:13, color:C.textSub }}>{fmtDateLocal(i.start)}</div>
-                        <div style={{ fontSize:13, color:C.textMuted }}>{fmtTime(i.start)} – {fmtTime(i.end)}</div>
+                        <div style={{ fontSize:13, color:C.textMuted }}>{fmtTime(i.start)} - {fmtTime(i.end)}</div>
                       </div>
                     ))}
                   </div>
@@ -503,7 +501,7 @@ export default function InstalacionesSection() {
                 </div>
               )}
               {upcoming.length === 0 && past.length === 0 && cancelled.length === 0 && (
-                <div style={styles.empty}>No hay instalaciones agendadas aun.</div>
+                <div style={styles.empty}>{buscar ? 'Sin resultados para "' + buscar + '".' : 'No hay instalaciones agendadas aun.'}</div>
               )}
             </>
           )}

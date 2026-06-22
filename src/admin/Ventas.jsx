@@ -24,21 +24,20 @@ function calcTotal(v) {
 }
 
 function VentaRow({ venta, onSaved }) {
-  const [open, setOpen]           = useState(false)
-  const [editing, setEditing]     = useState(false)
-  const [repisas, setRepisas]     = useState(venta.subtotalRepisas || 0)
-  const [ad, setAd]               = useState(venta.adicionales || {})
-  const [ajusteMonto, setAjuste]  = useState(venta.ajusteMonto || 0)
+  const [open, setOpen]             = useState(false)
+  const [editing, setEditing]       = useState(false)
+  const [repisas, setRepisas]       = useState(venta.subtotalRepisas || 0)
+  const [ad, setAd]                 = useState(venta.adicionales || {})
+  const [ajusteMonto, setAjuste]    = useState(venta.ajusteMonto || 0)
   const [ajusteNota, setAjusteNota] = useState(venta.ajusteNota || '')
   function pagoEfectivo(p) {
     if (p === 'Pagado') return 'Pagado'
-    // Si la instalación ya ocurrió y no está pagado → Atrasado
     const fin = venta.end || venta.fechaInstalacion
     if (fin && new Date(fin) < new Date() && p !== 'Pagado') return 'Atrasado'
     return p || 'Pendiente'
   }
-  const [pago, setPago]           = useState(pagoEfectivo(venta.pago || 'Pendiente'))
-  const [saving, setSaving]       = useState(false)
+  const [pago, setPago]   = useState(pagoEfectivo(venta.pago || 'Pendiente'))
+  const [saving, setSaving] = useState(false)
 
   const subtotalAd = AD_KEYS.reduce((s, {key}) => s + (Number(ad['qty_'+key]||0) * Number(ad['precio_'+key]||0)), 0)
   const total = Number(repisas) + subtotalAd + Number(ajusteMonto)
@@ -54,7 +53,6 @@ function VentaRow({ venta, onSaved }) {
           adicionales: ad,
           ajusteMonto: Number(ajusteMonto),
           ajusteNota,
-          // Atrasado es calculado, guardar el valor base
           pago: pago === 'Atrasado' ? 'Pendiente' : pago,
         }),
       })
@@ -66,7 +64,6 @@ function VentaRow({ venta, onSaved }) {
 
   return (
     <div style={{ ...styles.card, marginBottom:10, borderLeft:'3px solid '+(PAGO_COLORS[pago]||C.red) }}>
-      {/* Cabecera */}
       <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
         <div style={{ flex:1, cursor:'pointer' }} onClick={() => !editing && setOpen(o => !o)}>
           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:3 }}>
@@ -96,10 +93,8 @@ function VentaRow({ venta, onSaved }) {
         </div>
       </div>
 
-      {/* Desglose expandido */}
       {open && (
         <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid '+C.border }}>
-          {/* Repisas */}
           <div style={{ marginBottom:14 }}>
             <div style={styles.cardLabel}>Repisas</div>
             {editing ? (
@@ -110,12 +105,11 @@ function VentaRow({ venta, onSaved }) {
             )}
           </div>
 
-          {/* Adicionales */}
           <div style={{ marginBottom:14 }}>
             <div style={styles.cardLabel}>Adicionales</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:'6px 16px', alignItems:'center', fontSize:13 }}>
               {AD_KEYS.map(({key, label}) => {
-                const qty   = Number(ad['qty_'+key] || 0)
+                const qty    = Number(ad['qty_'+key] || 0)
                 const precio = Number(ad['precio_'+key] || 0)
                 if (!editing && qty === 0) return null
                 return (
@@ -149,9 +143,8 @@ function VentaRow({ venta, onSaved }) {
             </div>
           </div>
 
-          {/* Ajuste */}
           <div style={{ marginBottom:14 }}>
-            <div style={styles.cardLabel}>Ajuste post-instalación</div>
+            <div style={styles.cardLabel}>Ajuste post-instalacion</div>
             {editing ? (
               <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
                 <input type="number" value={ajusteMonto} onChange={e => setAjuste(e.target.value)}
@@ -173,19 +166,17 @@ function VentaRow({ venta, onSaved }) {
             )}
           </div>
 
-          {/* Total */}
           <div style={{ padding:'12px 16px', background:C.orangeLight, borderRadius:10, marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span style={{ fontWeight:700, fontSize:13, color:C.orangeDark }}>Total</span>
             <span style={{ fontWeight:800, fontSize:18, color:C.orangeDark }}>{fmt(total)}</span>
           </div>
 
-          {/* Pago */}
           <div style={{ marginBottom: editing ? 16 : 0 }}>
             <div style={styles.cardLabel}>Estado de pago</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {pagoEfectivo(pago) === 'Atrasado' && (
-                <div style={{ fontSize:12, color:'#7C3AED', fontWeight:700, marginBottom:8, padding:'6px 12px', background:'#EDE9FE', borderRadius:8 }}>
-                  ⚠ Atrasado — instalación realizada sin pago registrado
+                <div style={{ fontSize:12, color:'#7C3AED', fontWeight:700, marginBottom:8, padding:'6px 12px', background:'#EDE9FE', borderRadius:8, width:'100%' }}>
+                  Atrasado — instalacion realizada sin pago registrado
                 </div>
               )}
               {['Pendiente','Parcial','Pagado'].map(op => {
@@ -208,7 +199,6 @@ function VentaRow({ venta, onSaved }) {
             </div>
           </div>
 
-          {/* Botones guardar/cancelar */}
           {editing && (
             <div style={{ display:'flex', gap:8, marginTop:16 }}>
               <button onClick={handleSave} disabled={saving}
@@ -232,10 +222,11 @@ function VentaRow({ venta, onSaved }) {
 }
 
 export default function VentasSection() {
-  const [ventas, setVentas]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [year, setYear]       = useState(new Date().getFullYear())
+  const [ventas, setVentas]         = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [year, setYear]             = useState(new Date().getFullYear())
   const [filterPago, setFilterPago] = useState('all')
+  const [buscar, setBuscar]         = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -247,7 +238,6 @@ export default function VentasSection() {
 
       if (!instData.ok || !cotData.ok) return
 
-      // Cruzar instalaciones activas con cotizaciones confirmadas
       const cotMap = {}
       ;(cotData.quotes || []).filter(q => q.status === 'confirmada').forEach(q => {
         cotMap[String(q.cotNum)] = q
@@ -263,7 +253,6 @@ export default function VentasSection() {
             direccion:        cot.direccion || '',
             email:            cot.email || i.email,
             fechaInstalacion: i.start,
-            // Si Sheets ya tiene subtotalRepisas guardado, usarlo; si no, calcularlo desde cotización
             subtotalRepisas: i.subtotalRepisas || (() => {
               const reps = cot.repisas || []
               return reps.reduce((s, r) => s + (r.unidades||r.u||0)*(r.valor||r.v||0), 0)
@@ -285,10 +274,12 @@ export default function VentasSection() {
   const years = [...new Set(ventas.map(v => new Date(v.fechaInstalacion||v.start||'').getFullYear()).filter(Boolean))].sort((a,b)=>b-a)
   if (years.length > 0 && !years.includes(year)) setYear(years[0])
 
+  const bq = buscar.trim().toLowerCase()
   const byYear = ventas.filter(v => new Date(v.fechaInstalacion||v.start||'').getFullYear() === year)
-  const filtered = filterPago === 'all' ? byYear : byYear.filter(v => (v.pago||'Pendiente') === filterPago)
+  const filtered = (filterPago === 'all' ? byYear : byYear.filter(v => (v.pago||'Pendiente') === filterPago))
+    .filter(v => !bq || (v.nombre || '').toLowerCase().includes(bq))
 
-  const totalAnio     = byYear.reduce((s, v) => s + calcTotal(v), 0)
+  const totalAnio      = byYear.reduce((s, v) => s + calcTotal(v), 0)
   const totalCobrado   = byYear.filter(v => v.pago === 'Pagado').reduce((s, v) => s + calcTotal(v), 0)
   const totalPendiente = byYear.filter(v => v.pago !== 'Pagado').reduce((s, v) => s + calcTotal(v), 0)
 
@@ -296,7 +287,9 @@ export default function VentasSection() {
     <div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <h2 style={styles.sectionTitle}>Ventas</h2>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
+            style={{ ...styles.input, width:180, padding:'7px 12px', fontSize:13 }} />
           <select value={year} onChange={e => setYear(Number(e.target.value))}
             style={{ ...styles.input, width:'auto', padding:'7px 12px', fontSize:13 }}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -306,7 +299,6 @@ export default function VentasSection() {
         </div>
       </div>
 
-      {/* KPIs */}
       <div style={{ display:'flex', gap:12, marginBottom:20, flexWrap:'wrap' }}>
         <div style={{ ...styles.card, flex:1, minWidth:140 }}>
           <div style={styles.cardLabel}>Total {year}</div>
@@ -325,7 +317,6 @@ export default function VentasSection() {
         </div>
       </div>
 
-      {/* Filtro pago */}
       <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
         {[['all','Todas'],['Pendiente','Pendiente'],['Atrasado','Atrasado'],['Parcial','Parcial'],['Pagado','Pagado']].map(([k,l]) => (
           <button key={k} onClick={() => setFilterPago(k)}
@@ -336,7 +327,9 @@ export default function VentasSection() {
       </div>
 
       {loading && <div style={styles.empty}>Cargando ventas...</div>}
-      {!loading && filtered.length === 0 && <div style={styles.empty}>No hay ventas en este período.</div>}
+      {!loading && filtered.length === 0 && (
+        <div style={styles.empty}>{buscar ? 'Sin resultados para "' + buscar + '".' : 'No hay ventas en este periodo.'}</div>
+      )}
 
       {!loading && filtered.map(v => (
         <VentaRow key={(v.id || v.cotNum) + '-' + (v.pago||'Pendiente')} venta={v} onSaved={load} />
