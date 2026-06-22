@@ -75,6 +75,12 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   const [error, setError]           = useState('')
   const [editingNombre, setEditingNombre] = useState(null)
 
+  // Modo PDF
+  const [pdfReading, setPdfReading]   = useState(false)
+  const [pdfReadError, setPdfReadError] = useState('')
+  const [pdfOriginalB64, setPdfOriginalB64] = useState(null) // PDF original para subir a Drive
+  const fileInputRef = useRef(null)
+
   useEffect(() => {
     if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada) }
   }, [visitaSeleccionada])
@@ -93,7 +99,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
     setAdNombres({ retiro_orden:'Retiro y orden de articulos', retiro_basura:'Retiro de basura', cajas:'Cajas organizadoras', bici:'Soporte bicicleta / ski' })
     setAdicionales({ qty_retiro_orden:0, precio_retiro_orden:40000, qty_retiro_basura:0, precio_retiro_basura:30000, qty_cajas:0, precio_cajas:15000, qty_bici:0, precio_bici:20000 })
     setTotalInfo({ subtotal: 0, iva: 0, total: 0 }); setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
-    setSelectedVisit(null); saveState({})
+    setSelectedVisit(null); setPdfOriginalB64(null); setPdfReadError(''); saveState({})
   }
 
   function calcTotales() {
@@ -117,9 +123,63 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
   const cliente = mode === 'visita' ? (selectedVisit || {}) : manualCliente
 
+  // ── Leer PDF ────────────────────────────────────────────────────────────
+  async function handlePdfUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPdfReading(true); setPdfReadError(''); setPdfOriginalB64(null)
+    try {
+      const arrayBuf = await file.arrayBuffer()
+      const bytes = new Uint8Array(arrayBuf)
+      let binary = ''
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      const b64 = btoa(binary)
+      setPdfOriginalB64(b64)
+
+      const res = await apiFetch('/.netlify/functions/read-pdf-quote', {
+        method: 'POST',
+        body: JSON.stringify({ pdfBase64: b64 }),
+      })
+
+      if (!res.ok) throw new Error(res.error || 'Error al leer el PDF')
+
+      // Prellenar cliente
+      setManualCliente({
+        nombre:    res.nombre    || '',
+        email:     res.email     || '',
+        celular:   res.telefono  || '',
+        direccion: res.direccion || '',
+      })
+
+      // Prellenar repisas
+      if (res.repisas && res.repisas.length > 0) {
+        setRepisas(res.repisas.map((r, i) => ({ ...r, id: Date.now() + i })))
+      }
+
+      // Prellenar adicionales
+      if (res.adicionales) {
+        setAdicionales(prev => ({ ...prev, ...res.adicionales }))
+      }
+
+      // Si el PDF tenía N° de cotización, actualizar
+      if (res.cotNum) {
+        setCotNum(res.cotNum)
+        setCotNumStorage(res.cotNum)
+      }
+
+      // Cambiar a modo manual para editar los datos prellenados
+      setMode('pdf')
+    } catch (e) {
+      setPdfReadError('No se pudo leer el PDF: ' + e.message)
+    } finally {
+      setPdfReading(false)
+    }
+  }
+
+  // ── Generar PDF ─────────────────────────────────────────────────────────
   async function handleGenerar() {
     if (mode === 'visita' && !selectedVisit) return
-    if (mode === 'manual' && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
+    if ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
     setGenerating(true); setError(''); setPdfUrl(null); setAutoSaved(false)
 
     const t = calcTotales()
@@ -168,17 +228,17 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
       const next = cotNum + 1; setCotNum(next); setCotNumStorage(next)
 
-      // Subir PDF a Drive
+      // Si venía de PDF original, subir ese a Drive; si no, subir el recién generado
       let uploadedPdfUrl = ''
       try {
-        const pdfBase64 = fi.FileData || await blob.arrayBuffer().then(buf =>
+        const pdfBase64ToUpload = pdfOriginalB64 || (fi.FileData || await blob.arrayBuffer().then(buf =>
           btoa(String.fromCharCode(...new Uint8Array(buf)))
-        )
+        ))
         const nombreInicial = (cliente.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
         const pdfFileName = 'Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
         const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
           method: 'POST',
-          body: JSON.stringify({ pdfBase64, fileName: pdfFileName, cotNum }),
+          body: JSON.stringify({ pdfBase64: pdfBase64ToUpload, fileName: pdfFileName, cotNum }),
         })
         if (uploadRes.ok) uploadedPdfUrl = uploadRes.viewUrl || ''
       } catch (e) { console.warn('upload-pdf error:', e.message) }
@@ -218,9 +278,10 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Origen de la cotizacion</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
           <button onClick={() => setMode('visita')} style={{ ...styles.tab, ...(mode === 'visita' ? styles.tabActive : {}) }}>Desde visita</button>
           <button onClick={() => setMode('manual')} style={{ ...styles.tab, ...(mode === 'manual' ? styles.tabActive : {}) }}>Ingreso manual</button>
+          <button onClick={() => { setMode('pdf'); setPdfReadError('') }} style={{ ...styles.tab, ...(mode === 'pdf' ? styles.tabActive : {}) }}>Desde PDF</button>
         </div>
 
         {mode === 'visita' && (
@@ -238,8 +299,46 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
               </div>
         )}
 
-        {mode === 'manual' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {mode === 'pdf' && (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              style={{ display: 'none' }}
+              onChange={handlePdfUpload}
+            />
+            {!manualCliente.nombre ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 0' }}>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={pdfReading}
+                  style={{ ...styles.btnPrimary, padding: '12px 24px', fontSize: 14, opacity: pdfReading ? .6 : 1 }}
+                >
+                  {pdfReading ? 'Leyendo PDF...' : 'Seleccionar PDF de cotizacion'}
+                </button>
+                <span style={{ fontSize: 12, color: C.textMuted }}>Solo se lee la primera pagina</span>
+                {pdfReadError && <div style={{ ...styles.errorBox, marginTop: 0 }}>{pdfReadError}</div>}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>PDF leido correctamente</span>
+                  <span style={{ fontSize: 12, color: C.textMuted }}>— revisa y edita los datos abajo</span>
+                </div>
+                <button
+                  onClick={() => { fileInputRef.current?.click() }}
+                  style={{ ...styles.btnSecondary, fontSize: 12 }}
+                >
+                  Cambiar PDF
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(mode === 'manual' || mode === 'pdf') && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: mode === 'pdf' && manualCliente.nombre ? 14 : 0, paddingTop: mode === 'pdf' && manualCliente.nombre ? 14 : 0, borderTop: mode === 'pdf' && manualCliente.nombre ? '1px solid ' + C.border : 'none' }}>
             {[
               { key:'nombre',    label:'Nombre',    full: true, placeholder:'Nombre completo' },
               { key:'email',     label:'Email',     placeholder:'correo@ejemplo.com' },
@@ -384,9 +483,9 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       {error && <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div>}
 
       <button onClick={handleGenerar}
-        disabled={generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())}
+        disabled={generating || (mode === 'visita' && !selectedVisit) || ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim()) || (mode === 'pdf' && !manualCliente.nombre)}
         style={{ ...styles.btnPrimary, width: '100%', padding: '15px', fontSize: 15, borderRadius: 12, marginBottom: 14,
-          opacity: (generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())) ? .55 : 1 }}>
+          opacity: (generating || (mode === 'visita' && !selectedVisit) || ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim())) ? .55 : 1 }}>
         {generating ? 'Generando PDF...' : 'Generar Cotizacion PDF'}
       </button>
 
