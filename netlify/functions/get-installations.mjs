@@ -44,6 +44,7 @@ export async function handler(event) {
       id:       ev.id,
       nombre:   ev.extendedProperties?.shared?.cliente || ev.summary?.match(/Instalación — (.+?) \(/)?.[1] || '',
       cotNum:   ev.extendedProperties?.shared?.cot_num || '',
+      email:    ev.attendees?.[0]?.email || '',
       summary:  ev.summary || '',
       start:    ev.start?.dateTime || ev.start?.date || '',
       end:      ev.end?.dateTime   || ev.end?.date   || '',

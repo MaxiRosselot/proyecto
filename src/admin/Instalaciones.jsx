@@ -20,17 +20,16 @@ function addHours(timeStr, h) {
 function isoToLocalDate(iso) {
   if (!iso) return ''
   const d = new Date(iso)
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }) // YYYY-MM-DD
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
 }
 function isoToLocalTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
   return d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'America/Santiago' })
 }
-// Semana: lunes..sábado
 function getWeekDays(refDate) {
   const d = new Date(refDate)
-  const day = d.getDay() // 0=dom
+  const day = d.getDay()
   const monday = new Date(d)
   monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
   return Array.from({ length: 6 }, (_, i) => {
@@ -43,7 +42,7 @@ function sameDay(d1, d2) {
 const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb']
 
 // ── CalendarioSemanal ─────────────────────────────────────────────────────────
-function CalendarioSemanal({ installations, onReagendar }) {
+function CalendarioSemanal({ installations, onClickInst }) {
   const [weekRef, setWeekRef] = useState(() => new Date())
   const days = getWeekDays(weekRef)
 
@@ -67,7 +66,6 @@ function CalendarioSemanal({ installations, onReagendar }) {
         </div>
       </div>
 
-      {/* Cabecera días */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:4, marginBottom:6 }}>
         {days.map((d, i) => {
           const isToday = sameDay(d, new Date())
@@ -85,13 +83,9 @@ function CalendarioSemanal({ installations, onReagendar }) {
         })}
       </div>
 
-      {/* Celdas */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:4 }}>
         {days.map((d, i) => {
-          const dayInstalls = installations.filter(inst => {
-            if (!inst.start) return false
-            return sameDay(new Date(inst.start), d)
-          })
+          const dayInstalls = installations.filter(inst => inst.start && sameDay(new Date(inst.start), d))
           return (
             <div key={i} style={{
               minHeight:80, background: sameDay(d,new Date()) ? C.orangeLight : C.bg,
@@ -101,7 +95,7 @@ function CalendarioSemanal({ installations, onReagendar }) {
               {dayInstalls.length === 0
                 ? <div style={{ fontSize:10, color:C.textMuted, textAlign:'center', paddingTop:20 }}>—</div>
                 : dayInstalls.map((inst, j) => (
-                  <div key={j} onClick={() => onReagendar(inst)}
+                  <div key={j} onClick={() => onClickInst(inst)}
                     style={{
                       background: new Date(inst.end||inst.start) < new Date() ? '#E5E7EB' : C.orange,
                       color: new Date(inst.end||inst.start) < new Date() ? C.textSub : 'white',
@@ -117,16 +111,18 @@ function CalendarioSemanal({ installations, onReagendar }) {
           )
         })}
       </div>
-      <div style={{ fontSize:11, color:C.textMuted, marginTop:10 }}>Haz clic en una instalación para reagendar.</div>
+      <div style={{ fontSize:11, color:C.textMuted, marginTop:10 }}>Haz clic en una instalación para reagendar o cancelar.</div>
     </div>
   )
 }
 
-// ── Modal reagendar ───────────────────────────────────────────────────────────
-function ModalReagendar({ inst, onClose, onSaved }) {
+// ── Modal gestionar (reagendar + cancelar) ────────────────────────────────────
+function ModalGestionar({ inst, onClose, onSaved }) {
+  const [tab, setTab]               = useState('reagendar') // 'reagendar' | 'cancelar'
   const [fecha, setFecha]           = useState(isoToLocalDate(inst.start))
   const [horaInicio, setHoraInicio] = useState(isoToLocalTime(inst.start))
   const [horaFin, setHoraFin]       = useState(isoToLocalTime(inst.end))
+  const [motivo, setMotivo]         = useState('')
   const [saving, setSaving]         = useState(false)
   const [err, setErr]               = useState('')
 
@@ -135,7 +131,7 @@ function ModalReagendar({ inst, onClose, onSaved }) {
     setHoraFin(addHours(v, 3))
   }
 
-  async function handleSave() {
+  async function handleReagendar() {
     if (horaFin <= horaInicio) return setErr('Hora fin debe ser posterior a hora inicio')
     setSaving(true); setErr('')
     try {
@@ -149,41 +145,96 @@ function ModalReagendar({ inst, onClose, onSaved }) {
     finally { setSaving(false) }
   }
 
+  async function handleCancelar() {
+    setSaving(true); setErr('')
+    try {
+      const data = await apiFetch('/.netlify/functions/cancel-installation', {
+        method: 'POST',
+        body: JSON.stringify({
+          eventId: inst.id,
+          motivo,
+          nombre: inst.nombre || '',
+          email: inst.email || '',
+        }),
+      })
+      if (data.ok) { onSaved(); onClose() }
+      else setErr(data.error || 'Error al cancelar')
+    } catch (e) { setErr(e.message) }
+    finally { setSaving(false) }
+  }
+
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-      <div style={{ ...styles.card, width:'100%', maxWidth:400, boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
-          <div style={{ fontWeight:800, fontSize:15, color:C.text }}>Reagendar instalación</div>
+      <div style={{ ...styles.card, width:'100%', maxWidth:420, boxShadow:'0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div style={{ fontWeight:800, fontSize:15, color:C.text }}>Gestionar instalación</div>
           <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:C.textMuted, fontSize:20, lineHeight:1 }}>×</button>
         </div>
         <div style={{ fontSize:13, color:C.textSub, marginBottom:16, fontWeight:600 }}>{inst.nombre}</div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:14 }}>
-          <div style={{ gridColumn:'1/-1' }}>
-            <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Fecha</label>
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-              style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
-          </div>
-          <div>
-            <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Inicio</label>
-            <input type="time" value={horaInicio} onChange={e => handleInicioChange(e.target.value)}
-              style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
-          </div>
-          <div>
-            <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Fin</label>
-            <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)}
-              style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
-          </div>
-        </div>
-
-        {err && <div style={{ ...styles.errorBox, marginBottom:12 }}>{err}</div>}
-
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={handleSave} disabled={saving} style={{ ...styles.btnPrimary, flex:1, padding:'11px', fontSize:13 }}>
-            {saving ? 'Guardando...' : 'Reagendar en Calendar'}
+        {/* Tabs */}
+        <div style={{ display:'flex', gap:8, marginBottom:18 }}>
+          <button onClick={() => setTab('reagendar')} style={{ ...styles.tab, ...(tab==='reagendar' ? styles.tabActive : {}), fontSize:12 }}>
+            Reagendar
           </button>
-          <button onClick={onClose} style={styles.btnSecondary}>Cancelar</button>
+          <button onClick={() => setTab('cancelar')} style={{
+            ...styles.tab, fontSize:12,
+            ...(tab==='cancelar' ? { background:C.red, color:'white', borderColor:C.red } : {}),
+          }}>
+            Cancelar instalación
+          </button>
         </div>
+
+        {tab === 'reagendar' && (
+          <>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:14 }}>
+              <div style={{ gridColumn:'1/-1' }}>
+                <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Fecha</label>
+                <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+                  style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+              </div>
+              <div>
+                <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Inicio</label>
+                <input type="time" value={horaInicio} onChange={e => handleInicioChange(e.target.value)}
+                  style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+              </div>
+              <div>
+                <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>Fin</label>
+                <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)}
+                  style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+              </div>
+            </div>
+            {err && <div style={{ ...styles.errorBox, marginBottom:12 }}>{err}</div>}
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={handleReagendar} disabled={saving} style={{ ...styles.btnPrimary, flex:1, padding:'11px', fontSize:13 }}>
+                {saving ? 'Guardando...' : 'Reagendar en Calendar'}
+              </button>
+              <button onClick={onClose} style={styles.btnSecondary}>Volver</button>
+            </div>
+          </>
+        )}
+
+        {tab === 'cancelar' && (
+          <>
+            <div style={{ background:C.red+'0A', border:'1px solid '+C.red+'30', borderRadius:10, padding:14, marginBottom:14 }}>
+              <div style={{ fontSize:13, color:C.red, fontWeight:600, marginBottom:10 }}>
+                Esta acción eliminará el evento de Google Calendar y notificará al cliente por email.
+              </div>
+              <label style={{ ...styles.detailLabel, display:'block', marginBottom:6 }}>Motivo (opcional)</label>
+              <input value={motivo} onChange={e => setMotivo(e.target.value)}
+                placeholder="Ej: cliente reprogramó, material no disponible..."
+                style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
+            </div>
+            {err && <div style={{ ...styles.errorBox, marginBottom:12 }}>{err}</div>}
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={handleCancelar} disabled={saving}
+                style={{ ...styles.btnPrimary, flex:1, padding:'11px', fontSize:13, background:C.red, boxShadow:'none' }}>
+                {saving ? 'Cancelando...' : 'Confirmar cancelación'}
+              </button>
+              <button onClick={onClose} style={styles.btnSecondary}>Volver</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -193,11 +244,6 @@ function ModalReagendar({ inst, onClose, onSaved }) {
 export default function InstalacionesSection() {
   const [confirmedQuotes, setConfirmedQuotes] = useState([])
   const [selectedQuote, setSelectedQuote]     = useState(null)
-  const [useManual, setUseManual]             = useState(false)
-  const [manualNombre, setManualNombre]       = useState('')
-  const [manualEmail, setManualEmail]         = useState('')
-  const [manualTelefono, setManualTelefono]   = useState('')
-  const [manualDireccion, setManualDireccion] = useState('')
   const [fecha, setFecha]                     = useState('')
   const [horaInicio, setHoraInicio]           = useState('09:00')
   const [horaFin, setHoraFin]                 = useState('12:00')
@@ -208,14 +254,8 @@ export default function InstalacionesSection() {
   const [installations, setInstallations]     = useState([])
   const [loadingList, setLoadingList]         = useState(true)
   const [listError, setListError]             = useState('')
-  const [reagendarInst, setReagendarInst]     = useState(null)
-  const [view, setView]                       = useState('calendar') // 'calendar' | 'list'
-
-  useEffect(() => {
-    apiFetch('/.netlify/functions/get-quotes').then(data => {
-      if (data.ok) setConfirmedQuotes(data.quotes.filter(q => q.status === 'confirmada'))
-    }).catch(() => {})
-  }, [])
+  const [gestionarInst, setGestionarInst]     = useState(null)
+  const [view, setView]                       = useState('calendar')
 
   const loadInstallations = useCallback(async () => {
     setLoadingList(true); setListError('')
@@ -226,7 +266,23 @@ export default function InstalacionesSection() {
     } catch { setListError('No se pudo conectar') }
     finally { setLoadingList(false) }
   }, [])
-  useEffect(() => { loadInstallations() }, [loadInstallations])
+
+  useEffect(() => {
+    apiFetch('/.netlify/functions/get-quotes').then(data => {
+      if (data.ok) setConfirmedQuotes(data.quotes.filter(q => q.status === 'confirmada'))
+    }).catch(() => {})
+    loadInstallations()
+  }, [loadInstallations])
+
+  // cotNums ya agendados (activos, no cancelados)
+  const scheduledCotNums = new Set(
+    installations.filter(i => i.estado !== 'Cancelada').map(i => String(i.cotNum)).filter(Boolean)
+  )
+
+  // Cotizaciones confirmadas sin instalación aún
+  const quotesDisponibles = confirmedQuotes.filter(q => !scheduledCotNums.has(String(q.cotNum)))
+  // Cotizaciones confirmadas con instalación
+  const quotesAgendadas   = confirmedQuotes.filter(q =>  scheduledCotNums.has(String(q.cotNum)))
 
   function handleInicioChange(v) {
     setHoraInicio(v)
@@ -236,24 +292,21 @@ export default function InstalacionesSection() {
   async function handleAgendar(e) {
     e.preventDefault()
     setSubmitErr(''); setSubmitOk(null)
-    const nombre    = useManual ? manualNombre.trim()    : selectedQuote?.nombre    || ''
-    const email     = useManual ? manualEmail.trim()     : selectedQuote?.email     || ''
-    const telefono  = useManual ? manualTelefono.trim()  : selectedQuote?.telefono  || ''
-    const direccion = useManual ? manualDireccion.trim() : selectedQuote?.direccion || ''
-    const cotNum    = useManual ? '' : selectedQuote?.cotNum || ''
-    if (!nombre) return setSubmitErr('Ingresa el nombre del cliente')
+    const nombre    = selectedQuote?.nombre    || ''
+    const email     = selectedQuote?.email     || ''
+    const telefono  = selectedQuote?.telefono  || ''
+    const direccion = selectedQuote?.direccion || ''
+    const cotNum    = selectedQuote?.cotNum    || ''
+    if (!nombre) return setSubmitErr('Selecciona una cotización')
     if (!fecha)  return setSubmitErr('Selecciona una fecha')
     if (horaFin <= horaInicio) return setSubmitErr('Hora fin debe ser posterior a hora inicio')
 
-    let subtotalRepisas = 0, subtotalAdicionales = 0, total = 0
-    if (!useManual && selectedQuote) {
-      const reps = selectedQuote.repisas || []
-      subtotalRepisas = reps.reduce((s, r) => s + (r.unidades||r.u||0)*(r.valor||r.v||0), 0)
-      const ad = selectedQuote.adicionales || {}
-      subtotalAdicionales = ['retiro_orden','retiro_basura','cajas','bici']
-        .reduce((s, k) => s + (ad['qty_'+k]||0)*(ad['precio_'+k]||0), 0)
-      total = parseFloat(selectedQuote.total) || (subtotalRepisas + subtotalAdicionales) * 1.19
-    }
+    const reps = selectedQuote.repisas || []
+    const subtotalRepisas = reps.reduce((s, r) => s + (r.unidades||r.u||0)*(r.valor||r.v||0), 0)
+    const ad = selectedQuote.adicionales || {}
+    const subtotalAdicionales = ['retiro_orden','retiro_basura','cajas','bici']
+      .reduce((s, k) => s + (ad['qty_'+k]||0)*(ad['precio_'+k]||0), 0)
+    const total = parseFloat(selectedQuote.total) || (subtotalRepisas + subtotalAdicionales) * 1.19
 
     setSubmitting(true)
     try {
@@ -263,23 +316,22 @@ export default function InstalacionesSection() {
       })
       if (data.ok) {
         setSubmitOk(data)
-        setSelectedQuote(null); setManualNombre(''); setManualEmail('')
-        setManualTelefono(''); setManualDireccion('')
+        setSelectedQuote(null)
         setFecha(''); setHoraInicio('09:00'); setHoraFin('12:00'); setNotas('')
-        setUseManual(false)
         loadInstallations()
       } else { setSubmitErr(data.error || 'Error') }
     } catch (err) { setSubmitErr(err.message) }
     finally { setSubmitting(false) }
   }
 
-  const upcoming = installations.filter(i => !i.end || new Date(i.end) >= new Date())
-  const past     = installations.filter(i => i.end && new Date(i.end) < new Date())
+  const upcoming = installations.filter(i => i.estado !== 'Cancelada' && (!i.end || new Date(i.end) >= new Date()))
+  const past     = installations.filter(i => i.estado !== 'Cancelada' && i.end && new Date(i.end) < new Date())
+  const cancelled = installations.filter(i => i.estado === 'Cancelada')
 
   return (
     <div>
-      {reagendarInst && (
-        <ModalReagendar inst={reagendarInst} onClose={() => setReagendarInst(null)} onSaved={loadInstallations} />
+      {gestionarInst && (
+        <ModalGestionar inst={gestionarInst} onClose={() => setGestionarInst(null)} onSaved={loadInstallations} />
       )}
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
@@ -291,70 +343,43 @@ export default function InstalacionesSection() {
         </div>
       </div>
 
-      {/* Vista Calendario */}
       {view === 'calendar' && !loadingList && (
         <div style={{ marginBottom:20 }}>
-          <CalendarioSemanal installations={installations} onReagendar={setReagendarInst} />
+          <CalendarioSemanal installations={installations.filter(i => i.estado !== 'Cancelada')} onClickInst={setGestionarInst} />
         </div>
       )}
 
-      {/* Formulario nueva instalación */}
+      {/* Formulario nueva instalación — solo cotizaciones disponibles */}
       <div style={{ ...styles.card, marginBottom:20 }}>
         <div style={styles.cardLabel}>Agendar nueva instalacion</div>
 
         <div style={{ marginBottom:16 }}>
-          <div style={{ display:'flex', gap:10, marginBottom:10 }}>
-            <button type="button" onClick={() => setUseManual(false)}
-              style={{ ...styles.tab, ...(useManual ? {} : styles.tabActive), fontSize:12, padding:'5px 12px' }}>
-              Desde cotizacion confirmada
-            </button>
-            <button type="button" onClick={() => setUseManual(true)}
-              style={{ ...styles.tab, ...(useManual ? styles.tabActive : {}), fontSize:12, padding:'5px 12px' }}>
-              Ingreso manual
-            </button>
-          </div>
-
-          {!useManual && (
-            confirmedQuotes.length === 0
-              ? <p style={{ color:C.textMuted, fontSize:13, margin:0 }}>No hay cotizaciones confirmadas aun.</p>
-              : <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-                  {confirmedQuotes.map(q => (
-                    <button key={q.cotNum} type="button"
-                      onClick={() => setSelectedQuote(selectedQuote?.cotNum===q.cotNum ? null : q)}
-                      style={{
-                        padding:'8px 14px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer',
-                        border:'1.5px solid '+(selectedQuote?.cotNum===q.cotNum ? C.orange : C.border),
-                        background:selectedQuote?.cotNum===q.cotNum ? C.orangeLight : C.surface,
-                        color:selectedQuote?.cotNum===q.cotNum ? C.orangeDark : C.textSub, transition:'all .15s',
-                      }}>
-                      {q.nombre} N°{q.cotNum}
-                    </button>
-                  ))}
-                </div>
+          {quotesDisponibles.length === 0 ? (
+            <p style={{ color:C.textMuted, fontSize:13, margin:0 }}>
+              No hay cotizaciones confirmadas pendientes de agendar.
+            </p>
+          ) : (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+              {quotesDisponibles.map(q => (
+                <button key={q.cotNum} type="button"
+                  onClick={() => setSelectedQuote(selectedQuote?.cotNum===q.cotNum ? null : q)}
+                  style={{
+                    padding:'8px 14px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer',
+                    border:'1.5px solid '+(selectedQuote?.cotNum===q.cotNum ? C.orange : C.border),
+                    background:selectedQuote?.cotNum===q.cotNum ? C.orangeLight : C.surface,
+                    color:selectedQuote?.cotNum===q.cotNum ? C.orangeDark : C.textSub, transition:'all .15s',
+                  }}>
+                  {q.nombre} N°{q.cotNum}
+                </button>
+              ))}
+            </div>
           )}
 
-          {!useManual && selectedQuote && (
+          {selectedQuote && (
             <div style={{ marginTop:10, padding:'10px 14px', background:C.orangeLight, borderRadius:8, fontSize:13, color:C.textSub }}>
               {selectedQuote.email    && <span style={{ marginRight:16 }}>{selectedQuote.email}</span>}
               {selectedQuote.telefono && <span style={{ marginRight:16 }}>{selectedQuote.telefono}</span>}
               {selectedQuote.total    && <span style={{ fontWeight:700, color:C.orangeDark }}>${Number(selectedQuote.total).toLocaleString('es-CL')}</span>}
-            </div>
-          )}
-
-          {useManual && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-              {[
-                { label:'Nombre',    val:manualNombre,    set:setManualNombre,    placeholder:'Nombre completo',         full:true },
-                { label:'Email',     val:manualEmail,     set:setManualEmail,     placeholder:'correo@ejemplo.com' },
-                { label:'Telefono',  val:manualTelefono,  set:setManualTelefono,  placeholder:'+56 9 XXXX XXXX' },
-                { label:'Direccion', val:manualDireccion, set:setManualDireccion, placeholder:'Direccion',               full:true },
-              ].map(({ label, val, set, placeholder, full }) => (
-                <div key={label} style={{ gridColumn:full ? '1 / -1' : undefined }}>
-                  <label style={{ ...styles.detailLabel, display:'block', marginBottom:4 }}>{label}</label>
-                  <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
-                    style={{ ...styles.input, fontSize:13, padding:'8px 10px' }} />
-                </div>
-              ))}
             </div>
           )}
         </div>
@@ -392,12 +417,36 @@ export default function InstalacionesSection() {
             </div>
           )}
 
-          <button type="submit" disabled={submitting || (!useManual && !selectedQuote)}
-            style={{ ...styles.btnPrimary, padding:'12px 24px', fontSize:14, borderRadius:10, opacity:(submitting || (!useManual && !selectedQuote)) ? .6 : 1 }}>
+          <button type="submit" disabled={submitting || !selectedQuote}
+            style={{ ...styles.btnPrimary, padding:'12px 24px', fontSize:14, borderRadius:10, opacity:(submitting || !selectedQuote) ? .6 : 1 }}>
             {submitting ? 'Agendando...' : 'Agendar en Calendar'}
           </button>
         </form>
       </div>
+
+      {/* Cotizaciones ya agendadas */}
+      {quotesAgendadas.length > 0 && (
+        <div style={{ ...styles.card, marginBottom:20 }}>
+          <div style={styles.cardLabel}>Cotizaciones ya agendadas</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:10 }}>
+            {quotesAgendadas.map(q => {
+              const inst = installations.find(i => String(i.cotNum) === String(q.cotNum) && i.estado !== 'Cancelada')
+              return (
+                <div key={q.cotNum} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', padding:'10px 14px', background:C.bg, borderRadius:8, border:'1px solid '+C.border }}>
+                  <div>
+                    <span style={{ fontWeight:700, fontSize:13, color:C.text }}>{q.nombre}</span>
+                    <span style={{ fontSize:12, color:C.textMuted, marginLeft:8 }}>N°{q.cotNum}</span>
+                    {inst && <div style={{ fontSize:12, color:C.textSub, marginTop:2 }}>{fmtDateLocal(inst.start)} · {fmtTime(inst.start)}–{fmtTime(inst.end)}</div>}
+                  </div>
+                  <span style={{ padding:'4px 10px', borderRadius:99, fontSize:11, fontWeight:700, background:C.orange+'18', color:C.orangeDark, border:'1px solid '+C.orange+'30' }}>
+                    Agendada
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Lista */}
       {view === 'list' && (
@@ -418,7 +467,7 @@ export default function InstalacionesSection() {
                             <div style={{ fontSize:13, color:C.textSub }}>{fmtDateLocal(i.start)}</div>
                             <div style={{ fontSize:13, color:C.textMuted }}>{fmtTime(i.start)} – {fmtTime(i.end)}</div>
                           </div>
-                          <button onClick={() => setReagendarInst(i)} style={{ ...styles.btnSecondary, fontSize:12, padding:'6px 14px' }}>Reagendar</button>
+                          <button onClick={() => setGestionarInst(i)} style={{ ...styles.btnSecondary, fontSize:12, padding:'6px 14px' }}>Gestionar</button>
                         </div>
                       </div>
                     ))}
@@ -426,7 +475,7 @@ export default function InstalacionesSection() {
                 </div>
               )}
               {past.length > 0 && (
-                <div>
+                <div style={{ marginBottom:20 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Realizadas ({past.length})</div>
                   <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     {past.map(i => (
@@ -439,7 +488,21 @@ export default function InstalacionesSection() {
                   </div>
                 </div>
               )}
-              {upcoming.length === 0 && past.length === 0 && (
+              {cancelled.length > 0 && (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.red, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Canceladas ({cancelled.length})</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                    {cancelled.map(i => (
+                      <div key={i.id} style={{ ...styles.card, opacity:.6, borderLeft:'3px solid '+C.red }}>
+                        <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:3 }}>{i.nombre}</div>
+                        <div style={{ fontSize:13, color:C.textSub }}>{fmtDateLocal(i.start)}</div>
+                        {i.motivoCancelacion && <div style={{ fontSize:12, color:C.red, marginTop:2 }}>{i.motivoCancelacion}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {upcoming.length === 0 && past.length === 0 && cancelled.length === 0 && (
                 <div style={styles.empty}>No hay instalaciones agendadas aun.</div>
               )}
             </>

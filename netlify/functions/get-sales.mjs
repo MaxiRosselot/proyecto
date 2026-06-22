@@ -21,7 +21,7 @@ export async function handler(event) {
     auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
     const sheets = google.sheets({ version: 'v4', auth })
 
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Instalaciones!A:N' })
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Instalaciones!A:N' }).catch(() => ({ data: { values: [] } }))
     const rows = res.data.values || []
     if (rows.length <= 1) return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, installations: [] }) }
 

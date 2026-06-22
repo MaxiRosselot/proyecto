@@ -32,13 +32,25 @@ export default function CotizacionesSection() {
   const [saving, setSaving]         = useState(false)
   const [deleting, setDeleting]     = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
+  const [scheduledCotNums, setScheduledCotNums] = useState(new Set())
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const data = await apiFetch('/.netlify/functions/get-quotes')
-      if (data.ok) setQuotes(data.quotes)
-      else setError(data.error || 'Error')
+      const [quotesData, instData] = await Promise.all([
+        apiFetch('/.netlify/functions/get-quotes'),
+        apiFetch('/.netlify/functions/get-installations').catch(() => ({ ok: false })),
+      ])
+      if (quotesData.ok) setQuotes(quotesData.quotes)
+      else setError(quotesData.error || 'Error')
+      if (instData.ok) {
+        const nums = new Set(
+          (instData.installations || [])
+            .filter(i => i.cotNum)
+            .map(i => String(i.cotNum))
+        )
+        setScheduledCotNums(nums)
+      }
     } catch { setError('No se pudo conectar') }
     finally { setLoading(false) }
   }, [])
@@ -182,6 +194,11 @@ export default function CotizacionesSection() {
                     <span style={{ fontSize: 12, fontWeight: 700, color: C.textMuted }}>#{q.cotNum}</span>
                     <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{q.nombre}</span>
                     <Badge status={q.status} />
+                    {scheduledCotNums.has(String(q.cotNum)) && (
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: C.orange + '18', color: C.orangeDark, border: '1px solid ' + C.orange + '40' }}>
+                        Agendada
+                      </span>
+                    )}
                     {q.motivoRechazo && <span style={{ fontSize: 11, color: C.red, background: C.red + '10', padding: '2px 8px', borderRadius: 99 }}>{q.motivoRechazo}</span>}
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>

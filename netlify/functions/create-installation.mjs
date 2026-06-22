@@ -83,9 +83,20 @@ export async function handler(event) {
 
     // Guardar en Sheet
     if (SHEET_ID) {
-      const head = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A1:A1` }).catch(() => ({ data: { values: [] } }))
-      if (!head.data.values?.length) {
+      // Verificar si la hoja existe; crearla si no
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID })
+      const sheetExists = spreadsheet.data.sheets?.some(s => s.properties?.title === SHEET_NAME)
+      if (!sheetExists) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: { requests: [{ addSheet: { properties: { title: SHEET_NAME } } }] },
+        })
         await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A1`, valueInputOption: 'RAW', requestBody: { values: [HEADERS] } })
+      } else {
+        const head = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A1:A1` }).catch(() => ({ data: { values: [] } }))
+        if (!head.data.values?.length) {
+          await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A1`, valueInputOption: 'RAW', requestBody: { values: [HEADERS] } })
+        }
       }
       const createdAt = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
       const row = [
