@@ -123,7 +123,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
   const cliente = mode === 'visita' ? (selectedVisit || {}) : manualCliente
 
-  // ── Leer PDF ────────────────────────────────────────────────────────────
+  // --- Leer PDF ---
   async function handlePdfUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -170,7 +170,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
     }
   }
 
-  // ── Generar PDF ─────────────────────────────────────────────────────────
+  // --- Generar PDF ---
   async function handleGenerar() {
     if (mode === 'visita' && !selectedVisit) return
     if ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
@@ -225,9 +225,9 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       // Si venía de PDF original, subir ese a Drive; si no, subir el recién generado
       let uploadedPdfUrl = ''
       try {
-        const pdfBase64ToUpload = pdfOriginalB64 || (fi.FileData || await blob.arrayBuffer().then(buf =>
+        const pdfBase64ToUpload = fi.FileData || await blob.arrayBuffer().then(buf =>
           btoa(String.fromCharCode(...new Uint8Array(buf)))
-        ))
+        )
         const nombreInicial = (cliente.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
         const pdfFileName = 'Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
         const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {

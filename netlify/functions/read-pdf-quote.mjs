@@ -75,11 +75,11 @@ function parsePdfText(text) {
   }
 
   // ── Adicionales ──────────────────────────────────────────────────────────
-  // Buscar el bloque entre ADICIONALES y TOTAL
-  const totStart  = text.indexOf('TOTAL')
-  const adBlock   = adStart > -1 && totStart > adStart
-    ? text.slice(adStart, totStart)
-    : ''
+  // Buscar el bloque entre ADICIONALES y SUBTOTAL (no TOTAL, para evitar match en SUBTOTAL)
+  const subStart  = text.search(/SUBTOTAL/i)
+  const adBlock   = adStart > -1 && subStart > adStart
+    ? text.slice(adStart, subStart)
+    : (adStart > -1 ? text.slice(adStart, adStart + 400) : '')
 
   const adicionales = {
     qty_retiro_orden: 0,  precio_retiro_orden: 40000,
@@ -89,14 +89,35 @@ function parsePdfText(text) {
   }
 
   if (adBlock) {
-    // Cada línea de adicional: "RETIRO Y ORDEN DE ARTÍCULOS  0  $ 50.000  $ -"
-    // o "SOPORTE DE BICICLETA/SKI  1  $ 20.000  $ 20.000"
+    // Cada línea tiene formato: "NOMBRE DEL SERVICIO  QTY  $ PRECIO  $ TOTAL"
+    // La qty es un número entero pequeño (0-99) seguido de $ o espacios
+    // Buscamos: número entero solo (la cantidad) luego precios con $
     const adLines = adBlock.split('\n').map(l => l.trim()).filter(Boolean)
 
     for (const line of adLines) {
-      const nums = line.match(/\d+[.,]?\d*/g) || []
-      const qty   = nums.length >= 1 ? parseInt(nums[0]) : 0
-      const precio = nums.length >= 2 ? cleanNum(nums[1]) : 0
+      // Extraer qty: puede aparecer con $ en la misma línea o sin $
+      // Patrón 1: número antes del primer $ → "SERVICIO  1  $ 40.000  $ 40.000"
+      // Patrón 2: solo números separados por espacios → "SERVICIO  1  40.000  40.000"
+      const precioNums = [...line.matchAll(/\$\s*([\d.,]+)/g)]
+      let qty = 0
+      let precio = 0
+
+      if (precioNums.length >= 1) {
+        // Hay símbolo $: buscar número entero antes del primer $
+        const qtyMatch = line.match(/\b(\d{1,3})\s*\$/)
+        qty    = qtyMatch ? parseInt(qtyMatch[1]) : 0
+        precio = cleanNum(precioNums[0][1])
+      } else {
+        // Sin $: extraer todos los números y asumir [qty, precio, total] al final
+        const allNums = line.match(/\b\d+[.,]?\d*\b/g) || []
+        // Últimos 1-3 números son qty y precios
+        if (allNums.length >= 2) {
+          qty    = parseInt(allNums[allNums.length - 2]) || 0
+          precio = cleanNum(allNums[allNums.length - 1])
+        } else if (allNums.length === 1) {
+          qty = parseInt(allNums[0]) || 0
+        }
+      }
 
       if (/RETIRO.*ORDEN|ORDEN.*ART/i.test(line)) {
         adicionales.qty_retiro_orden   = qty
@@ -116,8 +137,8 @@ function parsePdfText(text) {
 
   // ── Totales ──────────────────────────────────────────────────────────────
   const subtotalMatch = text.match(/SUBTOTAL\s*NETO[^\d]*([\d.,]+)/i)
-  const ivaMatch      = text.match(/IVA[^\d]*([\d.,]+)/i)
-  const totalMatch    = text.match(/TOTAL[^\d]*([\d.,]+)/i)
+  const ivaMatch      = text.match(/\bIVA\b[^\d]*([\d.,]+)/i)
+  const totalMatch    = text.match(/\bTOTAL\b[^\d]*([\d.,]+)/i)
 
   const subtotal = subtotalMatch ? cleanNum(subtotalMatch[1]) : 0
   const iva      = ivaMatch      ? cleanNum(ivaMatch[1])      : 0
