@@ -28,6 +28,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [tab, setTab]           = useState('por-realizar')
   const [updating, setUpdating] = useState(null)
   const [expanded, setExpanded] = useState(null)
+  const [sortAsc, setSortAsc]   = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -59,11 +60,15 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   }
 
   const now = new Date()
-  const porRealizar = visits.filter(v => new Date(v.start) >= now && statuses[v.id] !== 'cancelada')
-  const realizadas  = visits.filter(v => new Date(v.start) < now  && statuses[v.id] !== 'cancelada')
-  const canceladas  = visits.filter(v => statuses[v.id] === 'cancelada')
+  const sortFn = (a, b) => sortAsc
+    ? new Date(a.start) - new Date(b.start)
+    : new Date(b.start) - new Date(a.start)
 
-  const listMap = { 'por-realizar': porRealizar, 'realizadas': realizadas, 'canceladas': canceladas }
+  const porRealizar = visits.filter(v => new Date(v.start) >= now && statuses[v.id] !== 'cancelada').sort(sortFn)
+  const realizadas  = visits.filter(v => new Date(v.start) < now  && statuses[v.id] !== 'cancelada').sort(sortFn)
+  const canceladas  = visits.filter(v => statuses[v.id] === 'cancelada').sort(sortFn)
+
+  const listMap = { 'por-realizar': porRealizar, realizadas, canceladas }
   const list = listMap[tab] || []
 
   const TABS = [
@@ -74,9 +79,15 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={styles.sectionTitle}>Visitas</h2>
-        <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setSortAsc(v => !v)} style={{ ...styles.btnSecondary, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg>
+            {sortAsc ? 'Mas antiguas' : 'Mas nuevas'}
+          </button>
+          <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -98,9 +109,9 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {list.map(visit => {
-          const status     = statuses[visit.id] || 'pendiente'
-          const isExpanded = expanded === visit.id
-          const isUpdating = updating === visit.id
+          const status      = statuses[visit.id] || 'pendiente'
+          const isExpanded  = expanded === visit.id
+          const isUpdating  = updating === visit.id
           const borderColor = VISIT_STATUS_LABELS[status]?.color || C.border
           return (
             <div key={visit.id} style={{ ...styles.card, borderLeft: '3px solid ' + borderColor }}>
@@ -112,7 +123,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                     <Badge status={status} />
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>
-                    {fmtDate(visit.start)} &middot; {fmtTime(visit.start)}
+                    {fmtDate(visit.start)} {'·'} {fmtTime(visit.start)}
                     {visit.direccion && <span style={{ marginLeft: 12, color: C.textMuted }}>{visit.direccion}</span>}
                   </div>
                 </div>

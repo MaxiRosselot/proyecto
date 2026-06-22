@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { ADMIN_PASSWORD, CONVERTAPI_SECRET, DEFAULTS_REPISA, C, apiFetch, fmtDate, fmt, styles } from './utils.js'
 
-// ── Selector con opción libre ──────────────────────────────────────────────────
-function SelectOrFree({ options, value, onChange, step = 0.01, unit = '' }) {
+function SelectOrFree({ options, value, onChange, step = 0.01 }) {
   const [libre, setLibre] = useState(() => !options.includes(Number(value)))
   const strOptions = options.map(String)
 
@@ -15,7 +14,7 @@ function SelectOrFree({ options, value, onChange, step = 0.01, unit = '' }) {
 
   if (!libre) return (
     <select value={strOptions.includes(String(value)) ? String(value) : '__libre__'} onChange={handleSelect} style={sel}>
-      {options.map(o => <option key={o} value={o}>{o}{unit}</option>)}
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
       <option value="__libre__">Otro...</option>
     </select>
   )
@@ -32,6 +31,7 @@ function SelectOrFree({ options, value, onChange, step = 0.01, unit = '' }) {
 }
 
 const STORAGE_KEY = 'dm_cotizador_state'
+const COT_NUM_KEY = 'dm_cot_num'
 
 function loadState() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
@@ -39,17 +39,21 @@ function loadState() {
 function saveState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
+function getCotNum() {
+  return parseInt(localStorage.getItem(COT_NUM_KEY) || '1421')
+}
+function setCotNumStorage(n) {
+  localStorage.setItem(COT_NUM_KEY, String(n))
+}
 
 export default function PorCotizarSection({ statuses, visitaSeleccionada, allVisits }) {
   const realizadas = allVisits.filter(v => statuses[v.id] === 'realizada')
-
-  // Cargar estado persistido o defaults
   const saved = loadState()
 
-  const [mode, setMode]               = useState(saved?.mode || 'visita') // 'visita' | 'manual'
+  const [mode, setMode]               = useState(saved?.mode || 'visita')
   const [selectedVisit, setSelectedVisit] = useState(null)
   const [manualCliente, setManualCliente] = useState(saved?.manualCliente || { nombre:'', email:'', celular:'', direccion:'' })
-  const [cotNum, setCotNum]           = useState(saved?.cotNum ?? parseInt(localStorage.getItem('dm_cot_num') || '1421'))
+  const [cotNum, setCotNum]           = useState(getCotNum)
   const [repisas, setRepisas]         = useState(saved?.repisas || [{ ...DEFAULTS_REPISA, id: Date.now() }])
   const [adNombres, setAdNombres]     = useState(saved?.adNombres || {
     retiro_orden: 'Retiro y orden de articulos',
@@ -71,34 +75,25 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   const [error, setError]           = useState('')
   const [editingNombre, setEditingNombre] = useState(null)
 
-  // Si viene desde Visitas, seleccionar esa visita
   useEffect(() => {
-    if (visitaSeleccionada) {
-      setMode('visita')
-      setSelectedVisit(visitaSeleccionada)
-    }
+    if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada) }
   }, [visitaSeleccionada])
 
-  // Persistir estado cuando cambia
   const stateRef = useRef({})
   useEffect(() => {
-    stateRef.current = { mode, manualCliente, cotNum, repisas, adNombres, adicionales, totalInfo }
+    stateRef.current = { mode, manualCliente, repisas, adNombres, adicionales, totalInfo }
     saveState(stateRef.current)
-  }, [mode, manualCliente, cotNum, repisas, adNombres, adicionales, totalInfo])
+  }, [mode, manualCliente, repisas, adNombres, adicionales, totalInfo])
 
   function resetCotizador() {
-    const newState = {
-      mode: 'visita', manualCliente: { nombre:'', email:'', celular:'', direccion:'' },
-      cotNum: parseInt(localStorage.getItem('dm_cot_num') || '1421'),
-      repisas: [{ ...DEFAULTS_REPISA, id: Date.now() }],
-      adNombres: { retiro_orden:'Retiro y orden de articulos', retiro_basura:'Retiro de basura', cajas:'Cajas organizadoras', bici:'Soporte bicicleta / ski' },
-      adicionales: { qty_retiro_orden:0, precio_retiro_orden:40000, qty_retiro_basura:0, precio_retiro_basura:30000, qty_cajas:0, precio_cajas:15000, qty_bici:0, precio_bici:20000 },
-      totalInfo: { subtotal: 0, iva: 0, total: 0 },
-    }
-    setMode(newState.mode); setManualCliente(newState.manualCliente); setCotNum(newState.cotNum)
-    setRepisas(newState.repisas); setAdNombres(newState.adNombres); setAdicionales(newState.adicionales)
-    setTotalInfo(newState.totalInfo); setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
-    setSelectedVisit(null); saveState(newState)
+    const newNum = getCotNum()
+    setMode('visita'); setManualCliente({ nombre:'', email:'', celular:'', direccion:'' })
+    setCotNum(newNum)
+    setRepisas([{ ...DEFAULTS_REPISA, id: Date.now() }])
+    setAdNombres({ retiro_orden:'Retiro y orden de articulos', retiro_basura:'Retiro de basura', cajas:'Cajas organizadoras', bici:'Soporte bicicleta / ski' })
+    setAdicionales({ qty_retiro_orden:0, precio_retiro_orden:40000, qty_retiro_basura:0, precio_retiro_basura:30000, qty_cajas:0, precio_cajas:15000, qty_bici:0, precio_bici:20000 })
+    setTotalInfo({ subtotal: 0, iva: 0, total: 0 }); setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
+    setSelectedVisit(null); saveState({})
   }
 
   function calcTotales() {
@@ -171,8 +166,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
       setPdfBlob(blob); setPdfUrl(URL.createObjectURL(blob))
 
-      // Guardado automático
-      const next = cotNum + 1; setCotNum(next); localStorage.setItem('dm_cot_num', String(next))
+      const next = cotNum + 1; setCotNum(next); setCotNumStorage(next)
 
       await apiFetch('/.netlify/functions/save-quote', {
         method: 'POST',
@@ -206,7 +200,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         <button onClick={resetCotizador} style={{ ...styles.btnSecondary, fontSize: 12 }}>Reiniciar</button>
       </div>
 
-      {/* Modo: visita o manual */}
+      {/* Modo */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Origen de la cotizacion</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -261,9 +255,9 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: C.textSub }}>N</span>
           <input type="number" value={cotNum}
-            onChange={e => { const v = parseInt(e.target.value); setCotNum(v); localStorage.setItem('dm_cot_num', String(v)) }}
+            onChange={e => { const v = parseInt(e.target.value) || 0; setCotNum(v); setCotNumStorage(v) }}
             style={{ width: 100, padding: '8px 10px', borderRadius: 9, border: '1.5px solid ' + C.border, fontSize: 16, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center', background: '#FAFAFA', outline: 'none' }} />
-          <span style={{ color: C.textMuted, fontSize: 12 }}>Fecha y validez se calculan en el Excel</span>
+          <span style={{ color: C.textMuted, fontSize: 12 }}>Se incrementa automaticamente al generar</span>
         </div>
       </div>
 
@@ -282,27 +276,21 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
             <tbody>
               {repisas.map((r, idx) => (
                 <tr key={r.id} style={{ background: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                  {/* Largo */}
                   <td style={{ padding: '5px 4px' }}>
                     <input type="number" value={r.l} step="0.01" onChange={e => updRep(r.id, 'l', e.target.value)} style={inputStyle} />
                   </td>
-                  {/* Prof con dropdown */}
                   <td style={{ padding: '5px 4px', minWidth: 90 }}>
                     <SelectOrFree options={[0.28,0.38,0.48,0.68]} value={r.p} onChange={v => updRep(r.id, 'p', v)} step={0.01} />
                   </td>
-                  {/* Alto con dropdown */}
                   <td style={{ padding: '5px 4px', minWidth: 90 }}>
                     <SelectOrFree options={[2,2.5,3]} value={r.a} onChange={v => updRep(r.id, 'a', v)} step={0.1} />
                   </td>
-                  {/* Niveles con dropdown */}
                   <td style={{ padding: '5px 4px', minWidth: 80 }}>
                     <SelectOrFree options={[4,5,6]} value={r.n} onChange={v => updRep(r.id, 'n', v)} step={1} />
                   </td>
-                  {/* Unidades */}
                   <td style={{ padding: '5px 4px' }}>
                     <input type="number" value={r.u} step="1" min="1" onChange={e => updRep(r.id, 'u', e.target.value)} style={inputStyle} />
                   </td>
-                  {/* Valor */}
                   <td style={{ padding: '5px 4px' }}>
                     <input type="number" value={r.v} step="1000" onChange={e => updRep(r.id, 'v', e.target.value)} style={inputStyle} />
                   </td>
@@ -337,7 +325,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
             const isEditingThis = editingNombre === key
             return (
               <React.Fragment key={key}>
-                {/* Nombre editable */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {isEditingThis
                     ? <input value={adNombres[key]} autoFocus

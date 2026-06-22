@@ -30,6 +30,8 @@ export default function CotizacionesSection() {
   const [editRepisas, setEditRepisas]   = useState([])
   const [editAd, setEditAd]         = useState({})
   const [saving, setSaving]         = useState(false)
+  const [deleting, setDeleting]     = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -54,6 +56,16 @@ export default function CotizacionesSection() {
     finally { setUpdating(null) }
   }
 
+  async function handleDelete(cotNum) {
+    setDeleting(cotNum)
+    try {
+      await apiFetch('/.netlify/functions/delete-quote', { method: 'POST', body: JSON.stringify({ cotNum }) })
+      setQuotes(prev => prev.filter(q => q.cotNum !== cotNum))
+      setConfirmDel(null); setExpanded(null)
+    } catch { alert('Error al borrar') }
+    finally { setDeleting(null) }
+  }
+
   function startEditing(quote) {
     setEditingId(quote.cotNum)
     setEditRepisas(quote.repisas?.length ? quote.repisas.map((r, i) => ({ ...r, id: i })) : [{ ...DEFAULTS_REPISA, id: 0 }])
@@ -63,17 +75,14 @@ export default function CotizacionesSection() {
   async function saveEdit(quote) {
     setSaving(true)
     try {
-      // Guardar en Sheet
       await apiFetch('/.netlify/functions/save-quote', {
         method: 'POST',
         body: JSON.stringify({ ...quote, repisas: editRepisas, adicionales: editAd }),
       })
 
-      // Regenerar PDF
       const subtotal = editRepisas.reduce((s, r) => s + (r.unidades||r.u||0)*(r.valor||r.v||0), 0) +
         ['retiro_orden','retiro_basura','cajas','bici'].reduce((s, k) => s + (editAd['qty_'+k]||0)*(editAd['precio_'+k]||0), 0)
       const iva = Math.round(subtotal * 0.19)
-      const total = subtotal + iva
 
       const payload = {
         cot_num: quote.cotNum,
@@ -139,14 +148,12 @@ export default function CotizacionesSection() {
         <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
       </div>
 
-      {/* Stats */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <StatCard label="Por confirmar" value={counts['por confirmar']} color={C.yellow} />
         <StatCard label="Confirmadas"   value={counts['confirmada']}   color={C.green} />
         <StatCard label="Rechazadas"    value={counts['rechazada']}    color={C.red} />
       </div>
 
-      {/* Filtros */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {FILTERS.map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)} style={{ ...styles.tab, ...(filter === f.key ? styles.tabActive : {}) }}>
@@ -162,10 +169,10 @@ export default function CotizacionesSection() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filtered.map(q => {
-          const isExp = expanded === q.cotNum
-          const isUpd = updating === q.cotNum
+          const isExp  = expanded === q.cotNum
+          const isUpd  = updating === q.cotNum
           const isEdit = editingId === q.cotNum
-          const color = QUOTE_STATUS_LABELS[q.status]?.color || C.border
+          const color  = QUOTE_STATUS_LABELS[q.status]?.color || C.border
           return (
             <div key={q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + color }}>
               <div onClick={() => !isEdit && setExpanded(isExp ? null : q.cotNum)}
@@ -196,8 +203,8 @@ export default function CotizacionesSection() {
                   {editRepisas.map((r, i) => (
                     <div key={r.id} style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                       {[
-                        ['Largo','largo','l',2.43,.01], ['Prof','prof','p',.48,.01], ['Alto','alto','a',2,.1],
-                        ['Niveles','niveles','n',4,1], ['Unid','unidades','u',1,1], ['Valor','valor','v',130000,1000],
+                        ['Largo','largo','l'], ['Prof','prof','p'], ['Alto','alto','a'],
+                        ['Niveles','niveles','n'], ['Unid','unidades','u'], ['Valor','valor','v'],
                       ].map(([lbl, field, fb]) => (
                         <div key={field} style={{ flex: 1, minWidth: 60 }}>
                           <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, marginBottom: 3 }}>{lbl}</div>
@@ -231,15 +238,14 @@ export default function CotizacionesSection() {
               {isExp && !isEdit && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid ' + C.border }}>
                   <div style={{ ...styles.detailGrid, marginBottom: 14 }}>
-                    {q.email     && <><span style={styles.detailLabel}>Email</span><span style={{ fontSize: 13 }}>{q.email}</span></>}
-                    {q.telefono  && <><span style={styles.detailLabel}>Tel</span><span style={{ fontSize: 13 }}>{q.telefono}</span></>}
-                    {q.notas     && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13 }}>{q.notas}</span></>}
-                    {q.subtotal  && <><span style={styles.detailLabel}>Subtotal</span><span style={{ fontSize: 13 }}>{fmt(q.subtotal)}</span></>}
-                    {q.iva       && <><span style={styles.detailLabel}>IVA</span><span style={{ fontSize: 13 }}>{fmt(q.iva)}</span></>}
-                    {q.total     && <><span style={styles.detailLabel}>Total</span><span style={{ fontSize: 13, fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span></>}
+                    {q.email    && <><span style={styles.detailLabel}>Email</span><span style={{ fontSize: 13 }}>{q.email}</span></>}
+                    {q.telefono && <><span style={styles.detailLabel}>Tel</span><span style={{ fontSize: 13 }}>{q.telefono}</span></>}
+                    {q.notas    && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13 }}>{q.notas}</span></>}
+                    {q.subtotal && <><span style={styles.detailLabel}>Subtotal</span><span style={{ fontSize: 13 }}>{fmt(q.subtotal)}</span></>}
+                    {q.iva      && <><span style={styles.detailLabel}>IVA</span><span style={{ fontSize: 13 }}>{fmt(q.iva)}</span></>}
+                    {q.total    && <><span style={styles.detailLabel}>Total</span><span style={{ fontSize: 13, fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span></>}
                   </div>
 
-                  {/* Botones de estado */}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Estado</span>
                     {Object.entries(QUOTE_STATUS_LABELS).map(([key, val]) => (
@@ -249,7 +255,8 @@ export default function CotizacionesSection() {
                       }}
                         disabled={isUpd || q.status === key}
                         style={{
-                          padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: q.status === key ? 'default' : 'pointer',
+                          padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                          cursor: q.status === key ? 'default' : 'pointer',
                           border: '1.5px solid ' + (q.status === key ? val.color : C.border),
                           background: q.status === key ? val.color + '18' : C.surface,
                           color: q.status === key ? val.color : C.textSub, opacity: isUpd ? .5 : 1,
@@ -260,7 +267,6 @@ export default function CotizacionesSection() {
                     </button>
                   </div>
 
-                  {/* Motivo rechazo popup inline */}
                   {rechazandoId === q.cotNum && (
                     <div style={{ background: C.red + '0A', border: '1px solid ' + C.red + '30', borderRadius: 10, padding: 14, marginTop: 8 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 10 }}>Motivo del rechazo</div>
@@ -276,13 +282,36 @@ export default function CotizacionesSection() {
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={() => { updateStatus(q, 'rechazada', motivoSelec); setRechazandoId(null) }}
-                          disabled={!motivoSelec} style={{ ...styles.btnPrimary, fontSize: 12, padding: '7px 16px', background: C.red, boxShadow: 'none', opacity: motivoSelec ? 1 : .5 }}>
+                          disabled={!motivoSelec}
+                          style={{ ...styles.btnPrimary, fontSize: 12, padding: '7px 16px', background: C.red, boxShadow: 'none', opacity: motivoSelec ? 1 : .5 }}>
                           Confirmar rechazo
                         </button>
                         <button onClick={() => setRechazandoId(null)} style={styles.btnSecondary}>Cancelar</button>
                       </div>
                     </div>
                   )}
+
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid ' + C.border }}>
+                    {confirmDel === q.cotNum
+                      ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, color: C.red, fontWeight: 600 }}>Confirmar eliminacion?</span>
+                          <button onClick={() => handleDelete(q.cotNum)} disabled={deleting === q.cotNum}
+                            style={{ ...styles.btnPrimary, background: C.red, boxShadow: 'none', fontSize: 12, padding: '6px 14px' }}>
+                            {deleting === q.cotNum ? 'Borrando...' : 'Si, borrar'}
+                          </button>
+                          <button onClick={() => setConfirmDel(null)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>Cancelar</button>
+                        </div>
+                      )
+                      : (
+                        <button onClick={() => setConfirmDel(q.cotNum)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 12, fontWeight: 600, padding: 0 }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                          Eliminar cotizacion
+                        </button>
+                      )
+                    }
+                  </div>
                 </div>
               )}
             </div>
