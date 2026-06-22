@@ -23,6 +23,11 @@ export async function handler(event) {
   }
 
   try {
+    if (!SHEET_ID) {
+      console.error('save-quote: GOOGLE_SHEET_ID no está definido')
+      return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ ok: false, error: 'GOOGLE_SHEET_ID no configurado en variables de entorno' }) }
+    }
+
     const {
       cotNum, nombre, email, telefono, direccion,
       fechaVisita, total, notas, status = 'por confirmar',
