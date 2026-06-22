@@ -22,7 +22,7 @@ export async function handler(event) {
     auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
     const sheets = google.sheets({ version: 'v4', auth })
 
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A:O` })
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A:P` })
     const rows = res.data.values || []
     if (rows.length <= 1) return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, quotes: [] }) }
 
@@ -42,6 +42,7 @@ export async function handler(event) {
       repisas:        (() => { try { return JSON.parse(r[12] || '[]') } catch { return [] } })(),
       adicionales:    (() => { try { return JSON.parse(r[13] || '{}') } catch { return {} } })(),
       creado:         r[14] || '',
+      pdfUrl:         r[15] || '',
     }))
 
     return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, quotes }) }

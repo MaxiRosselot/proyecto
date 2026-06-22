@@ -10,8 +10,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 const SHEET_ID       = process.env.GOOGLE_SHEET_ID
 const SHEET_NAME     = 'Cotizaciones'
 
-// Columnas: N°Cot | Nombre | Email | Teléfono | Dirección | FechaVisita | Subtotal | IVA | Total | Estado | MotivoRechazo | Notas | Repisas(JSON) | Adicionales(JSON) | Creado
-const HEADERS = ['N° Cot','Nombre','Email','Teléfono','Dirección','Fecha Visita','Subtotal','IVA','Total','Estado','Motivo Rechazo','Notas','Repisas (JSON)','Adicionales (JSON)','Creado']
+// Columnas A-P: N°Cot | Nombre | Email | Teléfono | Dirección | FechaVisita | Subtotal | IVA | Total | Estado | MotivoRechazo | Notas | Repisas(JSON) | Adicionales(JSON) | Creado | PDF URL
+const HEADERS = ['N° Cot','Nombre','Email','Teléfono','Dirección','Fecha Visita','Subtotal','IVA','Total','Estado','Motivo Rechazo','Notas','Repisas (JSON)','Adicionales (JSON)','Creado','PDF URL']
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
@@ -26,6 +26,7 @@ export async function handler(event) {
       subtotal, iva, total, status = 'por confirmar',
       motivoRechazo = '', notas = '',
       repisas = [], adicionales = {},
+      pdfUrl = '',
     } = JSON.parse(event.body || '{}')
 
     if (!cotNum || !nombre)
@@ -50,17 +51,29 @@ export async function handler(event) {
     }
 
     const createdAt = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
-    const row = [
-      String(cotNum), nombre, email || '', telefono || '', direccion || '',
-      fechaVisita || '', subtotal || '', iva || '', total || '',
-      status, motivoRechazo, notas,
-      JSON.stringify(repisas), JSON.stringify(adicionales),
-      createdAt,
-    ]
 
     if (rowIndex > 0) {
-      await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A${rowIndex}:O${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [row] } })
+      // Preservar createdAt y pdfUrl existente si no viene nueva
+      const existing = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A${rowIndex}:P${rowIndex}` }).catch(() => ({ data: { values: [] } }))
+      const existingRow = existing.data.values?.[0] || []
+      const existingCreado = existingRow[14] || createdAt
+      const finalPdfUrl = pdfUrl || existingRow[15] || ''
+      const row = [
+        String(cotNum), nombre, email || '', telefono || '', direccion || '',
+        fechaVisita || '', subtotal || '', iva || '', total || '',
+        status, motivoRechazo, notas,
+        JSON.stringify(repisas), JSON.stringify(adicionales),
+        existingCreado, finalPdfUrl,
+      ]
+      await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A${rowIndex}:P${rowIndex}`, valueInputOption: 'RAW', requestBody: { values: [row] } })
     } else {
+      const row = [
+        String(cotNum), nombre, email || '', telefono || '', direccion || '',
+        fechaVisita || '', subtotal || '', iva || '', total || '',
+        status, motivoRechazo, notas,
+        JSON.stringify(repisas), JSON.stringify(adicionales),
+        createdAt, pdfUrl,
+      ]
       await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${SHEET_NAME}!A1`, valueInputOption: 'RAW', requestBody: { values: [row] } })
     }
 

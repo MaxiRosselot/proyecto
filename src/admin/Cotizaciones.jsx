@@ -85,13 +85,15 @@ export default function CotizacionesSection() {
     setEditAd(quote.adicionales || {})
   }
 
+  function driveFileId(url) {
+    if (!url) return ''
+    const m = url.match(/\/d\/([^/]+)/)
+    return m ? m[1] : ''
+  }
+
   async function saveEdit(quote) {
     setSaving(true)
     try {
-      await apiFetch('/.netlify/functions/save-quote', {
-        method: 'POST',
-        body: JSON.stringify({ ...quote, repisas: editRepisas, adicionales: editAd }),
-      })
       const subtotal = editRepisas.reduce((s, r) => s + (r.unidades||r.u||0)*(r.valor||r.v||0), 0) +
         ['retiro_orden','retiro_basura','cajas','bici'].reduce((s, k) => s + (editAd['qty_'+k]||0)*(editAd['precio_'+k]||0), 0)
       const payload = {
@@ -125,11 +127,28 @@ export default function CotizacionesSection() {
           } else {
             blob = await fetch(fi.Url).then(r => r.blob())
           }
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = 'Cotizacion ' + quote.nombre + ' - Repisas Don Maxi.pdf'
-          a.click()
+          // Subir a Drive y actualizar URL
+          let newPdfUrl = quote.pdfUrl || ''
+          try {
+            const pdfBase64 = fi.FileData || await blob.arrayBuffer().then(buf =>
+              btoa(String.fromCharCode(...new Uint8Array(buf)))
+            )
+            const nombreInicial = (quote.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+            const pdfFileName = 'Cot' + quote.cotNum + ' - Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
+            const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
+              method: 'POST',
+              body: JSON.stringify({ pdfBase64, fileName: pdfFileName, cotNum: quote.cotNum }),
+            })
+            if (uploadRes.ok) newPdfUrl = uploadRes.viewUrl || newPdfUrl
+          } catch (e) { console.warn('upload-pdf error:', e.message) }
+
+          await apiFetch('/.netlify/functions/save-quote', {
+            method: 'POST',
+            body: JSON.stringify({ ...quote, repisas: editRepisas, adicionales: editAd, pdfUrl: newPdfUrl }),
+          })
+          setQuotes(prev => prev.map(q => q.cotNum === quote.cotNum ? { ...q, repisas: editRepisas, adicionales: editAd, pdfUrl: newPdfUrl } : q))
+          setEditingId(null)
+          return
         }
       }
       setQuotes(prev => prev.map(q => q.cotNum === quote.cotNum ? { ...q, repisas: editRepisas, adicionales: editAd } : q))
@@ -178,85 +197,60 @@ export default function CotizacionesSection() {
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <StatCard label="Por confirmar" value={counts['por confirmar']} color={C.yellow} />
-        <StatCard label="Confirmadas"   value={counts['confirmada']}   color={C.green} />
-        <StatCard label="Rechazadas"    value={counts['rechazada']}    color={C.red} />
+        <StatCard label="Confirmadas"   value={counts['confirmada']}    color={C.green}  />
+        <StatCard label="Rechazadas"    value={counts['rechazada']}     color={C.red}    />
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {FILTERS.map(f => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            style={{ ...styles.tab, ...(filter === f.key ? styles.tabActive : {}) }}
-          >
+          <button key={f.key} onClick={() => setFilter(f.key)} style={{ ...styles.tab, ...(filter === f.key ? styles.tabActive : {}) }}>
             {f.label}
-            {f.key !== 'all' && (
-              <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, opacity: .85 }}>
-                ({counts[f.key] || 0})
-              </span>
-            )}
           </button>
         ))}
       </div>
 
-      {loading && <div style={styles.empty}>Cargando...</div>}
+      {loading && <div style={styles.empty}>Cargando cotizaciones...</div>}
       {error   && <div style={styles.errorBox}>{error}</div>}
       {!loading && !error && filtered.length === 0 && (
-        <div style={styles.empty}>
-          {buscar ? 'Sin resultados para "' + buscar + '".' : 'No hay cotizaciones en esta categoria.'}
-        </div>
+        <div style={styles.empty}>{buscar ? 'Sin resultados para "' + buscar + '".' : 'No hay cotizaciones en esta seccion.'}</div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filtered.map(q => {
           const isExp  = expanded === q.cotNum
-          const isUpd  = updating === q.cotNum
           const isEdit = editingId === q.cotNum
-          const color  = QUOTE_STATUS_LABELS[q.status] ? QUOTE_STATUS_LABELS[q.status].color : C.border
+          const isUpd  = updating === q.cotNum
           const instFecha = instFechas[String(q.cotNum)]
-          // Si está confirmada: mostrar fecha de instalación activa (si existe). Si no está confirmada: mostrar fecha de visita.
-          const fechaMostrar = q.status === 'confirmada' ? (instFecha || null) : (q.fechaVisita || null)
+          const borderColor = QUOTE_STATUS_LABELS[q.status]?.color || C.border
 
           return (
-            <div key={q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + color }}>
-              <div
-                onClick={() => !isEdit && setExpanded(isExp ? null : q.cotNum)}
-                style={{ cursor: isEdit ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}
-              >
+            <div key={q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + borderColor }}>
+              {/* Header */}
+              <div onClick={() => !isEdit && setExpanded(isExp ? null : q.cotNum)}
+                style={{ cursor: isEdit ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.textMuted }}>#{q.cotNum}</span>
                     <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{q.nombre}</span>
                     <Badge status={q.status} />
                     {scheduledCotNums.has(String(q.cotNum)) && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 99,
-                        background: C.orange + '18', color: C.orangeDark, border: '1px solid ' + C.orange + '40'
-                      }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: C.green + '18', color: C.green, border: '1px solid ' + C.green + '40' }}>
                         Agendada
                       </span>
                     )}
-                    {q.status === 'por confirmar' && diasDesde(q.creado) >= 3 && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
-                        background: '#FEE2E2', color: C.red, border: '1px solid #FECACA'
-                      }}>
-                        {diasDesde(q.creado)}d sin respuesta
-                      </span>
-                    )}
-                    {q.motivoRechazo && (
-                      <span style={{ fontSize: 11, color: C.red, background: C.red + '10', padding: '2px 8px', borderRadius: 99 }}>
-                        {q.motivoRechazo}
+                    {q.pdfUrl && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                        PDF guardado
                       </span>
                     )}
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>
+                    <span style={{ marginRight: 6, color: C.textMuted, fontWeight: 600 }}>N{q.cotNum}</span>
                     {q.status === 'confirmada' ? (
                       instFecha
-                        ? <span style={{ color: C.green, fontWeight: 600 }}>Agendada para {fmtDate(instFecha)} &middot; </span>
-                        : <span style={{ color: C.yellow, fontWeight: 600 }}>Por agendar &middot; </span>
+                        ? <span style={{ color: C.green, fontWeight: 600 }}>Agendada para {fmtDate(instFecha)} · </span>
+                        : <span style={{ color: C.yellow, fontWeight: 600 }}>Por agendar · </span>
                     ) : (
-                      fechaMostrar ? <span>{fmtDate(fechaMostrar)} &middot; </span> : null
+                      q.fechaVisita ? <span>{fmtDate(q.fechaVisita)} · </span> : null
                     )}
                     <span style={{ fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span>
                     {q.direccion && <span style={{ marginLeft: 8, color: C.textMuted }}>{q.direccion}</span>}
@@ -264,29 +258,23 @@ export default function CotizacionesSection() {
                 </div>
                 {!isEdit && (
                   <div style={{ color: C.textMuted, transition: 'transform .2s', transform: isExp ? 'rotate(180deg)' : 'none' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 )}
               </div>
 
+              {/* Edit form */}
               {isEdit && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid ' + C.border }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', marginBottom: 10, letterSpacing: 1 }}>
-                    Editar repisas
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', marginBottom: 8, letterSpacing: 1 }}>Repisas</div>
                   {editRepisas.map((r, i) => (
-                    <div key={r.id} style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                      {[
-                        ['Largo','largo','l'], ['Prof','prof','p'], ['Alto','alto','a'],
-                        ['Niveles','niveles','n'], ['Unid','unidades','u'], ['Valor','valor','v'],
-                      ].map(([lbl, field, fb]) => (
-                        <div key={field} style={{ flex: 1, minWidth: 60 }}>
-                          <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, marginBottom: 3 }}>{lbl}</div>
+                    <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr) 28px', gap: 6, marginBottom: 8 }}>
+                      {['largo','prof','alto','niveles','unidades','valor'].map(field => (
+                        <div key={field}>
+                          <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 2 }}>{field}</div>
                           <input
                             type="number"
-                            value={r[field] != null ? r[field] : (r[fb] != null ? r[fb] : '')}
+                            value={r[field] ?? r[field[0]] ?? 0}
                             style={{ ...styles.input, padding: '5px 6px', fontSize: 12 }}
                             onChange={e => setEditRepisas(prev => prev.map((x, j) => j === i ? { ...x, [field]: parseFloat(e.target.value)||0 } : x))}
                           />
@@ -336,6 +324,27 @@ export default function CotizacionesSection() {
                     {q.iva      && <><span style={styles.detailLabel}>IVA</span><span style={{ fontSize: 13 }}>{fmt(q.iva)}</span></>}
                     {q.total    && <><span style={styles.detailLabel}>Total</span><span style={{ fontSize: 13, fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span></>}
                   </div>
+
+                  {q.pdfUrl && (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      <a
+                        href={q.pdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ ...styles.btnPrimary, fontSize: 12, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Ver PDF
+                      </a>
+                      <a
+                        href={'https://drive.google.com/uc?export=download&id=' + driveFileId(q.pdfUrl)}
+                        style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Descargar
+                      </a>
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Estado</span>

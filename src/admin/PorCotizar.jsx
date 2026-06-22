@@ -168,6 +168,21 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
       const next = cotNum + 1; setCotNum(next); setCotNumStorage(next)
 
+      // Subir PDF a Drive
+      let uploadedPdfUrl = ''
+      try {
+        const pdfBase64 = fi.FileData || await blob.arrayBuffer().then(buf =>
+          btoa(String.fromCharCode(...new Uint8Array(buf)))
+        )
+        const nombreInicial = (cliente.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+        const pdfFileName = `Cot${cotNum} - Cotizacion ${nombreInicial} - Repisas Don Maxi.pdf`
+        const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
+          method: 'POST',
+          body: JSON.stringify({ pdfBase64, fileName: pdfFileName, cotNum }),
+        })
+        if (uploadRes.ok) uploadedPdfUrl = uploadRes.viewUrl || ''
+      } catch (e) { console.warn('upload-pdf error:', e.message) }
+
       await apiFetch('/.netlify/functions/save-quote', {
         method: 'POST',
         body: JSON.stringify({
@@ -178,6 +193,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           notas: '', status: 'por confirmar',
           repisas: repisas.map(r => ({ largo:r.l, prof:r.p, alto:r.a, niveles:r.n, unidades:r.u, valor:r.v })),
           adicionales,
+          pdfUrl: uploadedPdfUrl,
         }),
       })
       setAutoSaved(true)
@@ -382,6 +398,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       {pdfUrl && (
         <div style={{ ...styles.card, borderLeft: '4px solid ' + C.green }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+     
             <div>
               <p style={{ fontWeight: 700, color: autoSaved ? C.green : C.orange, marginBottom: 2, marginTop: 0 }}>
                 {autoSaved ? 'PDF generado y guardado' : 'PDF generado'}
@@ -390,8 +407,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={handleDescargar} style={styles.btnSecondary}>Descargar</button>
-              <a href={pdfUrl} target="_blank" rel="noreferrer"
-                style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
             </div>
@@ -399,5 +415,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         </div>
       )}
     </div>
+  )
+}
+iv>
   )
 }
