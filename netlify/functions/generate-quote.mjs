@@ -4,9 +4,8 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import JSZip from 'jszip'
 
-// En Netlify Functions (Lambda), el bundle y los archivos incluidos
-// quedan en /var/task/. Cuando esbuild compila ESM → CJS, import.meta.url
-// queda undefined, por eso usamos LAMBDA_TASK_ROOT o /var/task como fallback.
+// En Netlify Functions con esbuild, los included_files quedan en /var/task/
+// junto al bundle. LAMBDA_TASK_ROOT apunta a esa carpeta.
 const FUNCTIONS_DIR = process.env.LAMBDA_TASK_ROOT || '/var/task'
 
 const corsHeaders = {
@@ -72,6 +71,17 @@ function num(obj, key) {
 // ── Generación del xlsx ───────────────────────────────────────────────────────
 
 async function generateXlsx(data) {
+  // Diagnóstico: listar archivos en /var/task y subdirectorios
+  const { readdirSync, existsSync } = await import('fs')
+  const diag = {
+    LAMBDA_TASK_ROOT: process.env.LAMBDA_TASK_ROOT,
+    FUNCTIONS_DIR,
+    cwd: process.cwd(),
+    varTask: existsSync('/var/task') ? readdirSync('/var/task').slice(0, 30) : 'no existe',
+    varTaskFunctions: existsSync('/var/task/netlify/functions') ? readdirSync('/var/task/netlify/functions').slice(0, 30) : 'no existe',
+  }
+  console.log('DIAG:', JSON.stringify(diag, null, 2))
+
   const baseBytes = readFileSync(join(FUNCTIONS_DIR, 'cotizacion.xlsx'))
   const zip = await JSZip.loadAsync(baseBytes)
   let sheetXml = await zip.file('xl/worksheets/sheet1.xml').async('string')
