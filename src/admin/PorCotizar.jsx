@@ -175,7 +175,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           btoa(String.fromCharCode(...new Uint8Array(buf)))
         )
         const nombreInicial = (cliente.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
-        const pdfFileName = `Cot${cotNum} - Cotizacion ${nombreInicial} - Repisas Don Maxi.pdf`
+        const pdfFileName = 'Cot' + cotNum + ' - Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
         const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
           method: 'POST',
           body: JSON.stringify({ pdfBase64, fileName: pdfFileName, cotNum }),
@@ -216,7 +216,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         <button onClick={resetCotizador} style={{ ...styles.btnSecondary, fontSize: 12 }}>Reiniciar</button>
       </div>
 
-      {/* Modo */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Origen de la cotizacion</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -265,7 +264,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         )}
       </div>
 
-      {/* N Cotizacion */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Numero de Cotizacion</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -277,7 +275,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         </div>
       </div>
 
-      {/* Repisas */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Repisas</div>
         <div style={{ overflowX: 'auto' }}>
@@ -328,7 +325,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         )}
       </div>
 
-      {/* Adicionales */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Adicionales</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 120px 90px', gap: '8px 10px', alignItems: 'center', fontSize: 13 }}>
@@ -370,7 +366,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         </div>
       </div>
 
-      {/* Totales */}
       <div style={{ ...styles.card, marginBottom: 20, background: C.orangeLight, border: '1px solid ' + C.orange + '30' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {[['Subtotal neto', totales.subtotal], ['IVA (19%)', totales.iva]].map(([label, val]) => (
@@ -398,7 +393,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       {pdfUrl && (
         <div style={{ ...styles.card, borderLeft: '4px solid ' + C.green }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-     
             <div>
               <p style={{ fontWeight: 700, color: autoSaved ? C.green : C.orange, marginBottom: 2, marginTop: 0 }}>
                 {autoSaved ? 'PDF generado y guardado' : 'PDF generado'}
@@ -415,8 +409,5 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         </div>
       )}
     </div>
-  )
-}
-iv>
   )
 }
