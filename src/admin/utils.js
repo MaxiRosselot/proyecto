@@ -16,6 +16,7 @@ export const QUOTE_STATUS_LABELS = {
 }
 
 export const SECTIONS = [
+  { id: 'inicio',        label: 'Inicio',        icon: 'home' },
   { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
   { id: 'cotizador',     label: 'Cotizaciones',  icon: 'doc' },
   { id: 'cotizaciones',  label: 'Historial',     icon: 'files' },

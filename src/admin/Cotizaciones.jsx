@@ -139,6 +139,12 @@ export default function CotizacionesSection() {
     finally { setSaving(false) }
   }
 
+  function diasDesde(dateStr) {
+    if (!dateStr) return null
+    try { return Math.floor((new Date() - new Date(dateStr)) / (1000*60*60*24)) }
+    catch { return null }
+  }
+
   const FILTERS = [
     { key: 'all', label: 'Todas' },
     { key: 'por confirmar', label: 'Por confirmar' },
@@ -197,6 +203,11 @@ export default function CotizacionesSection() {
                     {scheduledCotNums.has(String(q.cotNum)) && (
                       <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: C.orange + '18', color: C.orangeDark, border: '1px solid ' + C.orange + '40' }}>
                         Agendada
+                      </span>
+                    )}
+                    {q.status === 'por confirmar' && diasDesde(q.creado) >= 3 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#FEE2E2', color: C.red, border: '1px solid #FECACA' }}>
+                        {diasDesde(q.creado)}d sin respuesta
                       </span>
                     )}
                     {q.motivoRechazo && <span style={{ fontSize: 11, color: C.red, background: C.red + '10', padding: '2px 8px', borderRadius: 99 }}>{q.motivoRechazo}</span>}

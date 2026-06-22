@@ -39,6 +39,9 @@
 [functions.generate-quote]
   included_files = ["netlify/functions/cotizacion.xlsx"]
 
+[functions.send-reminders]
+  schedule = "0 13 * * *"
+
 [[headers]]
   for = "/*"
   [headers.values]

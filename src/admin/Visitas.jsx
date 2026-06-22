@@ -29,13 +29,21 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [updating, setUpdating] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [sortAsc, setSortAsc]   = useState(false)
+  const [cotFechas, setCotFechas] = useState(new Set())
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const data = await apiFetch('/.netlify/functions/get-visits')
-      if (data.ok) { setVisits(data.visits); onVisitsLoaded?.(data.visits) }
-      else setError(data.error || 'Error al cargar visitas')
+      const [visitData, cotData] = await Promise.all([
+        apiFetch('/.netlify/functions/get-visits'),
+        apiFetch('/.netlify/functions/get-quotes').catch(() => ({ ok: false })),
+      ])
+      if (visitData.ok) { setVisits(visitData.visits); onVisitsLoaded?.(visitData.visits) }
+      else setError(visitData.error || 'Error al cargar visitas')
+      if (cotData.ok) {
+        const fechas = new Set((cotData.quotes || []).map(q => q.fechaVisita).filter(Boolean).map(f => f.slice(0,10)))
+        setCotFechas(fechas)
+      }
     } catch { setError('No se pudo conectar') }
     finally { setLoading(false) }
   }, [])
@@ -60,6 +68,15 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   }
 
   const now = new Date()
+  function sinCotizar(visit) {
+    const status = statuses[visit.id]
+    if (status !== 'realizada') return false
+    const visitDate = new Date(visit.start)
+    const diffDays = (now - visitDate) / (1000*60*60*24)
+    if (diffDays < 2) return false
+    const fechaKey = visitDate.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+    return !cotFechas.has(fechaKey)
+  }
   const sortFn = (a, b) => sortAsc
     ? new Date(a.start) - new Date(b.start)
     : new Date(b.start) - new Date(a.start)
@@ -121,6 +138,11 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
                     <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{visit.nombre}</span>
                     <Badge status={status} />
+                    {sinCotizar(visit) && (
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:'#FEF3C7', color:'#92400E', border:'1px solid #FCD34D' }}>
+                        Sin cotizar
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>
                     {fmtDate(visit.start)} {'·'} {fmtTime(visit.start)}
