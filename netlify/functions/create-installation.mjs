@@ -59,7 +59,8 @@ export async function handler(event) {
       notas     ? `\nNotas:\n${notas}`      : '',
     ].filter(Boolean).join('\n')
 
-    const attendees = email ? [{ email }] : []
+    const validEmail = email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    const attendees = validEmail ? [{ email: email.trim() }] : []
 
     // Crear evento en Calendar
     const calRes = await calendar.events.insert({
