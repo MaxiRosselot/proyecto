@@ -8,7 +8,7 @@ const AD_KEYS = [
   { key: 'bici',          label: 'Bici' },
 ]
 
-const PAGO_COLORS = { Pendiente: C.red, Parcial: C.yellow, Pagado: C.green }
+const PAGO_COLORS = { Pendiente: C.red, Parcial: C.yellow, Pagado: C.green, Atrasado: '#7C3AED' }
 
 function PagoBadge({ pago }) {
   const color = PAGO_COLORS[pago] || C.red
@@ -30,7 +30,14 @@ function VentaRow({ venta, onSaved }) {
   const [ad, setAd]               = useState(venta.adicionales || {})
   const [ajusteMonto, setAjuste]  = useState(venta.ajusteMonto || 0)
   const [ajusteNota, setAjusteNota] = useState(venta.ajusteNota || '')
-  const [pago, setPago]           = useState(venta.pago || 'Pendiente')
+  function pagoEfectivo(p) {
+    if (p === 'Pagado') return 'Pagado'
+    // Si la instalación ya ocurrió y no está pagado → Atrasado
+    const fin = venta.end || venta.fechaInstalacion
+    if (fin && new Date(fin) < new Date() && p !== 'Pagado') return 'Atrasado'
+    return p || 'Pendiente'
+  }
+  const [pago, setPago]           = useState(pagoEfectivo(venta.pago || 'Pendiente'))
   const [saving, setSaving]       = useState(false)
 
   const subtotalAd = AD_KEYS.reduce((s, {key}) => s + (Number(ad['qty_'+key]||0) * Number(ad['precio_'+key]||0)), 0)
@@ -47,7 +54,8 @@ function VentaRow({ venta, onSaved }) {
           adicionales: ad,
           ajusteMonto: Number(ajusteMonto),
           ajusteNota,
-          pago,
+          // Atrasado es calculado, guardar el valor base
+          pago: pago === 'Atrasado' ? 'Pendiente' : pago,
         }),
       })
       setEditing(false)
@@ -175,6 +183,11 @@ function VentaRow({ venta, onSaved }) {
           <div style={{ marginBottom: editing ? 16 : 0 }}>
             <div style={styles.cardLabel}>Estado de pago</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {pagoEfectivo(pago) === 'Atrasado' && (
+                <div style={{ fontSize:12, color:'#7C3AED', fontWeight:700, marginBottom:8, padding:'6px 12px', background:'#EDE9FE', borderRadius:8 }}>
+                  ⚠ Atrasado — instalación realizada sin pago registrado
+                </div>
+              )}
               {['Pendiente','Parcial','Pagado'].map(op => {
                 const color = PAGO_COLORS[op]
                 const active = pago === op
@@ -276,8 +289,8 @@ export default function VentasSection() {
   const filtered = filterPago === 'all' ? byYear : byYear.filter(v => (v.pago||'Pendiente') === filterPago)
 
   const totalAnio     = byYear.reduce((s, v) => s + calcTotal(v), 0)
-  const totalCobrado  = byYear.filter(v => v.pago === 'Pagado').reduce((s, v) => s + calcTotal(v), 0)
-  const totalPendiente = byYear.filter(v => !v.pago || v.pago !== 'Pagado').reduce((s, v) => s + calcTotal(v), 0)
+  const totalCobrado   = byYear.filter(v => v.pago === 'Pagado').reduce((s, v) => s + calcTotal(v), 0)
+  const totalPendiente = byYear.filter(v => v.pago !== 'Pagado').reduce((s, v) => s + calcTotal(v), 0)
 
   return (
     <div>
@@ -314,7 +327,7 @@ export default function VentasSection() {
 
       {/* Filtro pago */}
       <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
-        {[['all','Todas'],['Pendiente','Pendiente'],['Parcial','Parcial'],['Pagado','Pagado']].map(([k,l]) => (
+        {[['all','Todas'],['Pendiente','Pendiente'],['Atrasado','Atrasado'],['Parcial','Parcial'],['Pagado','Pagado']].map(([k,l]) => (
           <button key={k} onClick={() => setFilterPago(k)}
             style={{ ...styles.tab, ...(filterPago===k ? styles.tabActive : {}), fontSize:12 }}>
             {l}
@@ -326,7 +339,7 @@ export default function VentasSection() {
       {!loading && filtered.length === 0 && <div style={styles.empty}>No hay ventas en este período.</div>}
 
       {!loading && filtered.map(v => (
-        <VentaRow key={v.id || v.cotNum} venta={v} onSaved={load} />
+        <VentaRow key={(v.id || v.cotNum) + '-' + (v.pago||'Pendiente')} venta={v} onSaved={load} />
       ))}
     </div>
   )

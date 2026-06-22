@@ -79,7 +79,7 @@ export default function DashboardSection({ navigateTo }) {
       const visitasProximas  = visits.filter(v => new Date(v.start) >= hoy && new Date(v.start) < en7)
       const porConfirmar     = quotes.filter(q => q.status === 'por confirmar')
       const instProximas     = installations.filter(i => new Date(i.start) >= hoy && new Date(i.start) < en7)
-      const cobrarPendiente  = installations.filter(i => !i.pago || i.pago === 'Pendiente')
+      const cobrarPendiente  = installations.filter(i => i.pago !== 'Pagado')
 
       // Seguimiento
       const tresDias = new Date(hoy); tresDias.setDate(hoy.getDate()-3)
@@ -156,7 +156,7 @@ export default function DashboardSection({ navigateTo }) {
           sub={totalPendiente > 0 ? fmt(totalPendiente) + ' total' : ''}
           color={cobrarPendiente.length > 0 ? C.red : C.green}
           alert={cobrarPendiente.length}
-          onClick={() => navigateTo('instalaciones')}
+          onClick={() => navigateTo('ventas')}
         />
       </div>
 
@@ -216,7 +216,7 @@ export default function DashboardSection({ navigateTo }) {
         </SectionCard>
 
         {/* Por cobrar */}
-        <SectionCard title="Instalaciones por cobrar" action={() => navigateTo('instalaciones')} actionLabel="Ver todas">
+        <SectionCard title="Instalaciones por cobrar" action={() => navigateTo('ventas')} actionLabel="Ver ventas">
           {cobrarPendiente.length === 0
             ? <div style={{ fontSize:13, color:C.textMuted, padding:'10px 0' }}>Todo al día.</div>
             : cobrarPendiente.slice(0,5).map(i => (
@@ -225,7 +225,7 @@ export default function DashboardSection({ navigateTo }) {
                   right={i.total ? fmt(i.total) : '—'}
                   sub={i.start ? fmtDate(i.start) : ''}
                   accent={C.red}
-                  onClick={() => navigateTo('instalaciones')}
+                  onClick={() => navigateTo('ventas')}
                 />
               ))
           }
