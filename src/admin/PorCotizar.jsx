@@ -161,12 +161,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         setAdicionales(prev => ({ ...prev, ...res.adicionales }))
       }
 
-      // Si el PDF tenía N° de cotización, actualizar
-      if (res.cotNum) {
-        setCotNum(res.cotNum)
-        setCotNumStorage(res.cotNum)
-      }
-
       // Cambiar a modo manual para editar los datos prellenados
       setMode('pdf')
     } catch (e) {
