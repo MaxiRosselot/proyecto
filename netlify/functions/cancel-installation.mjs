@@ -80,12 +80,8 @@ export async function handler(event) {
       ].join('\n')
 
       const subject = 'Cancelación de instalación — Repisas Don Maxi'
-      const raw = btoa(
-        `To: ${email}\r\n` +
-        `Subject: ${subject}\r\n` +
-        `Content-Type: text/plain; charset=utf-8\r\n\r\n` +
-        bodyText
-      ).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+      const msgStr = `To: ${email}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${bodyText}`
+      const raw = Buffer.from(msgStr).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
       await gmail.users.messages.send({ userId: 'me', requestBody: { raw } }).catch(e => {
         console.warn('Email warning (non-fatal):', e.message)

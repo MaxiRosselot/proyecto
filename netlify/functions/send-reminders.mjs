@@ -25,9 +25,8 @@ function fmtHuman(dateStr) {
 }
 
 async function sendEmail(gmail, to, subject, body) {
-  const raw = btoa(
-    `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}`
-  ).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
+  const msgStr = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}`
+  const raw = Buffer.from(msgStr).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
   await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
 }
 
