@@ -214,7 +214,8 @@ export default function CotizacionesSection() {
           const isEdit = editingId === q.cotNum
           const color  = QUOTE_STATUS_LABELS[q.status] ? QUOTE_STATUS_LABELS[q.status].color : C.border
           const instFecha = instFechas[String(q.cotNum)]
-          const fechaMostrar = q.fechaVisita || instFecha || null
+          // Si está confirmada: mostrar fecha de instalación activa (si existe). Si no está confirmada: mostrar fecha de visita.
+          const fechaMostrar = q.status === 'confirmada' ? (instFecha || null) : (q.fechaVisita || null)
 
           return (
             <div key={q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + color }}>
@@ -250,9 +251,15 @@ export default function CotizacionesSection() {
                     )}
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>
-                    {fechaMostrar && <span>{fmtDate(fechaMostrar)} &middot; </span>}
+                    {q.status === 'confirmada' ? (
+                      instFecha
+                        ? <span style={{ color: C.green, fontWeight: 600 }}>Agendada para {fmtDate(instFecha)} &middot; </span>
+                        : <span style={{ color: C.yellow, fontWeight: 600 }}>Por agendar &middot; </span>
+                    ) : (
+                      fechaMostrar ? <span>{fmtDate(fechaMostrar)} &middot; </span> : null
+                    )}
                     <span style={{ fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span>
-                    {q.direccion && <span style={{ marginLeft: 12, color: C.textMuted }}>{q.direccion}</span>}
+                    {q.direccion && <span style={{ marginLeft: 8, color: C.textMuted }}>{q.direccion}</span>}
                   </div>
                 </div>
                 {!isEdit && (
@@ -425,6 +432,10 @@ export default function CotizacionesSection() {
           )
         })}
       </div>
+    </div>
+  )
+}
+iv>
     </div>
   )
 }
