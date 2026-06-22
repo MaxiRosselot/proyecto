@@ -91,9 +91,19 @@ export default function InstalacionesSection() {
 
     setSubmitting(true)
     try {
+      // Calcular subtotales desde cotización seleccionada
+      let subtotalRepisas = 0, subtotalAdicionales = 0, total = 0
+      if (!useManual && selectedQuote) {
+        const reps = selectedQuote.repisas || []
+        subtotalRepisas = reps.reduce((s, r) => s + (r.unidades || r.u || 0) * (r.valor || r.v || 0), 0)
+        const ad = selectedQuote.adicionales || {}
+        subtotalAdicionales = ['retiro_orden','retiro_basura','cajas','bici']
+          .reduce((s, k) => s + (ad['qty_'+k]||0)*(ad['precio_'+k]||0), 0)
+        total = parseFloat(selectedQuote.total) || (subtotalRepisas + subtotalAdicionales) * 1.19
+      }
       const data = await apiFetch('/.netlify/functions/create-installation', {
         method: 'POST',
-        body: JSON.stringify({ nombre, email, telefono, direccion, fecha, horaInicio, horaFin, notas, cotNum }),
+        body: JSON.stringify({ nombre, email, telefono, direccion, fecha, horaInicio, horaFin, notas, cotNum, subtotalRepisas, subtotalAdicionales, total }),
       })
       if (data.ok) {
         setSubmitOk(data)

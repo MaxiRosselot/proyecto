@@ -17,9 +17,10 @@ export const QUOTE_STATUS_LABELS = {
 
 export const SECTIONS = [
   { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
-  { id: 'por-cotizar',   label: 'Por Cotizar',   icon: 'doc' },
-  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files' },
+  { id: 'cotizador',     label: 'Cotizaciones',  icon: 'doc' },
+  { id: 'cotizaciones',  label: 'Historial',     icon: 'files' },
   { id: 'instalaciones', label: 'Instalaciones', icon: 'wrench' },
+  { id: 'ventas',        label: 'Ventas',        icon: 'chart' },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }

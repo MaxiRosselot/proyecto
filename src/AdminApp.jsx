@@ -4,6 +4,7 @@ import VisitasSection        from './admin/Visitas.jsx'
 import PorCotizarSection     from './admin/PorCotizar.jsx'
 import CotizacionesSection   from './admin/Cotizaciones.jsx'
 import InstalacionesSection  from './admin/Instalaciones.jsx'
+import VentasSection         from './admin/Ventas.jsx'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -11,6 +12,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     doc:      (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>),
     files:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>),
     wrench:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>),
+    chart:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
   return icons[name] || null
@@ -61,6 +63,15 @@ function LoginScreen({ onLogin }) {
   )
 }
 
+function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllVisits, allVisits, visitaParaCotizar }) {
+  if (section === 'visitas')       return <VisitasSection statuses={statuses} onStatusChange={onStatusChange} navigateTo={navigateTo} onVisitsLoaded={setAllVisits} />
+  if (section === 'cotizador')     return <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} allVisits={allVisits} />
+  if (section === 'cotizaciones')  return <CotizacionesSection />
+  if (section === 'instalaciones') return <InstalacionesSection />
+  if (section === 'ventas')        return <VentasSection />
+  return null
+}
+
 export default function AdminApp() {
   const [authed, setAuthed]                       = useState(() => sessionStorage.getItem(SESSION_KEY) === '1')
   const [section, setSection]                     = useState('visitas')
@@ -72,17 +83,17 @@ export default function AdminApp() {
   function handleStatusChange(visitId, newStatus) { setStatuses(prev => ({ ...prev, [visitId]: newStatus })) }
   function navigateTo(sec, visitData) {
     setSection(sec)
-    if (sec === 'por-cotizar' && visitData) setVisitaParaCotizar(visitData)
+    if (sec === 'cotizador' && visitData) setVisitaParaCotizar(visitData)
   }
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
 
   const currentSection = SECTIONS.find(s => s.id === section)
+  const contentProps = { section, statuses, onStatusChange: handleStatusChange, navigateTo, setAllVisits, allVisits, visitaParaCotizar }
 
   // ── MOBILE: barra inferior ─────────────────────────────────────────────────
   if (isMobile) return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Header móvil */}
       <header style={{ background: C.sidebar, padding: '0 16px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/logo.png" alt="Don Maxi" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} onError={e => { e.target.style.display='none' }} />
@@ -97,29 +108,23 @@ export default function AdminApp() {
         </button>
       </header>
 
-      {/* Contenido */}
       <main style={{ flex: 1, padding: '16px', paddingBottom: 80, overflowY: 'auto' }}>
-        {section === 'visitas'       && <VisitasSection statuses={statuses} onStatusChange={handleStatusChange} navigateTo={navigateTo} onVisitsLoaded={setAllVisits} />}
-        {section === 'por-cotizar'   && <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} allVisits={allVisits} />}
-        {section === 'cotizaciones'  && <CotizacionesSection />}
-        {section === 'instalaciones' && <InstalacionesSection />}
+        <SectionContent {...contentProps} />
       </main>
 
-      {/* Tab bar inferior */}
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sidebar, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {SECTIONS.map(s => {
           const active = section === s.id
           return (
             <button key={s.id} onClick={() => navigateTo(s.id)} style={{
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 4, padding: '10px 4px', border: 'none', cursor: 'pointer',
-              background: 'transparent',
-              color: active ? C.orange : '#6B7280',
-              transition: 'color .15s',
+              gap: 3, padding: '8px 2px', border: 'none', cursor: 'pointer',
+              background: 'transparent', color: active ? C.orange : '#6B7280', transition: 'color .15s',
+              position: 'relative',
             }}>
-              <Icon name={s.icon} size={20} color={active ? C.orange : '#6B7280'} />
-              <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, letterSpacing: .2 }}>{s.label}</span>
-              {active && <div style={{ position: 'absolute', top: 0, width: 32, height: 2, borderRadius: '0 0 2px 2px', background: C.orange, marginTop: 0 }}/>}
+              {active && <div style={{ position: 'absolute', top: 0, width: 28, height: 2, borderRadius: '0 0 2px 2px', background: C.orange }}/>}
+              <Icon name={s.icon} size={19} color={active ? C.orange : '#6B7280'} />
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: .2 }}>{s.label}</span>
             </button>
           )
         })}
@@ -135,13 +140,6 @@ export default function AdminApp() {
           <img src="/logo.png" alt="Don Maxi" style={{ height: 38, objectFit: 'contain', filter: 'brightness(0) invert(1)', maxWidth: '100%' }}
             onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex' }} />
           <div style={{ display: 'none', alignItems: 'center', gap: 10 }}>
-            <svg width="28" height="28" viewBox="0 0 44 44" fill="none">
-              <rect x="4" y="14" width="36" height="5" rx="2" fill="#F47920"/>
-              <rect x="4" y="22" width="36" height="5" rx="2" fill="#F47920"/>
-              <rect x="4" y="30" width="36" height="5" rx="2" fill="#F47920"/>
-              <rect x="8" y="8" width="5" height="30" rx="2" fill="#F47920" opacity=".4"/>
-              <rect x="31" y="8" width="5" height="30" rx="2" fill="#F47920" opacity=".4"/>
-            </svg>
             <div><div style={{ fontWeight: 800, fontSize: 14 }}>DON MAXI</div></div>
           </div>
         </div>
@@ -182,10 +180,7 @@ export default function AdminApp() {
           <div style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '4px 12px', borderRadius: 6, fontWeight: 500 }}>Repisas Don Maxi</div>
         </header>
         <main style={{ flex: 1, padding: '28px 32px', maxWidth: 960, width: '100%' }}>
-          {section === 'visitas'       && <VisitasSection statuses={statuses} onStatusChange={handleStatusChange} navigateTo={navigateTo} onVisitsLoaded={setAllVisits} />}
-          {section === 'por-cotizar'   && <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} allVisits={allVisits} />}
-          {section === 'cotizaciones'  && <CotizacionesSection />}
-          {section === 'instalaciones' && <InstalacionesSection />}
+          <SectionContent {...contentProps} />
         </main>
       </div>
     </div>

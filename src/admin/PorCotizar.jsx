@@ -1,13 +1,63 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { ADMIN_PASSWORD, CONVERTAPI_SECRET, DEFAULTS_REPISA, C, apiFetch, fmtDate, fmt, styles } from './utils.js'
+
+// ── Selector con opción libre ──────────────────────────────────────────────────
+function SelectOrFree({ options, value, onChange, step = 0.01, unit = '' }) {
+  const [libre, setLibre] = useState(() => !options.includes(Number(value)))
+  const strOptions = options.map(String)
+
+  function handleSelect(e) {
+    if (e.target.value === '__libre__') { setLibre(true) }
+    else { setLibre(false); onChange(parseFloat(e.target.value)) }
+  }
+
+  const sel = { padding: '7px 6px', border: '1.5px solid ' + C.border, borderRadius: 7, fontSize: 13, width: '100%', fontFamily: 'inherit', background: '#FAFAFA', outline: 'none' }
+
+  if (!libre) return (
+    <select value={strOptions.includes(String(value)) ? String(value) : '__libre__'} onChange={handleSelect} style={sel}>
+      {options.map(o => <option key={o} value={o}>{o}{unit}</option>)}
+      <option value="__libre__">Otro...</option>
+    </select>
+  )
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      <input type="number" value={value} step={step} onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        style={{ ...sel, width: '70%' }} autoFocus />
+      <button type="button" onClick={() => setLibre(false)}
+        style={{ fontSize: 11, padding: '0 6px', border: '1.5px solid ' + C.border, borderRadius: 7, background: C.bg, cursor: 'pointer', color: C.textSub, whiteSpace: 'nowrap' }}>
+        Lista
+      </button>
+    </div>
+  )
+}
+
+const STORAGE_KEY = 'dm_cotizador_state'
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
+}
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+}
 
 export default function PorCotizarSection({ statuses, visitaSeleccionada, allVisits }) {
   const realizadas = allVisits.filter(v => statuses[v.id] === 'realizada')
 
-  const [selectedVisit, setSelectedVisit] = useState(visitaSeleccionada || null)
-  const [cotNum, setCotNum]               = useState(() => parseInt(localStorage.getItem('dm_cot_num') || '1421'))
-  const [repisas, setRepisas]             = useState([{ ...DEFAULTS_REPISA, id: Date.now() }])
-  const [adicionales, setAdicionales]     = useState({
+  // Cargar estado persistido o defaults
+  const saved = loadState()
+
+  const [mode, setMode]               = useState(saved?.mode || 'visita') // 'visita' | 'manual'
+  const [selectedVisit, setSelectedVisit] = useState(null)
+  const [manualCliente, setManualCliente] = useState(saved?.manualCliente || { nombre:'', email:'', celular:'', direccion:'' })
+  const [cotNum, setCotNum]           = useState(saved?.cotNum ?? parseInt(localStorage.getItem('dm_cot_num') || '1421'))
+  const [repisas, setRepisas]         = useState(saved?.repisas || [{ ...DEFAULTS_REPISA, id: Date.now() }])
+  const [adNombres, setAdNombres]     = useState(saved?.adNombres || {
+    retiro_orden: 'Retiro y orden de articulos',
+    retiro_basura: 'Retiro de basura',
+    cajas: 'Cajas organizadoras',
+    bici: 'Soporte bicicleta / ski',
+  })
+  const [adicionales, setAdicionales] = useState(saved?.adicionales || {
     qty_retiro_orden: 0, precio_retiro_orden: 40000,
     qty_retiro_basura: 0, precio_retiro_basura: 30000,
     qty_cajas: 0, precio_cajas: 15000,
@@ -16,16 +66,44 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   const [generating, setGenerating] = useState(false)
   const [pdfUrl, setPdfUrl]         = useState(null)
   const [pdfBlob, setPdfBlob]       = useState(null)
-  const [totalInfo, setTotalInfo]   = useState({ subtotal: 0, iva: 0, total: 0 })
-  const [saving, setSaving]         = useState(false)
-  const [saved, setSaved]           = useState(false)
+  const [totalInfo, setTotalInfo]   = useState(saved?.totalInfo || { subtotal: 0, iva: 0, total: 0 })
+  const [autoSaved, setAutoSaved]   = useState(false)
   const [error, setError]           = useState('')
+  const [editingNombre, setEditingNombre] = useState(null)
 
-  useEffect(() => { if (visitaSeleccionada) setSelectedVisit(visitaSeleccionada) }, [visitaSeleccionada])
+  // Si viene desde Visitas, seleccionar esa visita
+  useEffect(() => {
+    if (visitaSeleccionada) {
+      setMode('visita')
+      setSelectedVisit(visitaSeleccionada)
+    }
+  }, [visitaSeleccionada])
+
+  // Persistir estado cuando cambia
+  const stateRef = useRef({})
+  useEffect(() => {
+    stateRef.current = { mode, manualCliente, cotNum, repisas, adNombres, adicionales, totalInfo }
+    saveState(stateRef.current)
+  }, [mode, manualCliente, cotNum, repisas, adNombres, adicionales, totalInfo])
+
+  function resetCotizador() {
+    const newState = {
+      mode: 'visita', manualCliente: { nombre:'', email:'', celular:'', direccion:'' },
+      cotNum: parseInt(localStorage.getItem('dm_cot_num') || '1421'),
+      repisas: [{ ...DEFAULTS_REPISA, id: Date.now() }],
+      adNombres: { retiro_orden:'Retiro y orden de articulos', retiro_basura:'Retiro de basura', cajas:'Cajas organizadoras', bici:'Soporte bicicleta / ski' },
+      adicionales: { qty_retiro_orden:0, precio_retiro_orden:40000, qty_retiro_basura:0, precio_retiro_basura:30000, qty_cajas:0, precio_cajas:15000, qty_bici:0, precio_bici:20000 },
+      totalInfo: { subtotal: 0, iva: 0, total: 0 },
+    }
+    setMode(newState.mode); setManualCliente(newState.manualCliente); setCotNum(newState.cotNum)
+    setRepisas(newState.repisas); setAdNombres(newState.adNombres); setAdicionales(newState.adicionales)
+    setTotalInfo(newState.totalInfo); setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
+    setSelectedVisit(null); saveState(newState)
+  }
 
   function calcTotales() {
     const totRep = repisas.reduce((s, r) => s + (r.u || 0) * (r.v || 0), 0)
-    const totAd  = ['retiro_orden', 'retiro_basura', 'cajas', 'bici']
+    const totAd  = ['retiro_orden','retiro_basura','cajas','bici']
       .reduce((s, k) => s + (adicionales['qty_' + k] || 0) * (adicionales['precio_' + k] || 0), 0)
     const subtotal = totRep + totAd
     const iva = Math.round(subtotal * 0.19)
@@ -37,21 +115,28 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
     if (repisas.length >= 4) return
     setRepisas(prev => [...prev, { ...DEFAULTS_REPISA, id: Date.now() }])
   }
-  function updateRepisa(id, field, val) {
-    setRepisas(prev => prev.map(r => r.id === id ? { ...r, [field]: parseFloat(String(val).replace(',', '.')) || 0 } : r))
+  function updRep(id, field, val) {
+    setRepisas(prev => prev.map(r => r.id === id ? { ...r, [field]: parseFloat(String(val).replace(',','.')) || 0 } : r))
   }
   function removeRepisa(id) { setRepisas(prev => prev.filter(r => r.id !== id)) }
 
+  const cliente = mode === 'visita' ? (selectedVisit || {}) : manualCliente
+
   async function handleGenerar() {
-    if (!selectedVisit) return
-    setGenerating(true); setError(''); setPdfUrl(null); setSaved(false)
+    if (mode === 'visita' && !selectedVisit) return
+    if (mode === 'manual' && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
+    setGenerating(true); setError(''); setPdfUrl(null); setAutoSaved(false)
+
+    const t = calcTotales()
+    setTotalInfo(t)
+
     const payload = {
       cot_num: cotNum,
-      nombre:    (selectedVisit.nombre || '').toUpperCase(),
-      direccion: (selectedVisit.direccion || '').toUpperCase(),
-      rut: '', telefono: selectedVisit.celular || '',
-      email: (selectedVisit.email || '').toUpperCase(),
-      repisas: repisas.map(r => ({ largo: r.l, prof: r.p, alto: r.a, niveles: r.n, unidades: r.u, valor: r.v })),
+      nombre:    (cliente.nombre || '').toUpperCase(),
+      direccion: (cliente.direccion || '').toUpperCase(),
+      rut: '', telefono: cliente.celular || cliente.telefono || '',
+      email: (cliente.email || '').toUpperCase(),
+      repisas: repisas.map(r => ({ largo:r.l, prof:r.p, alto:r.a, niveles:r.n, unidades:r.u, valor:r.v })),
       ...adicionales,
     }
     try {
@@ -61,17 +146,21 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         body: JSON.stringify(payload),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + res.status) }
-      setTotalInfo({
+
+      const finalTotals = {
         subtotal: parseInt(res.headers.get('x-subtotal') || '0'),
         iva:      parseInt(res.headers.get('x-iva')      || '0'),
         total:    parseInt(res.headers.get('x-total')    || '0'),
-      })
+      }
+      setTotalInfo(finalTotals)
+
       const xlsxBlob = await res.blob()
       const formData = new FormData()
       formData.append('File', xlsxBlob, 'cotizacion.xlsx')
       const convertRes  = await fetch('https://v2.convertapi.com/convert/xlsx/to/pdf?Secret=' + CONVERTAPI_SECRET, { method: 'POST', body: formData })
       const convertData = await convertRes.json()
       if (!convertRes.ok || !convertData.Files) throw new Error('ConvertAPI: ' + (convertData.Message || 'Error'))
+
       const fi = convertData.Files[0]
       let blob
       if (fi.FileData) {
@@ -79,8 +168,25 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
         blob = new Blob([bytes], { type: 'application/pdf' })
       } else { blob = await fetch(fi.Url).then(r => r.blob()) }
+
       setPdfBlob(blob); setPdfUrl(URL.createObjectURL(blob))
+
+      // Guardado automático
       const next = cotNum + 1; setCotNum(next); localStorage.setItem('dm_cot_num', String(next))
+
+      await apiFetch('/.netlify/functions/save-quote', {
+        method: 'POST',
+        body: JSON.stringify({
+          cotNum, nombre: cliente.nombre || '', email: cliente.email || '',
+          telefono: cliente.celular || cliente.telefono || '', direccion: cliente.direccion || '',
+          fechaVisita: mode === 'visita' ? fmtDate(selectedVisit?.start) : '',
+          subtotal: finalTotals.subtotal, iva: finalTotals.iva, total: finalTotals.total,
+          notas: '', status: 'por confirmar',
+          repisas: repisas.map(r => ({ largo:r.l, prof:r.p, alto:r.a, niveles:r.n, unidades:r.u, valor:r.v })),
+          adicionales,
+        }),
+      })
+      setAutoSaved(true)
     } catch (e) { setError(e.message) }
     finally { setGenerating(false) }
   }
@@ -88,54 +194,60 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   function handleDescargar() {
     if (!pdfBlob) return
     const a = document.createElement('a')
-    a.href = pdfUrl; a.download = 'Cotizacion ' + (selectedVisit?.nombre || 'cliente') + ' - Repisas Don Maxi.pdf'; a.click()
-  }
-
-  async function handleGuardar() {
-    if (!pdfBlob || !selectedVisit) return
-    setSaving(true)
-    try {
-      await apiFetch('/.netlify/functions/save-quote', {
-        method: 'POST',
-        body: JSON.stringify({
-          cotNum: cotNum - 1, nombre: selectedVisit.nombre, email: selectedVisit.email,
-          telefono: selectedVisit.celular, direccion: selectedVisit.direccion,
-          fechaVisita: fmtDate(selectedVisit.start), total: fmt(totalInfo.total),
-          notas: selectedVisit.notas || '', status: 'por confirmar',
-        }),
-      })
-      setSaved(true)
-    } catch (e) { setError('Error al guardar: ' + e.message) }
-    finally { setSaving(false) }
+    a.href = pdfUrl; a.download = 'Cotizacion ' + (cliente.nombre || 'cliente') + ' - Repisas Don Maxi.pdf'; a.click()
   }
 
   const inputStyle = { padding: '7px 6px', border: '1.5px solid ' + C.border, borderRadius: 7, fontSize: 13, textAlign: 'center', width: '100%', fontFamily: 'inherit', background: '#FAFAFA', outline: 'none' }
 
   return (
     <div>
-      <h2 style={{ ...styles.sectionTitle, marginBottom: 24 }}>Por Cotizar</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h2 style={styles.sectionTitle}>Cotizaciones</h2>
+        <button onClick={resetCotizador} style={{ ...styles.btnSecondary, fontSize: 12 }}>Reiniciar</button>
+      </div>
 
-      {/* Visita */}
+      {/* Modo: visita o manual */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
-        <div style={styles.cardLabel}>Visita a cotizar</div>
-        {realizadas.length === 0
-          ? <p style={{ color: C.textMuted, fontSize: 14, margin: 0 }}>No hay visitas marcadas como Realizadas aun.</p>
-          : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {realizadas.map(v => (
-                <button key={v.id} onClick={() => { setSelectedVisit(v); setPdfUrl(null); setSaved(false) }} style={{
-                  padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  border: '1.5px solid ' + (selectedVisit?.id === v.id ? C.orange : C.border),
-                  background: selectedVisit?.id === v.id ? C.orangeLight : C.surface,
-                  color: selectedVisit?.id === v.id ? C.orangeDark : C.textSub,
-                  transition: 'all .15s',
-                }}>
-                  {v.nombre} &middot; {fmtDate(v.start)}
-                </button>
-              ))}
-            </div>
-        }
-        {selectedVisit && (
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border, ...styles.detailGrid }}>
+        <div style={styles.cardLabel}>Origen de la cotizacion</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button onClick={() => setMode('visita')} style={{ ...styles.tab, ...(mode === 'visita' ? styles.tabActive : {}) }}>Desde visita</button>
+          <button onClick={() => setMode('manual')} style={{ ...styles.tab, ...(mode === 'manual' ? styles.tabActive : {}) }}>Ingreso manual</button>
+        </div>
+
+        {mode === 'visita' && (
+          realizadas.length === 0
+            ? <p style={{ color: C.textMuted, fontSize: 14, margin: 0 }}>No hay visitas marcadas como Realizadas aun.</p>
+            : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {realizadas.map(v => (
+                  <button key={v.id} onClick={() => setSelectedVisit(v)} style={{
+                    padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: '1.5px solid ' + (selectedVisit?.id === v.id ? C.orange : C.border),
+                    background: selectedVisit?.id === v.id ? C.orangeLight : C.surface,
+                    color: selectedVisit?.id === v.id ? C.orangeDark : C.textSub, transition: 'all .15s',
+                  }}>{v.nombre} &middot; {fmtDate(v.start)}</button>
+                ))}
+              </div>
+        )}
+
+        {mode === 'manual' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[
+              { key:'nombre',    label:'Nombre',    full: true, placeholder:'Nombre completo' },
+              { key:'email',     label:'Email',     placeholder:'correo@ejemplo.com' },
+              { key:'celular',   label:'Celular',   placeholder:'+56 9 XXXX XXXX' },
+              { key:'direccion', label:'Direccion', full: true, placeholder:'Direccion' },
+            ].map(({ key, label, full, placeholder }) => (
+              <div key={key} style={{ gridColumn: full ? '1 / -1' : undefined }}>
+                <label style={{ ...styles.detailLabel, display: 'block', marginBottom: 4 }}>{label}</label>
+                <input value={manualCliente[key]} onChange={e => setManualCliente(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={placeholder} style={{ ...styles.input, fontSize: 13, padding: '8px 10px' }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mode === 'visita' && selectedVisit && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + C.border, ...styles.detailGrid }}>
             {selectedVisit.email     && <><span style={styles.detailLabel}>Email</span><span style={{ fontSize: 13 }}>{selectedVisit.email}</span></>}
             {selectedVisit.celular   && <><span style={styles.detailLabel}>Celular</span><span style={{ fontSize: 13 }}>{selectedVisit.celular}</span></>}
             {selectedVisit.direccion && <><span style={styles.detailLabel}>Direccion</span><span style={{ fontSize: 13 }}>{selectedVisit.direccion}</span></>}
@@ -149,7 +261,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: C.textSub }}>N</span>
           <input type="number" value={cotNum}
-            onChange={e => { setCotNum(parseInt(e.target.value)); localStorage.setItem('dm_cot_num', e.target.value) }}
+            onChange={e => { const v = parseInt(e.target.value); setCotNum(v); localStorage.setItem('dm_cot_num', String(v)) }}
             style={{ width: 100, padding: '8px 10px', borderRadius: 9, border: '1.5px solid ' + C.border, fontSize: 16, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center', background: '#FAFAFA', outline: 'none' }} />
           <span style={{ color: C.textMuted, fontSize: 12 }}>Fecha y validez se calculan en el Excel</span>
         </div>
@@ -170,14 +282,30 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
             <tbody>
               {repisas.map((r, idx) => (
                 <tr key={r.id} style={{ background: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                  {[{f:'l',v:r.l},{f:'p',v:r.p},{f:'a',v:r.a},{f:'n',v:r.n},{f:'u',v:r.u},{f:'v',v:r.v}].map(({ f, v }) => (
-                    <td key={f} style={{ padding: '5px 4px' }}>
-                      <input type="number" value={v}
-                        step={['l','p','a'].includes(f) ? '0.01' : f === 'v' ? '1000' : '1'}
-                        onChange={e => updateRepisa(r.id, f, e.target.value)}
-                        style={inputStyle} />
-                    </td>
-                  ))}
+                  {/* Largo */}
+                  <td style={{ padding: '5px 4px' }}>
+                    <input type="number" value={r.l} step="0.01" onChange={e => updRep(r.id, 'l', e.target.value)} style={inputStyle} />
+                  </td>
+                  {/* Prof con dropdown */}
+                  <td style={{ padding: '5px 4px', minWidth: 90 }}>
+                    <SelectOrFree options={[0.28,0.38,0.48,0.68]} value={r.p} onChange={v => updRep(r.id, 'p', v)} step={0.01} />
+                  </td>
+                  {/* Alto con dropdown */}
+                  <td style={{ padding: '5px 4px', minWidth: 90 }}>
+                    <SelectOrFree options={[2,2.5,3]} value={r.a} onChange={v => updRep(r.id, 'a', v)} step={0.1} />
+                  </td>
+                  {/* Niveles con dropdown */}
+                  <td style={{ padding: '5px 4px', minWidth: 80 }}>
+                    <SelectOrFree options={[4,5,6]} value={r.n} onChange={v => updRep(r.id, 'n', v)} step={1} />
+                  </td>
+                  {/* Unidades */}
+                  <td style={{ padding: '5px 4px' }}>
+                    <input type="number" value={r.u} step="1" min="1" onChange={e => updRep(r.id, 'u', e.target.value)} style={inputStyle} />
+                  </td>
+                  {/* Valor */}
+                  <td style={{ padding: '5px 4px' }}>
+                    <input type="number" value={r.v} step="1000" onChange={e => updRep(r.id, 'v', e.target.value)} style={inputStyle} />
+                  </td>
                   <td style={{ padding: '5px 8px', textAlign: 'center', fontWeight: 700, color: C.orangeDark, whiteSpace: 'nowrap' }}>{fmt(r.u * r.v)}</td>
                   <td style={{ padding: '5px 4px', textAlign: 'center' }}>
                     {repisas.length > 1 && (
@@ -190,7 +318,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           </table>
         </div>
         {repisas.length < 4 && (
-          <button onClick={addRepisa} style={{ marginTop: 10, width: '100%', background: 'none', border: '2px dashed ' + C.orange + '60', color: C.orange, padding: '9px', borderRadius: 9, cursor: 'pointer', fontWeight: 700, fontSize: 13, transition: 'border-color .15s' }}>
+          <button onClick={addRepisa} style={{ marginTop: 10, width: '100%', background: 'none', border: '2px dashed ' + C.orange + '60', color: C.orange, padding: '9px', borderRadius: 9, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
             + Agregar repisa
           </button>
         )}
@@ -203,17 +331,29 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           {['Servicio', 'Cant.', 'Precio unit.', 'Total'].map(h => (
             <span key={h} style={{ fontWeight: 700, fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .8, textAlign: h !== 'Servicio' ? 'center' : 'left' }}>{h}</span>
           ))}
-          {[
-            { key: 'retiro_orden',  label: 'Retiro y orden de articulos' },
-            { key: 'retiro_basura', label: 'Retiro de basura' },
-            { key: 'cajas',         label: 'Cajas organizadoras' },
-            { key: 'bici',          label: 'Soporte bicicleta / ski' },
-          ].map(({ key, label }) => {
+          {['retiro_orden','retiro_basura','cajas','bici'].map(key => {
             const q = adicionales['qty_' + key] || 0
             const p = adicionales['precio_' + key] || 0
+            const isEditingThis = editingNombre === key
             return (
               <React.Fragment key={key}>
-                <span style={{ color: C.text }}>{label}</span>
+                {/* Nombre editable */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {isEditingThis
+                    ? <input value={adNombres[key]} autoFocus
+                        onChange={e => setAdNombres(prev => ({ ...prev, [key]: e.target.value }))}
+                        onBlur={() => setEditingNombre(null)}
+                        onKeyDown={e => e.key === 'Enter' && setEditingNombre(null)}
+                        style={{ ...styles.input, fontSize: 13, padding: '5px 8px' }} />
+                    : <span style={{ color: C.text, fontSize: 13 }}>{adNombres[key]}</span>
+                  }
+                  {!isEditingThis && (
+                    <button type="button" onClick={() => setEditingNombre(key)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, padding: 2, display: 'flex', flexShrink: 0 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  )}
+                </div>
                 <input type="number" value={q} min="0"
                   onChange={e => setAdicionales(prev => ({ ...prev, ['qty_' + key]: parseInt(e.target.value) || 0 }))}
                   style={inputStyle} />
@@ -245,10 +385,10 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
 
       {error && <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div>}
 
-      <button onClick={handleGenerar} disabled={generating || !selectedVisit} style={{
-        ...styles.btnPrimary, width: '100%', padding: '15px', fontSize: 15, borderRadius: 12, marginBottom: 14,
-        opacity: (!selectedVisit || generating) ? .55 : 1,
-      }}>
+      <button onClick={handleGenerar}
+        disabled={generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())}
+        style={{ ...styles.btnPrimary, width: '100%', padding: '15px', fontSize: 15, borderRadius: 12, marginBottom: 14,
+          opacity: (generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())) ? .55 : 1 }}>
         {generating ? 'Generando PDF...' : 'Generar Cotizacion PDF'}
       </button>
 
@@ -256,7 +396,9 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         <div style={{ ...styles.card, borderLeft: '4px solid ' + C.green }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <p style={{ fontWeight: 700, color: C.green, marginBottom: 2, marginTop: 0 }}>PDF generado correctamente</p>
+              <p style={{ fontWeight: 700, color: autoSaved ? C.green : C.orange, marginBottom: 2, marginTop: 0 }}>
+                {autoSaved ? 'PDF generado y guardado' : 'PDF generado'}
+              </p>
               <p style={{ fontSize: 13, color: C.textSub, margin: 0 }}>Total: {fmt(totalInfo.total)}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -265,12 +407,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
                 style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
-              {!saved
-                ? <button onClick={handleGuardar} disabled={saving} style={{ ...styles.btnPrimary, opacity: saving ? .6 : 1 }}>
-                    {saving ? 'Guardando...' : 'Guardar cotizacion'}
-                  </button>
-                : <span style={{ color: C.green, fontWeight: 700, fontSize: 13, alignSelf: 'center' }}>Guardada</span>
-              }
             </div>
           </div>
         </div>

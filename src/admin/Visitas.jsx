@@ -59,9 +59,18 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   }
 
   const now = new Date()
-  const porRealizar = visits.filter(v => new Date(v.start) >= now)
-  const realizadas  = visits.filter(v => new Date(v.start) < now)
-  const list = tab === 'por-realizar' ? porRealizar : realizadas
+  const porRealizar = visits.filter(v => new Date(v.start) >= now && statuses[v.id] !== 'cancelada')
+  const realizadas  = visits.filter(v => new Date(v.start) < now  && statuses[v.id] !== 'cancelada')
+  const canceladas  = visits.filter(v => statuses[v.id] === 'cancelada')
+
+  const listMap = { 'por-realizar': porRealizar, 'realizadas': realizadas, 'canceladas': canceladas }
+  const list = listMap[tab] || []
+
+  const TABS = [
+    { key: 'por-realizar', label: 'Por realizar', count: porRealizar.length },
+    { key: 'realizadas',   label: 'Realizadas',   count: realizadas.length },
+    { key: 'canceladas',   label: 'Canceladas',   count: canceladas.length },
+  ]
 
   return (
     <div>
@@ -70,12 +79,8 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
         <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        {[
-          { key: 'por-realizar', label: 'Por realizar', count: porRealizar.length },
-          { key: 'realizadas',   label: 'Realizadas',   count: realizadas.length },
-        ].map(t => (
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{ ...styles.tab, ...(tab === t.key ? styles.tabActive : {}) }}>
             {t.label}
             <span style={{
@@ -96,8 +101,9 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
           const status     = statuses[visit.id] || 'pendiente'
           const isExpanded = expanded === visit.id
           const isUpdating = updating === visit.id
+          const borderColor = VISIT_STATUS_LABELS[status]?.color || C.border
           return (
-            <div key={visit.id} style={{ ...styles.card, borderLeft: '3px solid ' + (VISIT_STATUS_LABELS[status]?.color || C.border) }}>
+            <div key={visit.id} style={{ ...styles.card, borderLeft: '3px solid ' + borderColor }}>
               <div onClick={() => setExpanded(isExpanded ? null : visit.id)}
                 style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ flex: 1 }}>
@@ -110,7 +116,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                     {visit.direccion && <span style={{ marginLeft: 12, color: C.textMuted }}>{visit.direccion}</span>}
                   </div>
                 </div>
-                <div style={{ color: C.textMuted, fontSize: 12, transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                <div style={{ color: C.textMuted, transition: 'transform .2s', transform: isExpanded ? 'rotate(180deg)' : 'none' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
               </div>
@@ -124,12 +130,13 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                     {visit.notas     && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13 }}>{visit.notas}</span></>}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: .5, marginRight: 4 }}>Marcar como</span>
+                    <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginRight: 4 }}>Estado</span>
+                    <StatusBtn current={status} target="pendiente" label="Pendiente" onClick={s => handleStatus(visit, s)} loading={isUpdating} />
                     <StatusBtn current={status} target="cancelada" label="Cancelada" onClick={s => handleStatus(visit, s)} loading={isUpdating} />
                     <StatusBtn current={status} target="reagendar" label="Reagendar"  onClick={s => handleStatus(visit, s)} loading={isUpdating} />
                     <StatusBtn current={status} target="realizada" label="Realizada"  onClick={s => handleStatus(visit, s)} loading={isUpdating} />
                     {status === 'realizada' && (
-                      <button onClick={() => navigateTo('por-cotizar', visit)}
+                      <button onClick={() => navigateTo('cotizador', visit)}
                         style={{ ...styles.btnPrimary, padding: '6px 16px', fontSize: 12, marginLeft: 8 }}>
                         Cotizar visita
                       </button>
