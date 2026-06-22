@@ -1,15 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { QUOTE_STATUS_LABELS, apiFetch, fmtDate, styles } from './utils.js'
+import { QUOTE_STATUS_LABELS, C, apiFetch, styles } from './utils.js'
 
-function QuoteBadge({ status }) {
+function Badge({ status }) {
   const s = QUOTE_STATUS_LABELS[status] || QUOTE_STATUS_LABELS['por confirmar']
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 10px', borderRadius: 99,
-      fontSize: 11, fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase',
-      background: s.color + '22', color: s.color, border: `1px solid ${s.color}44`,
-    }}>{s.label}</span>
-  )
+  return <span style={styles.badge(s.color)}>{s.label}</span>
 }
 
 export default function CotizacionesSection() {
@@ -50,58 +44,67 @@ export default function CotizacionesSection() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h2 style={styles.sectionTitle}>📄 Cotizaciones</h2>
-        <button onClick={load} style={styles.btnSecondary}>↻ Actualizar</button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h2 style={styles.sectionTitle}>Cotizaciones</h2>
+        <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+      {/* Resumen */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
         {Object.entries(QUOTE_STATUS_LABELS).map(([key, { label, color }]) => (
-          <div key={key} style={{ ...styles.card, textAlign: 'center', borderTop: `3px solid ${color}` }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color }}>{byStatus[key]?.length || 0}</div>
-            <div style={{ fontSize: 11, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: .5 }}>{label}</div>
+          <div key={key} style={{ ...styles.card, textAlign: 'center', paddingTop: 22, paddingBottom: 22 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1, marginBottom: 6 }}>
+              {byStatus[key]?.length || 0}
+            </div>
+            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .8 }}>{label}</div>
+            <div style={{ marginTop: 12, height: 3, borderRadius: 2, background: color + '30', position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 2, background: color, width: quotes.length ? (byStatus[key]?.length / quotes.length * 100) + '%' : '0%', transition: 'width .4s' }}/>
+            </div>
           </div>
         ))}
       </div>
 
-      {loading && <div style={styles.empty}>Cargando cotizaciones…</div>}
+      {loading && <div style={styles.empty}>Cargando cotizaciones...</div>}
       {error   && <div style={styles.errorBox}>{error}</div>}
-      {!loading && !error && quotes.length === 0 && <div style={styles.empty}>No hay cotizaciones guardadas aún.</div>}
+      {!loading && !error && quotes.length === 0 && <div style={styles.empty}>No hay cotizaciones guardadas aun.</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {quotes.map(q => {
           const isUpdating = updating === q.cotNum
+          const statusColor = QUOTE_STATUS_LABELS[q.status]?.color || C.border
           return (
-            <div key={q.cotNum} style={{ ...styles.card, display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-                  <span style={{ fontWeight: 700, fontSize: 15 }}>{q.nombre}</span>
-                  <span style={{ fontSize: 12, color: '#aaa' }}>N° {q.cotNum}</span>
-                  <QuoteBadge status={q.status} />
+            <div key={q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + statusColor }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 5 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{q.nombre}</span>
+                    <span style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>N {q.cotNum}</span>
+                    <Badge status={q.status} />
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textSub, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                    {q.fechaVisita && <span>Visita: {q.fechaVisita}</span>}
+                    {q.total       && <span style={{ fontWeight: 700, color: C.orangeDark }}>{q.total}</span>}
+                    {q.email       && <span>{q.email}</span>}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: '#888', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                  {q.fechaVisita && <span>Visita: {q.fechaVisita}</span>}
-                  {q.total       && <span style={{ fontWeight: 700, color: '#D4600A' }}>{q.total}</span>}
-                  {q.email       && <span>{q.email}</span>}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {Object.entries(QUOTE_STATUS_LABELS).map(([s, sl]) => {
+                    const active = q.status === s
+                    return (
+                      <button key={s}
+                        onClick={() => !active && !isUpdating && updateStatus(q.cotNum, s, q)}
+                        disabled={active || isUpdating}
+                        style={{
+                          padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+                          cursor: active ? 'default' : 'pointer',
+                          border: '1.5px solid ' + (active ? sl.color : C.border),
+                          background: active ? sl.color + '18' : C.surface,
+                          color: active ? sl.color : C.textSub,
+                          opacity: isUpdating ? .5 : 1, transition: 'all .15s',
+                        }}>{sl.label}</button>
+                    )
+                  })}
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                {Object.entries(QUOTE_STATUS_LABELS).map(([s, sl]) => {
-                  const active = q.status === s
-                  return (
-                    <button key={s}
-                      onClick={() => !active && !isUpdating && updateStatus(q.cotNum, s, q)}
-                      disabled={active || isUpdating}
-                      style={{
-                        padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        cursor: active ? 'default' : 'pointer',
-                        border: `1.5px solid ${active ? sl.color : '#ddd'}`,
-                        background: active ? sl.color + '22' : 'white',
-                        color: active ? sl.color : '#666',
-                        opacity: isUpdating ? .5 : 1,
-                      }}>{sl.label}</button>
-                  )
-                })}
               </div>
             </div>
           )

@@ -16,10 +16,10 @@ export const QUOTE_STATUS_LABELS = {
 }
 
 export const SECTIONS = [
-  { id: 'visitas',       label: 'Visitas',       icon: '📅' },
-  { id: 'por-cotizar',   label: 'Por Cotizar',   icon: '📋' },
-  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: '📄' },
-  { id: 'instalaciones', label: 'Instalaciones', icon: '🔧' },
+  { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
+  { id: 'por-cotizar',   label: 'Por Cotizar',   icon: 'doc' },
+  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files' },
+  { id: 'instalaciones', label: 'Instalaciones', icon: 'wrench' },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }
@@ -59,40 +59,86 @@ export async function apiFetch(path, opts = {}) {
   return res.json()
 }
 
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const C = {
+  orange:     '#F47920',
+  orangeDark: '#D4600A',
+  orangeLight:'#FFF4EC',
+  bg:         '#F4F5F7',
+  surface:    '#FFFFFF',
+  border:     '#E8E8EC',
+  text:       '#111827',
+  textSub:    '#6B7280',
+  textMuted:  '#9CA3AF',
+  green:      '#10B981',
+  red:        '#EF4444',
+  yellow:     '#F59E0B',
+  sidebar:    '#18181B',
+  sidebarHover: '#27272A',
+}
+
+export { C }
+
 export const styles = {
-  sectionTitle: { margin: 0, fontSize: 22, fontWeight: 800, color: '#1a1a1a' },
+  sectionTitle: {
+    margin: 0, fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.3px',
+  },
   card: {
-    background: 'white', borderRadius: 12, padding: '18px 20px',
-    boxShadow: '0 2px 10px rgba(0,0,0,.06)', border: '1px solid #f0f0f0',
+    background: C.surface,
+    borderRadius: 14,
+    padding: '20px 22px',
+    boxShadow: '0 1px 4px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04)',
   },
   cardLabel: {
-    fontSize: 11, fontWeight: 700, letterSpacing: 1, color: '#999',
-    textTransform: 'uppercase', marginBottom: 12,
+    fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: C.textMuted,
+    textTransform: 'uppercase', marginBottom: 14,
   },
   tab: {
-    padding: '8px 18px', borderRadius: 8, border: '1.5px solid #e0e0e0',
-    background: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#555',
-    transition: 'all .15s',
+    padding: '7px 16px', borderRadius: 8, border: `1.5px solid ${C.border}`,
+    background: C.surface, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+    color: C.textSub, transition: 'all .15s',
   },
-  tabActive: { background: '#F47920', borderColor: '#F47920', color: 'white' },
+  tabActive: {
+    background: C.orange, borderColor: C.orange, color: 'white',
+    boxShadow: '0 2px 8px rgba(244,121,32,.35)',
+  },
   btnPrimary: {
-    background: 'linear-gradient(135deg, #F47920, #D4600A)',
-    color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px',
+    background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+    color: 'white', border: 'none', borderRadius: 9, padding: '9px 20px',
     fontSize: 13, fontWeight: 700, cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(244,121,32,.3)',
+    boxShadow: '0 3px 10px rgba(244,121,32,.3)',
+    transition: 'opacity .15s',
   },
   btnSecondary: {
-    background: 'white', border: '1.5px solid #ddd', borderRadius: 8,
-    padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#555', cursor: 'pointer',
+    background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: 9,
+    padding: '8px 16px', fontSize: 13, fontWeight: 600, color: C.textSub,
+    cursor: 'pointer', transition: 'background .15s',
   },
-  empty:    { textAlign: 'center', color: '#aaa', fontSize: 14, padding: '40px 0' },
+  empty:    { textAlign: 'center', color: C.textMuted, fontSize: 14, padding: '48px 0' },
   errorBox: {
-    background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8,
-    padding: '12px 16px', color: '#b91c1c', fontSize: 13, marginBottom: 16,
+    background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10,
+    padding: '12px 16px', color: '#B91C1C', fontSize: 13, marginBottom: 16,
   },
-  detailGrid: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px' },
+  detailGrid: {
+    display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '7px 18px',
+  },
   detailLabel: {
-    color: '#999', fontWeight: 600, fontSize: 11, textTransform: 'uppercase',
-    letterSpacing: '.5px', alignSelf: 'center',
+    color: C.textMuted, fontWeight: 700, fontSize: 10.5,
+    textTransform: 'uppercase', letterSpacing: '.6px', alignSelf: 'center',
+    whiteSpace: 'nowrap',
   },
+  input: {
+    width: '100%', padding: '9px 12px', borderRadius: 9,
+    border: `1.5px solid ${C.border}`, fontSize: 14,
+    boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit',
+    color: C.text, background: '#FAFAFA',
+    transition: 'border-color .15s',
+  },
+  badge: (color) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '3px 10px', borderRadius: 99,
+    fontSize: 11, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase',
+    background: color + '18', color: color,
+    border: `1px solid ${color}30`,
+  }),
 }

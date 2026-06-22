@@ -1,38 +1,31 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { VISIT_STATUS_LABELS, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
+import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
 
-function VisitBadge({ status }) {
+function Badge({ status }) {
   const s = VISIT_STATUS_LABELS[status] || VISIT_STATUS_LABELS.pendiente
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 10px', borderRadius: 99,
-      fontSize: 11, fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase',
-      background: s.color + '22', color: s.color, border: `1px solid ${s.color}44`,
-    }}>{s.label}</span>
-  )
+  return <span style={styles.badge(s.color)}>{s.label}</span>
 }
 
 function StatusBtn({ current, target, label, onClick, loading }) {
   const s = VISIT_STATUS_LABELS[target]
   const active = current === target
   return (
-    <button onClick={() => !active && !loading && onClick(target)} disabled={active || loading}
-      style={{
-        padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-        cursor: active ? 'default' : 'pointer',
-        border: `1.5px solid ${active ? s.color : '#ddd'}`,
-        background: active ? s.color + '22' : 'white',
-        color: active ? s.color : '#555',
-        opacity: loading ? .5 : 1, transition: 'all .15s',
-      }}>{label}</button>
+    <button onClick={() => !active && !loading && onClick(target)} disabled={active || loading} style={{
+      padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+      cursor: active ? 'default' : 'pointer',
+      border: '1.5px solid ' + (active ? s.color : C.border),
+      background: active ? s.color + '18' : C.surface,
+      color: active ? s.color : C.textSub,
+      opacity: loading ? .5 : 1, transition: 'all .15s',
+    }}>{label}</button>
   )
 }
 
 export default function VisitasSection({ statuses, onStatusChange, navigateTo, onVisitsLoaded }) {
-  const [visits, setVisits]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
-  const [tab, setTab]         = useState('por-realizar')
+  const [visits, setVisits]     = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
+  const [tab, setTab]           = useState('por-realizar')
   const [updating, setUpdating] = useState(null)
   const [expanded, setExpanded] = useState(null)
 
@@ -72,65 +65,73 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h2 style={styles.sectionTitle}>📅 Visitas</h2>
-        <button onClick={load} style={styles.btnSecondary}>↻ Actualizar</button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h2 style={styles.sectionTitle}>Visitas</h2>
+        <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
       </div>
 
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {[
-          { key: 'por-realizar', label: `Por Realizar (${porRealizar.length})` },
-          { key: 'realizadas',   label: `Realizadas (${realizadas.length})` },
+          { key: 'por-realizar', label: 'Por realizar', count: porRealizar.length },
+          { key: 'realizadas',   label: 'Realizadas',   count: realizadas.length },
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ ...styles.tab, ...(tab === t.key ? styles.tabActive : {}) }}>
+          <button key={t.key} onClick={() => setTab(t.key)} style={{ ...styles.tab, ...(tab === t.key ? styles.tabActive : {}) }}>
             {t.label}
+            <span style={{
+              marginLeft: 7, padding: '1px 7px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              background: tab === t.key ? 'rgba(255,255,255,.25)' : C.bg,
+              color: tab === t.key ? 'white' : C.textMuted,
+            }}>{t.count}</span>
           </button>
         ))}
       </div>
 
-      {loading && <div style={styles.empty}>Cargando visitas…</div>}
+      {loading && <div style={styles.empty}>Cargando visitas...</div>}
       {error   && <div style={styles.errorBox}>{error}</div>}
-      {!loading && !error && list.length === 0 && <div style={styles.empty}>No hay visitas en esta sección.</div>}
+      {!loading && !error && list.length === 0 && <div style={styles.empty}>No hay visitas en esta seccion.</div>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {list.map(visit => {
           const status     = statuses[visit.id] || 'pendiente'
           const isExpanded = expanded === visit.id
           const isUpdating = updating === visit.id
           return (
-            <div key={visit.id} style={styles.card}>
+            <div key={visit.id} style={{ ...styles.card, borderLeft: '3px solid ' + (VISIT_STATUS_LABELS[status]?.color || C.border) }}>
               <div onClick={() => setExpanded(isExpanded ? null : visit.id)}
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>{visit.nombre}</span>
-                    <VisitBadge status={status} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{visit.nombre}</span>
+                    <Badge status={status} />
                   </div>
-                  <div style={{ fontSize: 13, color: '#666', marginTop: 3 }}>
-                    {fmtDate(visit.start)} · {fmtTime(visit.start)}
+                  <div style={{ fontSize: 13, color: C.textSub }}>
+                    {fmtDate(visit.start)} &middot; {fmtTime(visit.start)}
+                    {visit.direccion && <span style={{ marginLeft: 12, color: C.textMuted }}>{visit.direccion}</span>}
                   </div>
                 </div>
-                <span style={{ color: '#aaa', fontSize: 18 }}>{isExpanded ? '▲' : '▼'}</span>
+                <div style={{ color: C.textMuted, fontSize: 12, transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
               </div>
 
               {isExpanded && (
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f0f0f0' }}>
-                  <div style={styles.detailGrid}>
-                    {visit.email     && <><span style={styles.detailLabel}>Email</span><span style={{fontSize:13}}>{visit.email}</span></>}
-                    {visit.celular   && <><span style={styles.detailLabel}>Celular</span><span style={{fontSize:13}}>{visit.celular}</span></>}
-                    {visit.direccion && <><span style={styles.detailLabel}>Dirección</span><span style={{fontSize:13}}>{visit.direccion}</span></>}
-                    {visit.notas     && <><span style={styles.detailLabel}>Notas</span><span style={{fontSize:13}}>{visit.notas}</span></>}
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid ' + C.border }}>
+                  <div style={{ ...styles.detailGrid, marginBottom: 16 }}>
+                    {visit.email     && <><span style={styles.detailLabel}>Email</span><span style={{ fontSize: 13 }}>{visit.email}</span></>}
+                    {visit.celular   && <><span style={styles.detailLabel}>Celular</span><span style={{ fontSize: 13 }}>{visit.celular}</span></>}
+                    {visit.direccion && <><span style={styles.detailLabel}>Direccion</span><span style={{ fontSize: 13 }}>{visit.direccion}</span></>}
+                    {visit.notas     && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13 }}>{visit.notas}</span></>}
                   </div>
-                  <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#999', marginRight: 4 }}>Marcar como:</span>
-                    <StatusBtn current={status} target="cancelada" label="✕ Cancelada" onClick={s => handleStatus(visit, s)} loading={isUpdating} />
-                    <StatusBtn current={status} target="reagendar" label="↺ Reagendar" onClick={s => handleStatus(visit, s)} loading={isUpdating} />
-                    <StatusBtn current={status} target="realizada" label="✓ Realizada" onClick={s => handleStatus(visit, s)} loading={isUpdating} />
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: .5, marginRight: 4 }}>Marcar como</span>
+                    <StatusBtn current={status} target="cancelada" label="Cancelada" onClick={s => handleStatus(visit, s)} loading={isUpdating} />
+                    <StatusBtn current={status} target="reagendar" label="Reagendar"  onClick={s => handleStatus(visit, s)} loading={isUpdating} />
+                    <StatusBtn current={status} target="realizada" label="Realizada"  onClick={s => handleStatus(visit, s)} loading={isUpdating} />
                     {status === 'realizada' && (
                       <button onClick={() => navigateTo('por-cotizar', visit)}
-                        style={{ ...styles.btnPrimary, padding: '5px 14px', fontSize: 12 }}>
-                        📋 Ir a Cotizar →
+                        style={{ ...styles.btnPrimary, padding: '6px 16px', fontSize: 12, marginLeft: 8 }}>
+                        Cotizar visita
                       </button>
                     )}
                   </div>
