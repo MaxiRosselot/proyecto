@@ -27,38 +27,46 @@ function escapeXml(val) {
     .replace(/'/g, '&apos;')
 }
 
+// Usa indexOf + slice en lugar de RegExp para evitar problemas de escaping
+// cuando esbuild compila ESM → CJS
+function findCellBounds(xml, cellRef) {
+  // Busca <c r="CELLREF" ...> o <c r="CELLREF" .../>
+  const open1 = '<c r=' + '"' + cellRef + '"'
+  let start = xml.indexOf(open1)
+  if (start === -1) return null
+  // Buscar el cierre de la etiqueta de apertura
+  let gt = xml.indexOf('>', start)
+  if (gt === -1) return null
+  // ¿Self-closing?
+  if (xml[gt - 1] === '/') {
+    return { start, end: gt + 1, selfClose: true, attrs: xml.slice(start + open1.length, gt - 1) }
+  }
+  // Con contenido: buscar </c>
+  let closeTag = xml.indexOf('</c>', gt)
+  if (closeTag === -1) return null
+  return { start, end: closeTag + 4, selfClose: false, attrs: xml.slice(start + open1.length, gt) }
+}
+
 function setCellInlineString(xml, cellRef, text) {
-  const esc = cellRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = new RegExp(`(<c r="${esc}"([^>]*?)(?:\\s+t="[^"]*")?>)(.*?)(</c>)`, 's')
-  const result = xml.replace(pattern, (_, open, attrs, _content, close) => {
-    const cleanOpen = open.replace(/\s+t="[^"]*"/g, '').replace(/>$/, '')
-    return `${cleanOpen} t="inlineStr"><is><t>${escapeXml(text)}</t></is></c>`
-  })
-  if (result === xml) throw new Error(`Cell ${cellRef} not found (inline)`)
-  return result
+  const bounds = findCellBounds(xml, cellRef)
+  if (!bounds) throw new Error('Cell ' + cellRef + ' not found (inline)')
+  const attrs = bounds.attrs.replace(/\s+t="[^"]*"/g, '')
+  const replacement = '<c r=' + '"' + cellRef + '"' + attrs + ' t="inlineStr"><is><t>' + escapeXml(text) + '</t></is></c>'
+  return xml.slice(0, bounds.start) + replacement + xml.slice(bounds.end)
 }
 
 function setCellValue(xml, cellRef, value) {
-  const esc = cellRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Self-closing: <c r="X" .../>
-  let result = xml.replace(new RegExp(`<c r="${esc}"([^>]*?)/>`), (_, attrs) =>
-    `<c r="${cellRef}"${attrs}><v>${value}</v></c>`
-  )
-  if (result !== xml) return result
-  // Con contenido
-  result = xml.replace(new RegExp(`<c r="${esc}"([^>]*?)>(.*?)</c>`, 's'), (_, attrs) =>
-    `<c r="${cellRef}"${attrs}><v>${value}</v></c>`
-  )
-  if (result !== xml) return result
-  throw new Error(`Cell ${cellRef} not found (value)`)
+  const bounds = findCellBounds(xml, cellRef)
+  if (!bounds) throw new Error('Cell ' + cellRef + ' not found (value)')
+  const replacement = '<c r=' + '"' + cellRef + '"' + bounds.attrs + '><v>' + value + '</v></c>'
+  return xml.slice(0, bounds.start) + replacement + xml.slice(bounds.end)
 }
 
 function clearCellValue(xml, cellRef) {
-  const esc = cellRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const result = xml.replace(new RegExp(`<c r="${esc}"([^>]*?)>(.*?)</c>`, 's'), (_, attrs) =>
-    `<c r="${cellRef}"${attrs}/>`
-  )
-  return result
+  const bounds = findCellBounds(xml, cellRef)
+  if (!bounds) return xml // si no existe, no hacer nada
+  const replacement = '<c r=' + '"' + cellRef + '"' + bounds.attrs + '/>'
+  return xml.slice(0, bounds.start) + replacement + xml.slice(bounds.end)
 }
 
 function num(obj, key) {
