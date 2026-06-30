@@ -3,10 +3,12 @@ export const SESSION_KEY = 'dm_admin_auth'
 export const CONVERTAPI_SECRET = 'SR5rDhdFxm8ddVMXxHjJdLmg3Rf0JLok'
 
 export const VISIT_STATUS_LABELS = {
-  pendiente: { label: 'Pendiente', color: '#6B7280' },
-  cancelada: { label: 'Cancelada', color: '#EF4444' },
-  reagendar: { label: 'Reagendar', color: '#F59E0B' },
-  realizada: { label: 'Realizada', color: '#10B981' },
+  agendada:           { label: 'Agendada',              color: '#3B82F6' },
+  pendiente:          { label: 'Pendiente de declarar', color: '#F59E0B' },
+  realizada:          { label: 'Realizada',             color: '#10B981' },
+  realizada_cotizada: { label: 'Realizada y cotizada',  color: '#8B5CF6' },
+  cancelada:          { label: 'Cancelada',             color: '#EF4444' },
+  reagendar:          { label: 'Reagendar',             color: '#F97316' },
 }
 
 export const QUOTE_STATUS_LABELS = {
@@ -16,12 +18,10 @@ export const QUOTE_STATUS_LABELS = {
 }
 
 export const SECTIONS = [
-  { id: 'inicio',        label: 'Inicio',        icon: 'home' },
-  { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
-  { id: 'cotizador',     label: 'Cotizar',       icon: 'doc' },
-  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files' },
-  { id: 'instalaciones', label: 'Agenda',        icon: 'wrench' },
-  { id: 'ventas',        label: 'Ventas',        icon: 'chart' },
+  { id: 'inicio',       label: 'Inicio',       icon: 'home'  },
+  { id: 'visitas',      label: 'Visitas',      icon: 'calendar' },
+  { id: 'cotizador',    label: 'Cotizar',      icon: 'doc'   },
+  { id: 'cotizaciones', label: 'Cotizaciones', icon: 'files' },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }
@@ -61,22 +61,24 @@ export async function apiFetch(path, opts = {}) {
   return res.json()
 }
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// Design tokens
 const C = {
-  orange:     '#F47920',
-  orangeDark: '#D4600A',
-  orangeLight:'#FFF4EC',
-  bg:         '#F4F5F7',
-  surface:    '#FFFFFF',
-  border:     '#E8E8EC',
-  text:       '#111827',
-  textSub:    '#6B7280',
-  textMuted:  '#9CA3AF',
-  green:      '#10B981',
-  red:        '#EF4444',
-  yellow:     '#F59E0B',
-  sidebar:    '#18181B',
-  sidebarHover: '#27272A',
+  orange:      '#F47920',
+  orangeDark:  '#D4600A',
+  orangeLight: '#FFF4EC',
+  bg:          '#F4F5F7',
+  surface:     '#FFFFFF',
+  border:      '#E8E8EC',
+  text:        '#111827',
+  textSub:     '#6B7280',
+  textMuted:   '#9CA3AF',
+  green:       '#10B981',
+  red:         '#EF4444',
+  yellow:      '#F59E0B',
+  blue:        '#3B82F6',
+  purple:      '#8B5CF6',
+  sidebar:     '#18181B',
+  sidebarHover:'#27272A',
 }
 
 export { C }

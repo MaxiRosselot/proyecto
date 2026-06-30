@@ -28,6 +28,7 @@ export async function handler(event) {
     )
     oAuth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
     const calendar = google.calendar({ version: 'v3', auth: oAuth2Client })
+    const sheets   = google.sheets({ version: 'v4', auth: oAuth2Client })
 
     // Traer eventos desde 3 meses atrás hasta 6 meses adelante
     const now = new Date()
@@ -36,19 +37,31 @@ export async function handler(event) {
     const timeMax = new Date(now)
     timeMax.setMonth(timeMax.getMonth() + 6)
 
-    const list = await calendar.events.list({
-      calendarId: process.env.CALENDAR_ID,
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 500,
-      sharedExtendedProperty: 'created_by=agendador-netlify',
-    })
+    // Leer statuses de Sheets en paralelo
+    const [list, sheetRes] = await Promise.all([
+      calendar.events.list({
+        calendarId: process.env.CALENDAR_ID,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 500,
+        sharedExtendedProperty: 'created_by=agendador-netlify',
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: 'Visitas!A:H',
+      }).catch(() => ({ data: { values: [] } })),
+    ])
+
+    // Mapa visitId -> status desde Sheets (columna A=id, H=status)
+    const statusMap = {}
+    for (const row of (sheetRes.data.values || [])) {
+      if (row[0] && row[7]) statusMap[row[0]] = row[7]
+    }
 
     const visits = (list.data.items || []).map(ev => {
       const desc = ev.description || ''
-      // Parsear campos del description
       const get = (label) => {
         const m = desc.match(new RegExp(`${label}:\\s*(.+)`))
         return m ? m[1].trim() : ''
@@ -63,8 +76,8 @@ export async function handler(event) {
         direccion: get('Dirección'),
         notas: get('Notas') === '(sin notas)' ? '' : get('Notas'),
         slotKey: ev.extendedProperties?.shared?.slot_key || '',
-        // Extraer nombre del summary: "Visita — Nombre Apellido (Repisas Don Maxi)"
         nombre: ev.summary?.match(/Visita — (.+?) \(/)?.[1] || ev.summary || '',
+        status: statusMap[ev.id] || 'agendada',
       }
     })
 

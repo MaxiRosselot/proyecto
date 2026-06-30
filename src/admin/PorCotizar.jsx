@@ -4,14 +4,14 @@ import { ADMIN_PASSWORD, CONVERTAPI_SECRET, DEFAULTS_REPISA, C, apiFetch, fmtDat
 function SelectOrFree({ options, value, onChange, step = 0.01 }) {
   const [libre, setLibre] = useState(() => !options.includes(Number(value)))
   const strOptions = options.map(String)
-
   function handleSelect(e) {
     if (e.target.value === '__libre__') { setLibre(true) }
     else { setLibre(false); onChange(parseFloat(e.target.value)) }
   }
-
-  const sel = { padding: '7px 6px', border: '1.5px solid ' + C.border, borderRadius: 7, fontSize: 13, width: '100%', fontFamily: 'inherit', background: '#FAFAFA', outline: 'none' }
-
+  const sel = {
+    padding: '7px 6px', border: '1.5px solid ' + C.border, borderRadius: 7,
+    fontSize: 13, width: '100%', fontFamily: 'inherit', background: '#FAFAFA', outline: 'none',
+  }
   if (!libre) return (
     <select value={strOptions.includes(String(value)) ? String(value) : '__libre__'} onChange={handleSelect} style={sel}>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -20,7 +20,8 @@ function SelectOrFree({ options, value, onChange, step = 0.01 }) {
   )
   return (
     <div style={{ display: 'flex', gap: 4 }}>
-      <input type="number" value={value} step={step} onChange={e => onChange(parseFloat(e.target.value) || 0)}
+      <input type="number" value={value} step={step}
+        onChange={e => onChange(parseFloat(e.target.value) || 0)}
         style={{ ...sel, width: '70%' }} autoFocus />
       <button type="button" onClick={() => setLibre(false)}
         style={{ fontSize: 11, padding: '0 6px', border: '1.5px solid ' + C.border, borderRadius: 7, background: C.bg, cursor: 'pointer', color: C.textSub, whiteSpace: 'nowrap' }}>
@@ -32,40 +33,31 @@ function SelectOrFree({ options, value, onChange, step = 0.01 }) {
 
 const STORAGE_KEY = 'dm_cotizador_state'
 const COT_NUM_KEY = 'dm_cot_num'
+function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null } }
+function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
+function getCotNum() { return parseInt(localStorage.getItem(COT_NUM_KEY) || '1421') }
+function setCotNumStorage(n) { localStorage.setItem(COT_NUM_KEY, String(n)) }
 
-function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
-}
-function saveState(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-}
-function getCotNum() {
-  return parseInt(localStorage.getItem(COT_NUM_KEY) || '1421')
-}
-function setCotNumStorage(n) {
-  localStorage.setItem(COT_NUM_KEY, String(n))
-}
-
-export default function PorCotizarSection({ statuses, visitaSeleccionada, allVisits }) {
+export default function PorCotizarSection({ statuses, visitaSeleccionada, allVisits, onVisitCotizada }) {
   const realizadas = allVisits.filter(v => statuses[v.id] === 'realizada')
   const saved = loadState()
 
-  const [mode, setMode]               = useState(saved?.mode || 'visita')
+  const [mode, setMode]                   = useState(saved?.mode || 'visita')
   const [selectedVisit, setSelectedVisit] = useState(null)
-  const [manualCliente, setManualCliente] = useState(saved?.manualCliente || { nombre:'', email:'', celular:'', direccion:'' })
-  const [cotNum, setCotNum]           = useState(getCotNum)
-  const [repisas, setRepisas]         = useState(saved?.repisas || [{ ...DEFAULTS_REPISA, id: Date.now() }])
-  const [adNombres, setAdNombres]     = useState(saved?.adNombres || {
+  const [manualCliente, setManualCliente] = useState(saved?.manualCliente || { nombre: '', email: '', celular: '', direccion: '' })
+  const [cotNum, setCotNum]               = useState(getCotNum)
+  const [repisas, setRepisas]             = useState(saved?.repisas || [{ ...DEFAULTS_REPISA, id: Date.now() }])
+  const [adNombres, setAdNombres]         = useState(saved?.adNombres || {
     retiro_orden: 'Retiro y orden de articulos',
     retiro_basura: 'Retiro de basura',
     cajas: 'Cajas organizadoras',
     bici: 'Soporte bicicleta / ski',
   })
-  const [adicionales, setAdicionales] = useState(saved?.adicionales || {
-    qty_retiro_orden: 0, precio_retiro_orden: 40000,
+  const [adicionales, setAdicionales]     = useState(saved?.adicionales || {
+    qty_retiro_orden: 0,  precio_retiro_orden: 40000,
     qty_retiro_basura: 0, precio_retiro_basura: 30000,
-    qty_cajas: 0, precio_cajas: 15000,
-    qty_bici: 0, precio_bici: 20000,
+    qty_cajas: 0,         precio_cajas: 15000,
+    qty_bici: 0,          precio_bici: 20000,
   })
   const [generating, setGenerating] = useState(false)
   const [pdfUrl, setPdfUrl]         = useState(null)
@@ -75,31 +67,25 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   const [error, setError]           = useState('')
   const [editingNombre, setEditingNombre] = useState(null)
 
-  // Modo PDF
-  const [pdfReading, setPdfReading]   = useState(false)
-  const [pdfReadError, setPdfReadError] = useState('')
-  const [pdfOriginalB64, setPdfOriginalB64] = useState(null) // PDF original para subir a Drive
-  const fileInputRef = useRef(null)
-
   useEffect(() => {
     if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada) }
   }, [visitaSeleccionada])
 
-  const stateRef = useRef({})
   useEffect(() => {
-    stateRef.current = { mode, manualCliente, repisas, adNombres, adicionales, totalInfo }
-    saveState(stateRef.current)
+    saveState({ mode, manualCliente, repisas, adNombres, adicionales, totalInfo })
   }, [mode, manualCliente, repisas, adNombres, adicionales, totalInfo])
 
   function resetCotizador() {
     const newNum = getCotNum()
-    setMode('visita'); setManualCliente({ nombre:'', email:'', celular:'', direccion:'' })
+    setMode('visita')
+    setManualCliente({ nombre: '', email: '', celular: '', direccion: '' })
     setCotNum(newNum)
     setRepisas([{ ...DEFAULTS_REPISA, id: Date.now() }])
-    setAdNombres({ retiro_orden:'Retiro y orden de articulos', retiro_basura:'Retiro de basura', cajas:'Cajas organizadoras', bici:'Soporte bicicleta / ski' })
-    setAdicionales({ qty_retiro_orden:0, precio_retiro_orden:40000, qty_retiro_basura:0, precio_retiro_basura:30000, qty_cajas:0, precio_cajas:15000, qty_bici:0, precio_bici:20000 })
-    setTotalInfo({ subtotal: 0, iva: 0, total: 0 }); setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
-    setSelectedVisit(null); setPdfOriginalB64(null); setPdfReadError(''); saveState({})
+    setAdNombres({ retiro_orden: 'Retiro y orden de articulos', retiro_basura: 'Retiro de basura', cajas: 'Cajas organizadoras', bici: 'Soporte bicicleta / ski' })
+    setAdicionales({ qty_retiro_orden: 0, precio_retiro_orden: 40000, qty_retiro_basura: 0, precio_retiro_basura: 30000, qty_cajas: 0, precio_cajas: 15000, qty_bici: 0, precio_bici: 20000 })
+    setTotalInfo({ subtotal: 0, iva: 0, total: 0 })
+    setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
+    setSelectedVisit(null); saveState({})
   }
 
   function calcTotales() {
@@ -110,6 +96,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
     const iva = Math.round(subtotal * 0.19)
     return { subtotal, iva, total: subtotal + iva }
   }
+
   const totales = calcTotales()
 
   function addRepisa() {
@@ -117,77 +104,31 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
     setRepisas(prev => [...prev, { ...DEFAULTS_REPISA, id: Date.now() }])
   }
   function updRep(id, field, val) {
-    setRepisas(prev => prev.map(r => r.id === id ? { ...r, [field]: parseFloat(String(val).replace(',','.')) || 0 } : r))
+    setRepisas(prev => prev.map(r => r.id === id ? { ...r, [field]: parseFloat(String(val).replace(',', '.')) || 0 } : r))
   }
   function removeRepisa(id) { setRepisas(prev => prev.filter(r => r.id !== id)) }
 
   const cliente = mode === 'visita' ? (selectedVisit || {}) : manualCliente
 
-  // --- Leer PDF ---
-  async function handlePdfUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPdfReading(true); setPdfReadError(''); setPdfOriginalB64(null)
-    try {
-      const arrayBuf = await file.arrayBuffer()
-      const bytes = new Uint8Array(arrayBuf)
-      let binary = ''
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-      const b64 = btoa(binary)
-      setPdfOriginalB64(b64)
-
-      const res = await apiFetch('/.netlify/functions/read-pdf-quote', {
-        method: 'POST',
-        body: JSON.stringify({ pdfBase64: b64 }),
-      })
-
-      if (!res.ok) throw new Error(res.error || 'Error al leer el PDF')
-
-      // Prellenar cliente
-      setManualCliente({
-        nombre:    res.nombre    || '',
-        email:     res.email     || '',
-        celular:   res.telefono  || '',
-        direccion: res.direccion || '',
-      })
-
-      // Prellenar repisas
-      if (res.repisas && res.repisas.length > 0) {
-        setRepisas(res.repisas.map((r, i) => ({ ...r, id: Date.now() + i })))
-      }
-
-      // Prellenar adicionales
-      if (res.adicionales) {
-        setAdicionales(prev => ({ ...prev, ...res.adicionales }))
-      }
-
-      // Cambiar a modo manual para editar los datos prellenados
-      setMode('pdf')
-    } catch (e) {
-      setPdfReadError('No se pudo leer el PDF: ' + e.message)
-    } finally {
-      setPdfReading(false)
-    }
-  }
-
-  // --- Generar PDF ---
   async function handleGenerar() {
     if (mode === 'visita' && !selectedVisit) return
-    if ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
+    if (mode === 'manual' && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
     setGenerating(true); setError(''); setPdfUrl(null); setAutoSaved(false)
 
     const t = calcTotales()
     setTotalInfo(t)
 
     const payload = {
-      cot_num: cotNum,
+      cot_num:   cotNum,
       nombre:    (cliente.nombre || '').toUpperCase(),
       direccion: (cliente.direccion || '').toUpperCase(),
-      rut: '', telefono: cliente.celular || cliente.telefono || '',
-      email: (cliente.email || '').toUpperCase(),
-      repisas: repisas.map(r => ({ largo:r.l, prof:r.p, alto:r.a, niveles:r.n, unidades:r.u, valor:r.v })),
+      rut: '',
+      telefono:  cliente.celular || cliente.telefono || '',
+      email:     (cliente.email || '').toUpperCase(),
+      repisas:   repisas.map(r => ({ largo: r.l, prof: r.p, alto: r.a, niveles: r.n, unidades: r.u, valor: r.v })),
       ...adicionales,
     }
+
     try {
       const res = await fetch('/.netlify/functions/generate-quote', {
         method: 'POST',
@@ -213,22 +154,26 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       const fi = convertData.Files[0]
       let blob
       if (fi.FileData) {
-        const bin = atob(fi.FileData); const bytes = new Uint8Array(bin.length)
+        const bin = atob(fi.FileData)
+        const bytes = new Uint8Array(bin.length)
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
         blob = new Blob([bytes], { type: 'application/pdf' })
-      } else { blob = await fetch(fi.Url).then(r => r.blob()) }
+      } else {
+        blob = await fetch(fi.Url).then(r => r.blob())
+      }
 
       setPdfBlob(blob); setPdfUrl(URL.createObjectURL(blob))
 
       const next = cotNum + 1; setCotNum(next); setCotNumStorage(next)
 
-      // Si venía de PDF original, subir ese a Drive; si no, subir el recién generado
+      // Subir PDF a Drive
       let uploadedPdfUrl = ''
       try {
         const pdfBase64ToUpload = fi.FileData || await blob.arrayBuffer().then(buf =>
           btoa(String.fromCharCode(...new Uint8Array(buf)))
         )
-        const nombreInicial = (cliente.nombre || 'cliente').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+        const nombreInicial = (cliente.nombre || 'cliente').split(' ')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
         const pdfFileName = 'Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
         const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
           method: 'POST',
@@ -237,19 +182,47 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         if (uploadRes.ok) uploadedPdfUrl = uploadRes.viewUrl || ''
       } catch (e) { console.warn('upload-pdf error:', e.message) }
 
+      // Guardar cotizacion
       await apiFetch('/.netlify/functions/save-quote', {
         method: 'POST',
         body: JSON.stringify({
-          cotNum, nombre: cliente.nombre || '', email: cliente.email || '',
-          telefono: cliente.celular || cliente.telefono || '', direccion: cliente.direccion || '',
-          fechaVisita: mode === 'visita' ? fmtDate(selectedVisit?.start) : '',
-          subtotal: finalTotals.subtotal, iva: finalTotals.iva, total: finalTotals.total,
+          cotNum,
+          nombre:      cliente.nombre || '',
+          email:       cliente.email || '',
+          telefono:    cliente.celular || cliente.telefono || '',
+          direccion:   cliente.direccion || '',
+          fechaVisita: mode === 'visita' ? (selectedVisit?.start || '') : '',
+          subtotal:    finalTotals.subtotal,
+          iva:         finalTotals.iva,
+          total:       finalTotals.total,
           notas: '', status: 'por confirmar',
-          repisas: repisas.map(r => ({ largo:r.l, prof:r.p, alto:r.a, niveles:r.n, unidades:r.u, valor:r.v })),
+          repisas:     repisas.map(r => ({ largo: r.l, prof: r.p, alto: r.a, niveles: r.n, unidades: r.u, valor: r.v })),
           adicionales,
-          pdfUrl: uploadedPdfUrl,
+          pdfUrl:      uploadedPdfUrl,
         }),
       })
+
+      // Si vino de visita, marcarla como realizada_cotizada
+      if (mode === 'visita' && selectedVisit) {
+        try {
+          await apiFetch('/.netlify/functions/update-visit-status', {
+            method: 'POST',
+            body: JSON.stringify({
+              visitId:   selectedVisit.id,
+              nombre:    selectedVisit.nombre,
+              fecha:     fmtDate(selectedVisit.start),
+              hora:      '',
+              email:     selectedVisit.email || '',
+              celular:   selectedVisit.celular || '',
+              direccion: selectedVisit.direccion || '',
+              status:    'realizada_cotizada',
+              notas:     selectedVisit.notas || '',
+            }),
+          })
+          onVisitCotizada?.(selectedVisit.id, 'realizada_cotizada')
+        } catch (e) { console.warn('No se pudo actualizar estado de visita:', e.message) }
+      }
+
       setAutoSaved(true)
     } catch (e) { setError(e.message) }
     finally { setGenerating(false) }
@@ -258,24 +231,30 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   function handleDescargar() {
     if (!pdfBlob) return
     const a = document.createElement('a')
-    a.href = pdfUrl; a.download = 'Cotizacion ' + (cliente.nombre || 'cliente') + ' - Repisas Don Maxi.pdf'; a.click()
+    a.href = pdfUrl
+    a.download = 'Cotizacion ' + (cliente.nombre || 'cliente') + ' - Repisas Don Maxi.pdf'
+    a.click()
   }
 
-  const inputStyle = { padding: '7px 6px', border: '1.5px solid ' + C.border, borderRadius: 7, fontSize: 13, textAlign: 'center', width: '100%', fontFamily: 'inherit', background: '#FAFAFA', outline: 'none' }
+  const inputStyle = {
+    padding: '7px 6px', border: '1.5px solid ' + C.border, borderRadius: 7,
+    fontSize: 13, textAlign: 'center', width: '100%', fontFamily: 'inherit',
+    background: '#FAFAFA', outline: 'none',
+  }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h2 style={styles.sectionTitle}>Cotizaciones</h2>
+        <h2 style={styles.sectionTitle}>Cotizar</h2>
         <button onClick={resetCotizador} style={{ ...styles.btnSecondary, fontSize: 12 }}>Reiniciar</button>
       </div>
 
+      {/* Origen */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Origen de la cotizacion</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           <button onClick={() => setMode('visita')} style={{ ...styles.tab, ...(mode === 'visita' ? styles.tabActive : {}) }}>Desde visita</button>
           <button onClick={() => setMode('manual')} style={{ ...styles.tab, ...(mode === 'manual' ? styles.tabActive : {}) }}>Ingreso manual</button>
-          <button onClick={() => { setMode('pdf'); setPdfReadError('') }} style={{ ...styles.tab, ...(mode === 'pdf' ? styles.tabActive : {}) }}>Desde PDF</button>
         </div>
 
         {mode === 'visita' && (
@@ -293,56 +272,20 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
               </div>
         )}
 
-        {mode === 'pdf' && (
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              style={{ display: 'none' }}
-              onChange={handlePdfUpload}
-            />
-            {!manualCliente.nombre ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 0' }}>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={pdfReading}
-                  style={{ ...styles.btnPrimary, padding: '12px 24px', fontSize: 14, opacity: pdfReading ? .6 : 1 }}
-                >
-                  {pdfReading ? 'Leyendo PDF...' : 'Seleccionar PDF de cotizacion'}
-                </button>
-                <span style={{ fontSize: 12, color: C.textMuted }}>Solo se lee la primera pagina</span>
-                {pdfReadError && <div style={{ ...styles.errorBox, marginTop: 0 }}>{pdfReadError}</div>}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>PDF leido correctamente</span>
-                  <span style={{ fontSize: 12, color: C.textMuted }}>— revisa y edita los datos abajo</span>
-                </div>
-                <button
-                  onClick={() => { fileInputRef.current?.click() }}
-                  style={{ ...styles.btnSecondary, fontSize: 12 }}
-                >
-                  Cambiar PDF
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {(mode === 'manual' || mode === 'pdf') && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: mode === 'pdf' && manualCliente.nombre ? 14 : 0, paddingTop: mode === 'pdf' && manualCliente.nombre ? 14 : 0, borderTop: mode === 'pdf' && manualCliente.nombre ? '1px solid ' + C.border : 'none' }}>
+        {mode === 'manual' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {[
-              { key:'nombre',    label:'Nombre',    full: true, placeholder:'Nombre completo' },
-              { key:'email',     label:'Email',     placeholder:'correo@ejemplo.com' },
-              { key:'celular',   label:'Celular',   placeholder:'+56 9 XXXX XXXX' },
-              { key:'direccion', label:'Direccion', full: true, placeholder:'Direccion' },
+              { key: 'nombre',    label: 'Nombre',    full: true, placeholder: 'Nombre completo' },
+              { key: 'email',     label: 'Email',     placeholder: 'correo@ejemplo.com' },
+              { key: 'celular',   label: 'Celular',   placeholder: '+56 9 XXXX XXXX' },
+              { key: 'direccion', label: 'Direccion', full: true, placeholder: 'Direccion' },
             ].map(({ key, label, full, placeholder }) => (
               <div key={key} style={{ gridColumn: full ? '1 / -1' : undefined }}>
                 <label style={{ ...styles.detailLabel, display: 'block', marginBottom: 4 }}>{label}</label>
-                <input value={manualCliente[key]} onChange={e => setManualCliente(prev => ({ ...prev, [key]: e.target.value }))}
-                  placeholder={placeholder} style={{ ...styles.input, fontSize: 13, padding: '8px 10px' }} />
+                <input value={manualCliente[key]}
+                  onChange={e => setManualCliente(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={{ ...styles.input, fontSize: 13, padding: '8px 10px' }} />
               </div>
             ))}
           </div>
@@ -357,6 +300,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         )}
       </div>
 
+      {/* Numero de cotizacion */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Numero de Cotizacion</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -368,6 +312,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         </div>
       </div>
 
+      {/* Repisas */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Repisas</div>
         <div style={{ overflowX: 'auto' }}>
@@ -403,7 +348,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
                   <td style={{ padding: '5px 8px', textAlign: 'center', fontWeight: 700, color: C.orangeDark, whiteSpace: 'nowrap' }}>{fmt(r.u * r.v)}</td>
                   <td style={{ padding: '5px 4px', textAlign: 'center' }}>
                     {repisas.length > 1 && (
-                      <button onClick={() => removeRepisa(r.id)} style={{ background: 'none', border: '1.5px solid ' + C.border, borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: C.textMuted, fontSize: 15, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>x</button>
+                      <button onClick={() => removeRepisa(r.id)}
+                        style={{ background: 'none', border: '1.5px solid ' + C.border, borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: C.textMuted, fontSize: 15, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>x</button>
                     )}
                   </td>
                 </tr>
@@ -412,12 +358,14 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           </table>
         </div>
         {repisas.length < 4 && (
-          <button onClick={addRepisa} style={{ marginTop: 10, width: '100%', background: 'none', border: '2px dashed ' + C.orange + '60', color: C.orange, padding: '9px', borderRadius: 9, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+          <button onClick={addRepisa}
+            style={{ marginTop: 10, width: '100%', background: 'none', border: '2px dashed ' + C.orange + '60', color: C.orange, padding: '9px', borderRadius: 9, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
             + Agregar repisa
           </button>
         )}
       </div>
 
+      {/* Adicionales */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Adicionales</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 120px 90px', gap: '8px 10px', alignItems: 'center', fontSize: 13 }}>
@@ -459,6 +407,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         </div>
       </div>
 
+      {/* Totales */}
       <div style={{ ...styles.card, marginBottom: 20, background: C.orangeLight, border: '1px solid ' + C.orange + '30' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {[['Subtotal neto', totales.subtotal], ['IVA (19%)', totales.iva]].map(([label, val]) => (
@@ -467,7 +416,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
               <span style={{ fontWeight: 600 }}>{fmt(val)}</span>
             </div>
           ))}
-          <div style={{ height: 1, background: C.orange + '40', margin: '8px 0' }}/>
+          <div style={{ height: 1, background: C.orange + '40', margin: '8px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 22, fontWeight: 800, color: C.orangeDark }}>
             <span>Total</span><span>{fmt(totales.total)}</span>
           </div>
@@ -477,9 +426,11 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       {error && <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div>}
 
       <button onClick={handleGenerar}
-        disabled={generating || (mode === 'visita' && !selectedVisit) || ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim()) || (mode === 'pdf' && !manualCliente.nombre)}
-        style={{ ...styles.btnPrimary, width: '100%', padding: '15px', fontSize: 15, borderRadius: 12, marginBottom: 14,
-          opacity: (generating || (mode === 'visita' && !selectedVisit) || ((mode === 'manual' || mode === 'pdf') && !manualCliente.nombre.trim())) ? .55 : 1 }}>
+        disabled={generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())}
+        style={{
+          ...styles.btnPrimary, width: '100%', padding: '15px', fontSize: 15, borderRadius: 12, marginBottom: 14,
+          opacity: (generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())) ? .55 : 1,
+        }}>
         {generating ? 'Generando PDF...' : 'Generar Cotizacion PDF'}
       </button>
 
@@ -494,7 +445,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={handleDescargar} style={styles.btnSecondary}>Descargar</button>
-              <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              <a href={pdfUrl} target="_blank" rel="noreferrer"
+                style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
             </div>
