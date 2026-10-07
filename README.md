@@ -25,6 +25,23 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
    - VITE_REPISAS_3D_URL: dirección del configurador 3D (Vercel).
 3. Sube `logo.png` y `og-cover.png` a `/public`.
 
+## Cotizador para clientes (/cotiza)
+
+- El cliente ingresa las medidas de su bodega (A, B/E, C, D y alto) y elige:
+  - dónde van las repisas: solo fondo, fondo + izquierda, fondo + derecha o fondo + ambos lados;
+  - la profundidad y el alto;
+  - colgador sí/no en cada módulo.
+- Ve el precio con IVA de cada módulo y el total. Funciona en celular.
+- El 3D es el configurador de Repisas 3D en modo cliente (`/embed?mode=cliente`, rama `feat/manual-build-mode` del otro repo), incrustado con `VITE_REPISAS_3D_URL`.
+- `cotizacion-web` (pública):
+  - con `GET` entrega la tabla de precios;
+  - con `POST` recalcula los precios con la planilla (no confía en el navegador), asigna el número, arma el PDF, lo sube a Drive y lo guarda en Cotizaciones como "por confirmar", con nota "Cotización web" y su modelo 3D;
+  - envía el PDF al cliente y una copia a `NOTIFY_EMAIL` (o repisasdonmaxi@gmail.com).
+- Protección: campo trampa para robots y máximo 3 cotizaciones por correo cada 2 horas.
+- Si falla el correo, la cotización queda guardada igual.
+- Lógica y pruebas: `netlify/functions/lib/cotizacion-web.mjs`. Prueba E2E local: `node scripts/local-dev/verify-cotiza.mjs`.
+  En local los correos quedan como `.eml` en `scripts/local-dev/correos/`.
+
 ## Horarios de visita
 
 - En **Admin → Horarios** se define:

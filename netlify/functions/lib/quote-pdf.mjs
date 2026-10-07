@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { CONDICIONES, MARCA } from './marca.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -9,8 +10,6 @@ const L = 42, R = 570, W = R - L, FOOT = 751.8;
 const F = { serif: 'Lora-Bold', sans: 'Poppins', bold: 'Poppins-Bold' };
 const money = value => '$' + Math.round(value).toLocaleString('es-CL');
 const metres = value => (Number.isInteger(value) ? String(value) : value.toFixed(2)) + ' m';
-const MARCA = { razonSocial: 'Don Maxi SPA', rut: '77.386.684-8', banco: 'Banco BCI', tipoCuenta: 'Corriente', numeroCuenta: '13702807', rating: '5.0', resenas: '231', linkPago: 'https://link.mercadopago.cl/repisasdonmaxi', galeriaUrl: 'www.donmaxi.cl/galeria' };
-const CONDICIONES = 'Puede abonar un 50% antes de la instalación, o pagar el total al finalizar el trabajo. Garantía de 5 años sobre estructura e instalación.';
 const services = [
   ['retiro_orden', 'Retiro y orden de artículos', 40000, 'Retiramos todo lo que tengas en el espacio y lo reordenamos una vez instaladas las repisas. Si no se contrata, el área debe estar despejada antes de la instalación.'],
   ['retiro_basura', 'Retiro de basura', 30000, 'Nos llevamos muebles, cajas, escombros y todo lo que ya no necesites, para que no tengas que preocuparte de desecharlo.'],
@@ -40,7 +39,7 @@ function imageData(src, key) {
 // Deterministic page geometry. No network, browser or office installation is required.
 export async function generateQuotePdf(data, { now = new Date(), functionsDir = join(process.env.LAMBDA_TASK_ROOT || process.cwd(), 'netlify/functions') } = {}) {
   const rows = (data.repisas || [data.repisa1, data.repisa2].filter(Boolean)).map(r => ({
-    kind: r.kind, label: String(r.label || 'Rack completo').slice(0, 90),
+    kind: r.kind, label: String(r.label || 'Rack completo').slice(0, 90), colgador: r.kind !== 'rack' && r.colgador === true,
     largo: numeric(r.largo), prof: numeric(r.prof), alto: numeric(r.alto), niveles: numeric(r.niveles), unidades: numeric(r.unidades), valor: numeric(r.valor),
   }));
   if (rows.length > 100) throw new Error('Máximo 100 repisas por cotización');
@@ -111,7 +110,9 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   box(L, 60.4, W, 28.8, C.accent, undefined, 6);
   withIcon('Repisas Don Maxi — N.º 1 en Google (', star, `${MARCA.rating} · ${MARCA.resenas} reseñas)`, L, 68.7, 9.75, '#FFFFFF', F.bold, 'center');
   // Drawings give up to 110 pt of height so a quote of about six rows still ends on page 1.
-  const tableHeight = rows.reduce((h, r) => h + 23.85 + (r.kind === 'rack' ? 13 : 0), 0) + extras.filter(r => r.qty > 0).length * 23.85;
+  // Una fila con titulo (rack o repisa con colgador) ocupa 13 pt mas.
+  const heading = r => r.kind === 'rack' ? `${r.label} · cajas incluidas` : r.colgador ? 'Repisa con colgador' : undefined;
+  const tableHeight = rows.reduce((h, r) => h + 23.85 + (heading(r) ? 13 : 0), 0) + extras.filter(r => r.qty > 0).length * 23.85;
   const shrink = Math.min(110, Math.max(0, tableHeight - 47.7));
   // Maxi's frames: 227 x 283 pt isometric and 160 x 283 pt plan, centred. The plan frame follows the
   // plan's own proportions (a long bodega is narrow, a square one wide); the isometric takes the rest.
@@ -160,7 +161,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   }
   tableHeader();
   for (const r of rows)
-    row([[metres(r.largo), col.largo], [metres(r.prof), col.prof], [metres(r.alto), col.alto], [r.niveles, col.niveles], [r.unidades, col.uds]], r.valor, r.unidades, r.kind === 'rack' ? `${r.label} · cajas incluidas` : undefined);
+    row([[metres(r.largo), col.largo], [metres(r.prof), col.prof], [metres(r.alto), col.alto], [r.niveles, col.niveles], [r.unidades, col.uds]], r.valor, r.unidades, heading(r));
   // Contracted services are charged, so they are listed with the items (the handoff's README: "agréguenlo como una fila más").
   for (const r of extras.filter(r => r.qty > 0)) row([[r.title, col.largo], [r.qty, col.uds]], r.price, r.qty);
 
