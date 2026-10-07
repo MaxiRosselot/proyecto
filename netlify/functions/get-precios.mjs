@@ -3,13 +3,13 @@
 // Esa planilla es la fuente de verdad: si suben los precios de la madera, el cliente edita
 // ahi y la cotizacion queda al dia sin tocar el codigo.
 import { google } from 'googleapis'
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 const SHEET_ID       = process.env.PRECIOS_SHEET_ID
 const RANGE          = "'Tabla de precios'!A2:G"
 
@@ -23,8 +23,8 @@ function filaValida(fila) {
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
-  if (event.headers['x-admin-password'] !== ADMIN_PASSWORD)
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
+  const denied = requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     if (!SHEET_ID) throw new Error('Falta PRECIOS_SHEET_ID')

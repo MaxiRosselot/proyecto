@@ -1,14 +1,14 @@
 // netlify/functions/update-visit-status.mjs
 // Escribe/actualiza el estado de una visita en Google Sheets
 import { google } from 'googleapis'
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 const SHEET_ID = process.env.GOOGLE_SHEET_ID
 const SHEET_NAME = 'Visitas'
 
@@ -17,10 +17,8 @@ export async function handler(event) {
     return { statusCode: 204, headers: corsHeaders }
   }
 
-  const pwd = event.headers['x-admin-password']
-  if (pwd !== ADMIN_PASSWORD) {
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
-  }
+  const denied = requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     const { visitId, nombre, fecha, hora, email, celular, direccion, status, notas } = JSON.parse(event.body || '{}')

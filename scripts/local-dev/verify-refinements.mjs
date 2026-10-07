@@ -11,8 +11,10 @@ try {
   const page=await browser.newPage({viewport:{width:1600,height:1100}});
   const errors=[];page.on('pageerror',e=>errors.push(e.stack || e.message));
   await page.goto(base+'/admin');
-  await page.locator('input[type=password]').fill('2003');
+  await page.locator('input[type=password]').fill(process.env.LOCAL_ADMIN_PASSWORD || 'donmaxi-local-demo');
   await page.getByRole('button',{name:'Ingresar'}).click();
+  await expect(page.getByRole('navigation')).toBeVisible();
+  const auth={Authorization:'Bearer '+await page.evaluate(()=>JSON.parse(sessionStorage.getItem('dm_admin_session')).token)};
   await page.getByRole('navigation').getByRole('button',{name:'Cotizar',exact:true}).click();
   await page.getByRole('button',{name:'Ingreso manual'}).click();
   await page.getByPlaceholder('Nombre completo').fill('CLIENTE DE PRUEBA');
@@ -23,7 +25,7 @@ try {
   page.once('dialog',dialog=>dialog.accept());
   await priceRow.getByRole('button',{name:'Actualizar valor en tabla'}).click();
   await expect(page.getByRole('status')).toContainText('guardado y verificado');
-  const persisted=await page.request.get(base+'/.netlify/functions/get-precios',{headers:{'x-admin-password':'2003'}});
+  const persisted=await page.request.get(base+'/.netlify/functions/get-precios',{headers:auth});
   const priceTable=(await persisted.json()).tabla;
   expect(priceTable.find(r=>r.alto===200 && r.prof===40 && r.desde===194).precio).toBe(120000);
   await page.screenshot({path:path.join(evidence,'01-actualizar-precio.png'),fullPage:true});
@@ -62,6 +64,8 @@ try {
   writeFileSync('output/request-e2e.json',response.request().postData());
   if(!response.ok()) throw new Error(await response.text());
   await expect(page.getByRole('button',{name:/Descargar/})).toBeVisible();
+  // El link del PDF se guarda despues de subirlo; el aviso aparece cuando todo quedo guardado.
+  await expect(page.getByText(/Cotización N° \d+ guardada/)).toBeVisible({timeout:60000});
   const downloadPromise=page.waitForEvent('download');
   await page.getByRole('button',{name:/Descargar/}).click();
   const download=await downloadPromise;
@@ -76,7 +80,7 @@ try {
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('dm_cotizador_state')).project3d.shelving.runs.length)).toBe(2);
   await page.screenshot({path:path.join(evidence,'06-cotizador-movil.png'),fullPage:true});
   expect((await saveResponse).ok()).toBe(true);
-  const saved=await page.request.get(base+'/.netlify/functions/get-quotes',{headers:{'x-admin-password':'2003'}});
+  const saved=await page.request.get(base+'/.netlify/functions/get-quotes',{headers:auth});
   const quote=(await saved.json()).quotes.find(q=>q.nombre==='CLIENTE DE PRUEBA');
   expect(quote).toBeTruthy();
   expect(quote.pdfUrl).toContain('/.netlify/functions/local-pdf?id=');

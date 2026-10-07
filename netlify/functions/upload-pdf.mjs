@@ -2,19 +2,19 @@
 // Recibe pdfBase64 + fileName, sube a Google Drive, retorna URL pública
 import { google } from 'googleapis'
 import { Readable } from 'stream'
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
-const ADMIN_PASSWORD  = process.env.ADMIN_PASSWORD || '2003'
 const DRIVE_FOLDER_NAME = 'Cotizaciones Don Maxi'
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
-  if (event.headers['x-admin-password'] !== ADMIN_PASSWORD)
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
+  const denied = requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     const { pdfBase64, fileName, cotNum } = JSON.parse(event.body || '{}')
@@ -41,15 +41,18 @@ export async function handler(event) {
       folderId = created.data.id
     }
 
-    // 2. Si ya existe un PDF para este cotNum, eliminarlo
-    if (cotNum) {
+    // 2. Al regenerar una cotizacion, el PDF anterior va a la papelera (recuperable 30 dias).
+    // Se reconoce por la marca cotNum que se le pone al subirlo; antes se buscaba "Cot<numero>"
+    // en el nombre, que los archivos nunca tenian, y los PDF viejos se acumulaban.
+    const numero = /^\d+$/.test(String(cotNum || '')) ? String(cotNum) : ''
+    if (numero) {
       const existing = await drive.files.list({
-        q: `name contains 'Cot${cotNum}' and '${folderId}' in parents and trashed=false`,
+        q: `appProperties has { key='cotNum' and value='${numero}' } and '${folderId}' in parents and trashed=false`,
         fields: 'files(id)',
         spaces: 'drive',
       })
       for (const f of existing.data.files || []) {
-        await drive.files.delete({ fileId: f.id }).catch(() => {})
+        await drive.files.update({ fileId: f.id, requestBody: { trashed: true } }).catch(() => {})
       }
     }
 
@@ -63,6 +66,7 @@ export async function handler(event) {
         name: safeName,
         mimeType: 'application/pdf',
         parents: [folderId],
+        ...(numero ? { appProperties: { cotNum: numero } } : {}),
       },
       media: { mimeType: 'application/pdf', body: stream },
       fields: 'id,webViewLink,webContentLink',

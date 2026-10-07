@@ -92,8 +92,8 @@ export default function DashboardSection({ navigateTo }) {
       // Cotizaciones sin respuesta hace 3+ dias
       const tresDias = new Date(hoy); tresDias.setDate(hoy.getDate() - 3)
       const sinRespuesta = porConfirmar.filter(q => {
-        if (!q.creado) return false
-        try { return new Date(q.creado) < tresDias } catch { return false }
+        // creadoMs lo calcula el servidor: "creado" viene en formato chileno y new Date() no lo lee.
+        return q.creadoMs != null && q.creadoMs < tresDias.getTime()
       })
 
       // Proximas visitas de hoy
@@ -217,7 +217,7 @@ export default function DashboardSection({ navigateTo }) {
           {porConfirmar.length === 0
             ? <div style={{ fontSize: 13, color: C.textMuted, padding: '10px 0' }}>Ninguna pendiente.</div>
             : porConfirmar.slice(0, 5).map(q => {
-                const dias = q.creado ? Math.floor((new Date() - new Date(q.creado)) / (1000*60*60*24)) : null
+                const dias = q.creadoMs != null ? Math.floor((Date.now() - q.creadoMs) / (1000*60*60*24)) : null
                 const sinResp = dias >= 3
                 return (
                   <Row key={q.cotNum}

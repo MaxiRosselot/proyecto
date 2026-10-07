@@ -15,6 +15,9 @@ test('rejects negative, nonfinite, fractional and string prices',()=>{
   for(const precio of [-1,0,NaN,Infinity,1.2,'120000']) assert.throws(()=>resolvePriceUpdate([row],{...input,precio}),{status:400});
 });
 test('write route requires POST and authenticated administrator',async()=>{
+  process.env.ADMIN_PASSWORD ??= 'clave-de-prueba-larga';
+  process.env.ADMIN_SESSION_SECRET ??= 's'.repeat(40);
   assert.equal((await handler({httpMethod:'GET',headers:{}})).statusCode,405);
   assert.equal((await handler({httpMethod:'POST',headers:{}})).statusCode,401);
+  assert.equal((await handler({httpMethod:'POST',headers:{'x-admin-password':process.env.ADMIN_PASSWORD}})).statusCode,401);
 });

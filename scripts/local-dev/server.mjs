@@ -4,12 +4,16 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { buildCatalog } from './catalog.mjs'
 import { SEED_VISITS, SEED_QUOTES, SEED_INSTALLATIONS, visitToApiShape } from './seed.mjs'
 import { TABLA_PRECIOS } from '../../src/admin/preciosRepisas.js'
 import { resolvePriceUpdate } from '../../netlify/functions/lib/price-update.mjs'
+import { AUTH_HEADERS, requireAdmin } from '../../netlify/functions/lib/admin-auth.mjs'
+import {
+  actualizarCotizacion, almacenEnMemoria, borrarCotizacion, cotizacionAFila, crearCotizacion,
+  listarCotizaciones, obtenerCotizacion, siguienteDisponible,
+} from '../../netlify/functions/lib/cotizaciones.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -20,12 +24,10 @@ const PUBLIC_URL = process.env.LOCAL_PUBLIC_URL || 'http://127.0.0.1:5176'
 // generate-quote busca la plantilla en LAMBDA_TASK_ROOT/netlify/functions; en local es el repo.
 process.env.LAMBDA_TASK_ROOT = process.env.LAMBDA_TASK_ROOT || path.join(here, '../..')
 
-process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
-process.env.REPISAS_3D_API_URL = process.env.REPISAS_3D_API_URL || 'http://127.0.0.1:3000'
-process.env.REPISAS_3D_PUBLIC_URL = PUBLIC_URL
-process.env.REPISAS_API_KEY = process.env.REPISAS_API_KEY || 'local-dev-key'
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+// Contraseña de demostración, solo para este backend local. En producción ADMIN_PASSWORD y
+// ADMIN_SESSION_SECRET se configuran en Netlify y no tienen valor por defecto.
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'donmaxi-local-demo'
+process.env.ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || randomBytes(32).toString('hex')
 
 function loadData() {
   if (fs.existsSync(DATA_FILE)) {
@@ -45,24 +47,20 @@ function saveData(data) { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null,
 let db = loadData()
 db.precios ||= structuredClone(TABLA_PRECIOS)
 
+// Las cotizaciones se guardan como filas de la hoja, con la misma logica que en produccion
+// (lib/cotizaciones.mjs). Un data.json anterior traia objetos sueltos: se convierten una vez.
+db.cotizacionesFilas ||= (db.quotes || SEED_QUOTES).map(q => cotizacionAFila(q))
+delete db.quotes
+const cotizaciones = almacenEnMemoria(db.cotizacionesFilas, filas => { db.cotizacionesFilas = filas; saveData(db) })
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Content-Type': 'application/json',
 }
 
 function send(res, code, body) { res.writeHead(code, CORS); res.end(JSON.stringify(body)) }
-
-// The real integration handler is reused verbatim so the PR's own code path is what runs.
-let quoteHandler
-async function getQuoteHandler() {
-  if (!quoteHandler) {
-    process.env.REPISAS_QUOTE_CATALOG_JSON = JSON.stringify(buildCatalog())
-    ;({ handler: quoteHandler } = await import('../../netlify/functions/repisas-3d-quote.mjs'))
-  }
-  return quoteHandler
-}
 
 const routes = {
   'upload-pdf': body => {
@@ -84,7 +82,14 @@ const routes = {
     ok: true,
     visits: db.visits.map(v => ({ ...v, status: db.visitStatuses[v.id] || v.status || 'agendada' })),
   }),
-  'get-quotes': () => ({ ok: true, quotes: db.quotes }),
+  'get-quotes': async (_body, params) => {
+    if (params.get('siguiente')) return { ok: true, siguiente: await siguienteDisponible(cotizaciones) }
+    if (params.get('cotNum')) {
+      const quote = await obtenerCotizacion(cotizaciones, params.get('cotNum'))
+      return quote ? { ok: true, quote } : { status: 404, ok: false, error: 'Cotización no encontrada' }
+    }
+    return { ok: true, ...(await listarCotizaciones(cotizaciones)) }
+  },
   'get-installations': () => ({ ok: true, installations: db.installations }),
   'get-sales': () => ({ ok: true, installations: db.installations }),
   'update-visit-status': (body) => {
@@ -95,20 +100,13 @@ const routes = {
     saveData(db)
     return { ok: true }
   },
-  'save-quote': (body) => {
-    if (!body.cotNum || !body.nombre) return { ok: false, error: 'Faltan parámetros' }
-    const creado = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
-    const idx = db.quotes.findIndex(q => String(q.cotNum) === String(body.cotNum))
-    const record = { ...body, cotNum: String(body.cotNum), creado: idx >= 0 ? db.quotes[idx].creado : creado }
-    if (idx >= 0) db.quotes[idx] = { ...db.quotes[idx], ...record }
-    else db.quotes.unshift(record)
-    saveData(db)
-    return { ok: true }
+  'save-quote': async (body) => {
+    const { estado, respuesta } = body.crear ? await crearCotizacion(cotizaciones, body) : await actualizarCotizacion(cotizaciones, body)
+    return { status: estado, ...respuesta }
   },
-  'delete-quote': (body) => {
-    db.quotes = db.quotes.filter(q => String(q.cotNum) !== String(body.cotNum))
-    saveData(db)
-    return { ok: true }
+  'delete-quote': async (body) => {
+    const { estado, respuesta } = await borrarCotizacion(cotizaciones, body.cotNum)
+    return { status: estado, ...respuesta }
   },
 }
 
@@ -129,23 +127,29 @@ const server = http.createServer(async (req, res) => {
     return res.end(fs.readFileSync(file))
   }
 
-  if (req.headers['x-admin-password'] !== ADMIN_PASSWORD) return send(res, 401, { error: 'No autorizado' })
-
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
   const raw = Buffer.concat(chunks).toString('utf8')
+  const event = {
+    httpMethod: req.method,
+    headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k.toLowerCase(), String(v || '')])),
+    body: raw,
+    queryStringParameters: Object.fromEntries(url.searchParams),
+  }
+
+  // El login y la verificacion de sesion son los de produccion.
+  if (name !== 'admin-login') {
+    const denied = requireAdmin(event, CORS)
+    if (denied) return send(res, denied.statusCode, JSON.parse(denied.body))
+  }
 
   try {
-    // Estas rutas corren el handler real de la PR / de produccion, no una version local.
-    const handlerReal = name === 'repisas-3d-quote' ? await getQuoteHandler()
-      : name === 'generate-quote' ? (await import('../../netlify/functions/generate-quote.mjs')).handler
+    // Estas rutas corren el handler real de produccion, no una version local.
+    const handlerReal = name === 'generate-quote' ? (await import('../../netlify/functions/generate-quote.mjs')).handler
+      : name === 'admin-login' ? (await import('../../netlify/functions/admin-login.mjs')).handler
       : null
     if (handlerReal) {
-      const result = await handlerReal({
-        httpMethod: req.method,
-        headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k.toLowerCase(), String(v || '')])),
-        body: raw,
-      })
+      const result = await handlerReal(event)
       res.writeHead(result.statusCode, { ...CORS, ...(result.headers || {}) })
       // El PDF viaja en base64: Netlify lo decodifica en produccion, aca hay que hacerlo.
       return res.end(result.isBase64Encoded ? Buffer.from(result.body, 'base64') : (result.body || ''))
@@ -155,16 +159,18 @@ const server = http.createServer(async (req, res) => {
     if (!route) return send(res, 404, { ok: false, error: `Sin backend local para ${name}` })
     if (name === 'update-precio' && req.method !== 'POST') return send(res, 405, { error: 'Método no permitido' })
     const body = raw ? JSON.parse(raw) : {}
-    return send(res, 200, route(body))
+    const { status = 200, ...result } = await route(body, url.searchParams)
+    return send(res, status, result)
   } catch (error) {
-    console.error(`[local-api] ${name} failed:`, error)
-    return send(res, error.status || 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
+    const status = error.status || error.estado || 500
+    if (status >= 500) console.error(`[local-api] ${name} failed:`, error)
+    return send(res, status, { ok: false, error: error instanceof Error ? error.message : String(error) })
   }
 })
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[local-api] listening on http://127.0.0.1:${PORT}`)
   console.log(`[local-api] visits seeded: ${db.visits.length} (realizadas: ${db.visits.filter(v => (db.visitStatuses[v.id] || v.status) === 'realizada').length})`)
-  console.log(`[local-api] quotes seeded: ${db.quotes.length}`)
-  console.log(`[local-api] 3D API: ${process.env.REPISAS_3D_API_URL} | embed base: ${process.env.REPISAS_3D_PUBLIC_URL}`)
+  console.log(`[local-api] quotes: ${db.cotizacionesFilas.length}`)
+  console.log(`[local-api] admin password (solo local): ${process.env.ADMIN_PASSWORD}`)
 })

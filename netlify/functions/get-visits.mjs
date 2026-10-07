@@ -1,14 +1,13 @@
 // netlify/functions/get-visits.mjs
 // Devuelve todas las visitas agendadas desde Google Calendar
 import { google } from 'googleapis'
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') {
@@ -16,10 +15,8 @@ export async function handler(event) {
   }
 
   // Auth simple
-  const pwd = event.headers['x-admin-password']
-  if (pwd !== ADMIN_PASSWORD) {
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
-  }
+  const denied = requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     const oAuth2Client = new google.auth.OAuth2(

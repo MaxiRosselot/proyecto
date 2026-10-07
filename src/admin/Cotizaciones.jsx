@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { QUOTE_STATUS_LABELS, C, apiFetch, fmt, fmtDate, styles, DEFAULTS_REPISA } from './utils.js'
+import { QUOTE_STATUS_LABELS, C, apiFetch, fmt, fmtDate, styles, DEFAULTS_REPISA, porCreacion } from './utils.js'
+import { hayBorradorSinGuardar } from './PorCotizar.jsx'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 
@@ -14,7 +15,7 @@ function driveFileId(url) {
   return m ? m[1] : ''
 }
 
-export default function CotizacionesSection() {
+export default function CotizacionesSection({ onAbrirEnCotizador }) {
   const [quotes, setQuotes]             = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState('')
@@ -30,6 +31,7 @@ export default function CotizacionesSection() {
   const [deleting, setDeleting]         = useState(null)
   const [confirmDel, setConfirmDel]     = useState(null)
   const [buscar, setBuscar]             = useState('')
+  const [abriendo, setAbriendo]         = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -43,26 +45,29 @@ export default function CotizacionesSection() {
 
   useEffect(() => { load() }, [load])
 
+  // Solo viajan los campos que cambian: el resto (incluido el modelo 3D) queda como estaba.
   async function updateStatus(quote, newStatus, motivo) {
     setUpdating(quote.cotNum)
     try {
-      await apiFetch('/.netlify/functions/save-quote', {
+      const res = await apiFetch('/.netlify/functions/save-quote', {
         method: 'POST',
-        body: JSON.stringify({ ...quote, status: newStatus, motivoRechazo: motivo || '' }),
+        body: JSON.stringify({ cotNum: quote.cotNum, status: newStatus, motivoRechazo: motivo || '' }),
       })
+      if (!res.ok) throw new Error(res.error)
       setQuotes(prev => prev.map(q => q.cotNum === quote.cotNum
         ? { ...q, status: newStatus, motivoRechazo: motivo || '' } : q))
-    } catch { alert('Error al actualizar') }
+    } catch (e) { alert('Error al actualizar' + (e?.message ? ': ' + e.message : '')) }
     finally { setUpdating(null) }
   }
 
   async function handleDelete(cotNum) {
     setDeleting(cotNum)
     try {
-      await apiFetch('/.netlify/functions/delete-quote', { method: 'POST', body: JSON.stringify({ cotNum }) })
+      const res = await apiFetch('/.netlify/functions/delete-quote', { method: 'POST', body: JSON.stringify({ cotNum }) })
+      if (!res.ok) throw new Error(res.error)
       setQuotes(prev => prev.filter(q => q.cotNum !== cotNum))
       setConfirmDel(null); setExpanded(null)
-    } catch { alert('Error al borrar') }
+    } catch (e) { alert('Error al borrar' + (e?.message ? ': ' + e.message : '')) }
     finally { setDeleting(null) }
   }
 
@@ -78,15 +83,28 @@ export default function CotizacionesSection() {
     if (editRepisas.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.valor) || r.valor <= 0))) return alert('Ingresa un precio neto entero positivo para cada rack.')
     setSaving(true)
     try {
-      await apiFetch('/.netlify/functions/save-quote', {
+      const res = await apiFetch('/.netlify/functions/save-quote', {
         method: 'POST',
-        body: JSON.stringify({ ...quote, repisas: editRepisas, adicionales: editAd }),
+        body: JSON.stringify({ cotNum: quote.cotNum, repisas: editRepisas, adicionales: editAd }),
       })
+      if (!res.ok) throw new Error(res.error)
       setQuotes(prev => prev.map(q => q.cotNum === quote.cotNum
         ? { ...q, repisas: editRepisas, adicionales: editAd } : q))
       setEditingId(null)
     } catch (e) { alert('Error al guardar: ' + e.message) }
     finally { setSaving(false) }
+  }
+
+  // Trae la cotizacion completa, con su modelo 3D, y la lleva al cotizador.
+  async function abrirEnCotizador(quote) {
+    if (hayBorradorSinGuardar() && !window.confirm('Hay una cotización nueva sin guardar en el cotizador. ¿Reemplazarla por la N° ' + quote.cotNum + '?')) return
+    setAbriendo(quote.cotNum)
+    try {
+      const res = await apiFetch('/.netlify/functions/get-quotes?cotNum=' + encodeURIComponent(quote.cotNum))
+      if (!res.ok || !res.quote) throw new Error(res.error || 'No se encontró la cotización')
+      onAbrirEnCotizador?.(res.quote)
+    } catch (e) { alert('No se pudo abrir: ' + e.message) }
+    finally { setAbriendo(null) }
   }
 
   const TABS = [
@@ -105,7 +123,7 @@ export default function CotizacionesSection() {
   const filtered = quotes
     .filter(q => q.status === tab)
     .filter(q => !bq || (q.nombre || '').toLowerCase().includes(bq))
-    .sort((a, b) => new Date(b.creado || 0) - new Date(a.creado || 0))
+    .sort(porCreacion)
 
   const canEdit = tab === 'por confirmar' || tab === 'confirmada'
 
@@ -172,6 +190,8 @@ export default function CotizacionesSection() {
                     <span style={{ marginRight: 8, color: C.textMuted, fontWeight: 600 }}>N{q.cotNum}</span>
                     <span style={{ fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span>
                     {q.direccion && <span style={{ marginLeft: 10, color: C.textMuted }}>{q.direccion}</span>}
+                    {q.creado && <span style={{ marginLeft: 10, color: C.textMuted }}>Creada {String(q.creado).split(/[ ,]/)[0]}</span>}
+                    {q.tieneProyecto3d && <span style={{ ...styles.badge(C.purple), marginLeft: 10 }}>Modelo 3D</span>}
                   </div>
                 </div>
                 {!isEdit && (
@@ -283,6 +303,13 @@ export default function CotizacionesSection() {
                       <button onClick={() => startEditing(q)}
                         style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', marginLeft: 4 }}>
                         Editar
+                      </button>
+                    )}
+                    {canEdit && onAbrirEnCotizador && (
+                      <button onClick={() => abrirEnCotizador(q)} disabled={abriendo === q.cotNum}
+                        title={q.tieneProyecto3d ? 'Abre la cotización con su modelo 3D para ajustarla y regenerar el PDF' : 'Abre la cotización en el cotizador para ajustarla y regenerar el PDF'}
+                        style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>
+                        {abriendo === q.cotNum ? 'Abriendo...' : 'Abrir en cotizador'}
                       </button>
                     )}
                   </div>

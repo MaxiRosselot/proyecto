@@ -1,5 +1,20 @@
-export const ADMIN_PASSWORD = '2003'
-export const SESSION_KEY = 'dm_admin_auth'
+// La contraseña del panel ya no vive en el navegador: admin-login la valida en el servidor y
+// devuelve un token que vence. Aca solo se guarda ese token, por pestaña.
+export const SESSION_KEY = 'dm_admin_session'
+export const SESSION_EXPIRED_EVENT = 'dm:sesion-vencida'
+
+export function leerSesion() {
+  try {
+    const sesion = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null')
+    return sesion?.token && sesion.expiresAt > Date.now() ? sesion : null
+  } catch { return null }
+}
+export function guardarSesion({ token, expiresAt }) { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, expiresAt })) }
+export function cerrarSesion() { sessionStorage.removeItem(SESSION_KEY) }
+export function authHeaders() {
+  const sesion = leerSesion()
+  return sesion ? { Authorization: 'Bearer ' + sesion.token } : {}
+}
 
 export const VISIT_STATUS_LABELS = {
   agendada:           { label: 'Agendada',              color: '#3B82F6' },
@@ -48,16 +63,31 @@ export function fmt(n) {
   return '$' + Math.round(n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
-export async function apiFetch(path, opts = {}) {
+// Llama a una funcion del panel con la sesion. Si el servidor la rechaza (vencio o cambio la
+// contraseña) se cierra, y AdminApp vuelve al login en vez de dejar pantallas vacias.
+export async function adminFetch(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-password': ADMIN_PASSWORD,
+      ...authHeaders(),
       ...(opts.headers || {}),
     },
   })
-  return res.json()
+  if (res.status === 401) {
+    cerrarSesion()
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+  }
+  return res
+}
+
+export async function apiFetch(path, opts = {}) {
+  return (await adminFetch(path, opts)).json()
+}
+
+// Mas nuevas arriba. creadoMs lo calcula el servidor desde "Creado" (formato chileno).
+export function porCreacion(a, b) {
+  return ((b.creadoMs ?? -Infinity) - (a.creadoMs ?? -Infinity)) || (Number(b.cotNum) - Number(a.cotNum))
 }
 
 // Design tokens
