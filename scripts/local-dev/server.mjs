@@ -14,6 +14,9 @@ import {
   actualizarCotizacion, almacenEnMemoria, borrarCotizacion, cotizacionAFila, crearCotizacion,
   listarCotizaciones, obtenerCotizacion, siguienteDisponible,
 } from '../../netlify/functions/lib/cotizaciones.mjs'
+import {
+  DURACION_MIN, aHHMM, ahoraEnZona, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario,
+} from '../../netlify/functions/lib/horarios.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -52,6 +55,19 @@ db.precios ||= structuredClone(TABLA_PRECIOS)
 db.cotizacionesFilas ||= (db.quotes || SEED_QUOTES).map(q => cotizacionAFila(q))
 delete db.quotes
 const cotizaciones = almacenEnMemoria(db.cotizacionesFilas, filas => { db.cotizacionesFilas = filas; saveData(db) })
+
+// Horarios: la pestaña "Horarios" de la planilla, aca en data.json. Sin filas = horario por defecto.
+const horarios = {
+  async leerFilas() { return db.horariosFilas ?? null },
+  async guardarFilas(filas) { db.horariosFilas = filas; saveData(db) },
+}
+// Hora de Chile de una visita ya agendada, como la slot_key que guarda create_event.
+function slotDeVisita(v) {
+  const { fecha, minutos } = ahoraEnZona(new Date(v.start))
+  return `${fecha}T${aHHMM(minutos)}`
+}
+// Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event'])
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -108,6 +124,40 @@ const routes = {
     const { estado, respuesta } = await borrarCotizacion(cotizaciones, body.cotNum)
     return { status: estado, ...respuesta }
   },
+  // Mismo contrato que netlify/functions/horarios.mjs
+  'horarios': async (body, params, method) => {
+    if (method === 'POST') {
+      const config = await guardarHorario(horarios, body)
+      return { ok: true, config, dias: diasDisponibles(config) }
+    }
+    const config = await leerHorario(horarios)
+    return params.get('config') ? { ok: true, config, dias: diasDisponibles(config) } : { ok: true, dias: diasDisponibles(config), duracion: DURACION_MIN }
+  },
+  // Mismas reglas que get-availability / create_event, con las visitas locales en vez de Calendar.
+  'get-availability': async (_body, params) => {
+    const date = params.get('date') || ''
+    const config = await leerHorario(horarios)
+    const tomadas = new Set(db.visits.filter(v => (db.visitStatuses[v.id] || v.status) !== 'cancelada').map(slotDeVisita))
+    const availability = Object.fromEntries((params.get('slots') || '').split(',').filter(Boolean)
+      .map(h => [h, horaPermitida(config, date, h) && !tomadas.has(`${date}T${h}`)]))
+    return { ok: true, date, availability, mode: 'created-only' }
+  },
+  'create_event': async (body) => {
+    const { nombre = '', apellido = '', email, celular = '', direccion = '', fechaISO, horaHHmm, note = '' } = body
+    if (!email || !fechaISO || !horaHHmm) return { status: 400, ok: false, error: 'Faltan parámetros' }
+    if (!horaPermitida(await leerHorario(horarios), fechaISO, horaHHmm))
+      return { status: 400, ok: false, error: 'INVALID_SLOT', message: 'Ese horario no está disponible para agendar. Elige otro.' }
+    const slotKey = `${fechaISO}T${horaHHmm}`
+    if (db.visits.some(v => slotDeVisita(v) === slotKey)) return { status: 409, ok: false, error: 'SLOT_TAKEN' }
+    const start = horaLocalAUTC(fechaISO, horaHHmm)
+    const visita = {
+      id: `visit-local-${randomUUID().slice(0, 8)}`, summary: `Visita — ${nombre} ${apellido} (Repisas Don Maxi)`,
+      start: start.toISOString(), end: new Date(start.getTime() + DURACION_MIN * 60000).toISOString(),
+      email, celular, direccion, notas: note, nombre: `${nombre} ${apellido}`.trim(), status: 'agendada', slotKey,
+    }
+    db.visits.push(visita); db.visitStatuses[visita.id] = 'agendada'; saveData(db)
+    return { ok: true, local: true, slotKey }
+  },
 }
 
 const server = http.createServer(async (req, res) => {
@@ -138,7 +188,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   // El login y la verificacion de sesion son los de produccion.
-  if (name !== 'admin-login') {
+  // horarios es publico para leer los dias; ver o guardar la configuracion pide sesion.
+  const publica = PUBLICAS.has(name) || (name === 'horarios' && req.method === 'GET' && !url.searchParams.get('config'))
+  if (!publica) {
     const denied = requireAdmin(event, CORS)
     if (denied) return send(res, denied.statusCode, JSON.parse(denied.body))
   }
@@ -159,7 +211,7 @@ const server = http.createServer(async (req, res) => {
     if (!route) return send(res, 404, { ok: false, error: `Sin backend local para ${name}` })
     if (name === 'update-precio' && req.method !== 'POST') return send(res, 405, { error: 'Método no permitido' })
     const body = raw ? JSON.parse(raw) : {}
-    const { status = 200, ...result } = await route(body, url.searchParams)
+    const { status = 200, ...result } = await route(body, url.searchParams, req.method)
     return send(res, status, result)
   } catch (error) {
     const status = error.status || error.estado || 500

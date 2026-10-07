@@ -1,7 +1,7 @@
 # Agendador — Repisas Don Maxi
 
-Agenda visitas en los **próximos 4 domingos**, bloques de **30 min (09:00–16:00)**.  
-La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar (freebusy).
+Agenda visitas en los días y horarios que se habilitan desde el panel (**Admin → Horarios**), con inicios cada **30 min**.  
+La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 
 ## Requisitos
 - Node 18+
@@ -24,6 +24,19 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar (
      Cambiar esta variable o la contraseña cierra todas las sesiones abiertas.
    - VITE_REPISAS_3D_URL: dirección del configurador 3D (Vercel).
 3. Sube `logo.png` y `og-cover.png` a `/public`.
+
+## Horarios de visita
+
+- En **Admin → Horarios** se define:
+  - el **horario semanal**, que se repite cada semana (por ejemplo, domingo de 10:00 a 14:00);
+  - las **fechas especiales**: abrir un sábado, cambiar el horario de un domingo o cerrar un día;
+  - cuántas **semanas** hacia adelante ve el cliente (1 a 12).
+- Se guarda en la pestaña **Horarios** de la planilla `GOOGLE_SHEET_ID`. La pestaña se crea sola la primera vez que se guarda.
+- Mientras no exista la pestaña, se usa lo que estaba fijo antes: domingos de 08:00 a 20:00 (último inicio 19:30) y 4 semanas.
+- La página pública muestra solo los días con horarios. El día de hoy ofrece solo horas que parten en una hora o más.
+- `get-availability` y `create_event` validan cada hora contra el horario: una reserva fuera de él se rechaza aunque se arme a mano.
+- Las visitas ya agendadas no se borran al cambiar el horario.
+- Lógica y pruebas: `netlify/functions/lib/horarios.mjs`. Prueba E2E local: `node scripts/local-dev/verify-horarios.mjs`.
 
 ## Panel admin y cotizaciones
 

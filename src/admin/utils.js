@@ -36,6 +36,7 @@ export const SECTIONS = [
   { id: 'visitas',      label: 'Visitas',      icon: 'calendar' },
   { id: 'cotizador',    label: 'Cotizar',      icon: 'doc'   },
   { id: 'cotizaciones', label: 'Cotizaciones', icon: 'files' },
+  { id: 'horarios',     label: 'Horarios',     icon: 'clock' },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }
