@@ -5,6 +5,7 @@ const CONFIG = {
   business: { name: 'Repisas Don Maxi', notifyPhone: '+56951020367' },
   logoUrl: '/logo.png',
   endpoints: {
+    horarios: '/.netlify/functions/horarios',
     availability: '/.netlify/functions/get-availability',
     createEvent: '/.netlify/functions/create_event',
   }
@@ -15,40 +16,10 @@ function parseLocalDate(iso){ const [y,m,d]=iso.split('-').map(Number); return n
 function prettyDate(date){ return new Intl.DateTimeFormat('es-CL',{dateStyle:'full'}).format(date) }
 function encode(data){ return new URLSearchParams(data).toString() }
 
-// Próximos 4 domingos desde hoy (inclusive si hoy es domingo)
-function nextFourSundays(){
-  const now = new Date()
-  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-  const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-
-  const out = []
-  let cursor = new Date(base)
-
-  while(out.length < 4){
-    if (cursor.getDay() === 0){ // 0 = domingo
-      out.push(toISO(cursor))
-    }
-    cursor = new Date(cursor.getTime() + 86400000) // +1 día
-  }
-
-  return out
-}
-
-// Slots de 30 min entre 08:00 y 20:00
-function daySlots30m(){
-  const out = []
-  let h = 8, m = 0
-  while (h < 20 || (h === 20 && m === 0)){
-    out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)
-    m += 30
-    if (m >= 60){ h += 1; m = 0 }
-  }
-  return out
-}
-
 export default function App(){
-  const [dates, setDates] = useState([])
+  // Dias y horas los define el admin (seccion Horarios); el servidor los entrega ya calculados.
+  const [dias, setDias] = useState(null) // null = cargando
+  const [diasError, setDiasError] = useState('')
   const [selectedDateISO,setSelectedDateISO]=useState('')
   const [selectedSlot,setSelectedSlot]=useState('')
   const [availability, setAvailability] = useState(null) // null = aún no cargado
@@ -59,8 +30,16 @@ export default function App(){
   const [submitting,setSubmitting]=useState(false)
   const [toast,setToast]=useState({ type:'', msg:'' })
 
-  useEffect(() => { setDates(nextFourSundays()) }, [])
-  const baseSlots = useMemo(() => daySlots30m(), [])
+  useEffect(() => {
+    fetch(`${CONFIG.endpoints.horarios}?v=${Date.now()}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.ok && Array.isArray(data.dias)) setDias(data.dias)
+        else { setDias([]); setDiasError('No se pudieron cargar las fechas disponibles.') }
+      })
+      .catch(() => { setDias([]); setDiasError('No se pudieron cargar las fechas disponibles.') })
+  }, [])
+  const baseSlots = useMemo(() => dias?.find(d => d.fecha === selectedDateISO)?.horas || [], [dias, selectedDateISO])
   const selectedDate = useMemo(()=>selectedDateISO?parseLocalDate(selectedDateISO):null,[selectedDateISO])
 
   const step = useMemo(()=> selectedDateISO ? (selectedSlot ? 3 : 2) : 1, [selectedDateISO, selectedSlot])
@@ -79,7 +58,7 @@ export default function App(){
 
   // ----------- DISPONIBILIDAD -----------
   useEffect(() => {
-    if (!selectedDateISO) return
+    if (!selectedDateISO || baseSlots.length === 0) return
     const controller = new AbortController()
     setLoadingAvail(true)
     setAvailError('')
@@ -183,9 +162,18 @@ export default function App(){
     <div role="application" aria-label="Agendador de visitas">
       {/* FECHAS */}
       <section aria-labelledby="tit-fechas">
-        <h2 id="tit-fechas" className="section-title">📅 Próximos domingos</h2>
+        <h2 id="tit-fechas" className="section-title">📅 Fechas disponibles</h2>
+        {dias === null && <p className="note">Cargando fechas…</p>}
+        {diasError && <p className="note" role="alert" style={{ color:'#b91c1c' }}>{diasError}</p>}
+        {dias?.length === 0 && !diasError && (
+          <p className="note">
+            Por ahora no hay fechas disponibles para agendar. Escríbenos por WhatsApp al{' '}
+            <a href={`https://wa.me/${CONFIG.business.notifyPhone.replace(/\D/g,'')}`}>{CONFIG.business.notifyPhone}</a>{' '}
+            y coordinamos.
+          </p>
+        )}
         <div className="dates" role="listbox" aria-label="Seleccione una fecha">
-          {dates.map((date)=> {
+          {(dias || []).map(({ fecha: date })=> {
             const d = parseLocalDate(date)
             const label = new Intl.DateTimeFormat('es-CL',{ weekday:'long', day:'2-digit', month:'short' }).format(d)
             const active = selectedDateISO===date

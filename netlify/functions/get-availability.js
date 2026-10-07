@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import { almacenHorariosSheets, horaPermitida, leerHorario } from './lib/horarios.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,6 +83,11 @@ export async function handler(event) {
     const calendar = google.calendar({ version: 'v3', auth: oAuth2Client })
     const calendarId = process.env.CALENDAR_ID
 
+    // Solo cuentan las horas que el admin habilito (pestaña Horarios). Una hora fuera del
+    // horario, o que ya paso, sale como no disponible aunque el calendario este libre.
+    const horario = await leerHorario(almacenHorariosSheets(google.sheets({ version: 'v4', auth: oAuth2Client }), process.env.GOOGLE_SHEET_ID))
+    const habilitada = hhmm => horaPermitida(horario, date, hhmm)
+
     // --- Ventana del día en UTC (alineada a tz) ---
     const { startUTC: dayStartUTC, endUTC: dayEndUTC } = toDayBoundsUTC(date, tz)
 
@@ -106,7 +112,7 @@ export async function handler(event) {
       const availability = {}
       for (const hhmm of slots) {
         const key = `${date}T${hhmm}`
-        availability[hhmm] = !takenKeys.has(key)
+        availability[hhmm] = habilitada(hhmm) && !takenKeys.has(key)
       }
 
       return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, date, tz, availability, mode }) }
@@ -131,7 +137,7 @@ export async function handler(event) {
       const sUTC = zonedWallTimeToUTC(date, hhmm, tz)
       const eUTC = new Date(sUTC.getTime() + duration * 60000)
       const isBusy = busyWindows.some(b => overlap(sUTC, eUTC, b.start, b.end))
-      availability[hhmm] = !isBusy
+      availability[hhmm] = habilitada(hhmm) && !isBusy
     }
 
     return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, date, tz, availability, mode: 'any-event' }) }

@@ -1,5 +1,6 @@
 // netlify/functions/create_event.mjs
 import { google } from 'googleapis';
+import { almacenHorariosSheets, horaLocalAUTC, horaPermitida, leerHorario, sumarDias } from './lib/horarios.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,20 +48,6 @@ export async function handler(event) {
     const duration = Number(process.env.DEFAULT_EVENT_DURATION_MIN || 15);
     const startLocal = buildLocal(fechaISO, horaHHmm);
 
-    // ✅ Seguridad: permitir SOLO sábado (6) o domingo (0)
-    const dow = startLocal.getDay();
-    if (dow !== 0 && dow !== 6) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          ok: false,
-          error: 'INVALID_DAY',
-          message: 'Solo se permiten agendamientos en sábado o domingo.',
-        }),
-      };
-    }
-
     const endLocal = new Date(startLocal.getTime() + duration * 60000);
     const slotKey = `${fechaISO}T${horaHHmm}`;
     const calendarId = process.env.CALENDAR_ID;
@@ -73,15 +60,30 @@ export async function handler(event) {
     oAuth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
     const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
 
+    // ✅ Seguridad: solo horas que el admin habilitó (pestaña Horarios) y que no hayan pasado.
+    // Antes bastaba con que fuera sábado o domingo, a cualquier hora.
+    const horario = await leerHorario(almacenHorariosSheets(google.sheets({ version: 'v4', auth: oAuth2Client }), process.env.GOOGLE_SHEET_ID));
+    if (!horaPermitida(horario, fechaISO, horaHHmm)) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          ok: false,
+          error: 'INVALID_SLOT',
+          message: 'Ese horario no está disponible para agendar. Elige otro.',
+        }),
+      };
+    }
+
     // =========================
     // 1) Chequeo atómico por slot_key
     //    SOLO considerando eventos creados por el agendador
     //    (created_by=agendador-netlify)
     // =========================
-    const dayStart = new Date(startLocal);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(startLocal);
-    dayEnd.setHours(23, 59, 59, 999);
+    // El dia de Chile, no el del servidor (UTC): con el dia UTC una visita de la tarde-noche
+    // quedaba fuera de la busqueda y se podia agendar dos veces.
+    const dayStart = horaLocalAUTC(fechaISO, '00:00', tz);
+    const dayEnd = new Date(horaLocalAUTC(sumarDias(fechaISO, 1), '00:00', tz).getTime() - 1);
 
     const sameDay = await calendar.events.list({
       calendarId,

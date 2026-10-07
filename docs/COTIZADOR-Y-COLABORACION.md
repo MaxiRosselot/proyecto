@@ -36,7 +36,7 @@ Colocar este repositorio en `erp` y el configurador en la carpeta vecina `config
 3. En `erp`: `node scripts/local-dev/start-native.mjs`.
 4. Abrir `http://127.0.0.1:5176/admin`. La contraseña de demostración (solo local) es `donmaxi-local-demo`; se puede cambiar con `ADMIN_PASSWORD`. El login y las sesiones usan el mismo código que producción.
 
-El configurador compilado se sirve con `vite preview` en el puerto 3000; ya no hace falta la API del repo 3D, que se eliminó.
+El configurador compilado se sirve con `vite preview` en el puerto 3000; el entorno local no necesita levantar la API del repo 3D.
 
 Si el configurador está en otra ubicación, definir `REPISAS_CONFIGURATOR_DIR` con esa ruta antes de ejecutar el script. Se necesitan libres los puertos 3000, 8899 y 5176. Ctrl+C cierra los procesos que inició el lanzador.
 Para un túnel temporal existente, definir `LOCAL_PUBLIC_URL` antes del arranque: así los enlaces locales a PDFs usan la misma dirección de prueba.
