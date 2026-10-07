@@ -17,6 +17,9 @@ import {
 import {
   DURACION_MIN, aHHMM, ahoraEnZona, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario,
 } from '../../netlify/functions/lib/horarios.mjs'
+import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
+import { armarCorreo } from '../../netlify/functions/lib/correo.mjs'
+import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -67,7 +70,20 @@ function slotDeVisita(v) {
   return `${fecha}T${aHHMM(minutos)}`
 }
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web'])
+
+// Los PDF y correos de las cotizaciones web quedan en disco: nada sale a Google ni a un correo real.
+function guardarPdfLocal(bytes) {
+  const id = randomUUID()
+  fs.mkdirSync(path.join(here, 'pdfs'), { recursive: true })
+  fs.writeFileSync(path.join(here, 'pdfs', `${id}.pdf`), bytes)
+  return `${PUBLIC_URL}/.netlify/functions/local-pdf?id=${id}`
+}
+function guardarCorreoLocal(correo) {
+  fs.mkdirSync(path.join(here, 'correos'), { recursive: true })
+  const archivo = path.join(here, 'correos', `${Date.now()}-${String(correo.para).replace(/[^a-z0-9.@-]/gi, '_')}.eml`)
+  fs.writeFileSync(archivo, armarCorreo(correo))
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -82,10 +98,7 @@ const routes = {
   'upload-pdf': body => {
     const bytes = Buffer.from(body.pdfBase64 || '', 'base64')
     if (bytes.subarray(0, 4).toString() !== '%PDF') throw Object.assign(new Error('PDF inválido'), { status: 400 })
-    const id = randomUUID()
-    fs.mkdirSync(path.join(here, 'pdfs'), { recursive: true })
-    fs.writeFileSync(path.join(here, 'pdfs', `${id}.pdf`), bytes)
-    return { ok: true, local: true, viewUrl: `${PUBLIC_URL}/.netlify/functions/local-pdf?id=${id}` }
+    return { ok: true, local: true, viewUrl: guardarPdfLocal(bytes) }
   },
   'get-precios': () => ({ ok: true, tabla: db.precios, local: true }),
   'update-precio': body => {
@@ -123,6 +136,17 @@ const routes = {
   'delete-quote': async (body) => {
     const { estado, respuesta } = await borrarCotizacion(cotizaciones, body.cotNum)
     return { status: estado, ...respuesta }
+  },
+  // Mismo contrato que netlify/functions/cotizacion-web.mjs
+  'cotizacion-web': async (body, _params, method) => {
+    if (method === 'GET') return { ok: true, tabla: db.precios }
+    const resultado = await procesarCotizacionWeb(body, {
+      tabla: db.precios, almacen: cotizaciones, generarPdf: generateQuotePdf,
+      subirPdf: async ({ pdfBuffer }) => ({ viewUrl: guardarPdfLocal(pdfBuffer) }),
+      enviarCorreo: async correo => guardarCorreoLocal(correo),
+      avisoA: 'admin-local@example.com',
+    })
+    return { ok: true, ...resultado }
   },
   // Mismo contrato que netlify/functions/horarios.mjs
   'horarios': async (body, params, method) => {

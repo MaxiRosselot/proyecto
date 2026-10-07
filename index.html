@@ -171,11 +171,14 @@
 
     <script>
       document.getElementById('year').textContent = new Date().getFullYear()
-      // En /admin, ocultar el shell estático y el container del agendador
-      if (window.location.pathname.startsWith('/admin')) {
+      // En /admin y /cotiza, ocultar el shell estático y el container del agendador:
+      // esas páginas dibujan su propio diseño.
+      if (/^\/(admin|cotiza)/.test(window.location.pathname)) {
         document.querySelector('.container').style.display = 'none'
-        document.body.style.background = 'none'
-        document.body.style.backgroundImage = 'none'
+        if (window.location.pathname.startsWith('/admin')) {
+          document.body.style.background = 'none'
+          document.body.style.backgroundImage = 'none'
+        }
         // Mover el root fuera del container para que ocupe toda la pantalla
         var root = document.getElementById('root')
         document.body.appendChild(root)

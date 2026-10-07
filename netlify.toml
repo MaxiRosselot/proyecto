@@ -46,6 +46,12 @@
   external_node_modules = ["pdfkit"]
   included_files = ["netlify/functions/quote-assets/**"]
 
+# La cotizacion que arma el cliente en /cotiza genera el mismo PDF: mismas dependencias y el
+# mismo tamaño que generate-quote (ver el limite de arriba).
+[functions.cotizacion-web]
+  external_node_modules = ["pdfkit"]
+  included_files = ["netlify/functions/quote-assets/**"]
+
 [functions.send-reminders]
   schedule = "0 13 * * *"
 

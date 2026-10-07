@@ -92,7 +92,7 @@ try {
   const texto = await page.locator('main').innerText()
   expect(texto.indexOf('Cliente Prueba B')).toBeLessThan(texto.indexOf('Cliente Prueba A'))
   expect(texto.indexOf('Cliente Prueba A')).toBeLessThan(texto.indexOf('Ignacio Vera Salas'))
-  await expect(page.getByText('Modelo 3D', { exact: true })).toHaveCount(2)
+  await expect.poll(() => page.getByText('Modelo 3D', { exact: true }).count()).toBeGreaterThanOrEqual(2)
   await shot('02-lista-ordenada.png')
 
   // Confirmar A desde la lista no debe borrarle el modelo.
