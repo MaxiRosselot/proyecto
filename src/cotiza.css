@@ -60,6 +60,17 @@
   padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--borde);box-shadow:0 -8px 24px rgba(0,0,0,.08)}
 .ctz-barra div{display:grid}.ctz-barra small{font-size:11px;color:var(--suave)}.ctz-barra strong{font-size:20px;color:var(--acento-osc)}
 .ctz-barra .ctz-boton{width:auto;min-height:44px;font-size:14px}
+/* Celular: encabezado mas bajo y el configurador casi de borde a borde, para darle ancho al 3D. */
+@media (max-width:520px){
+  .ctz{padding:10px 8px 96px}
+  .ctz-hero{margin:0 0 12px}
+  .ctz-logo{height:44px;margin-bottom:4px}
+  .ctz-hero h1{font-size:24px}
+  .ctz-hero p{font-size:14px}
+  .ctz-tarjeta{border-radius:16px;padding:14px 12px}
+  .ctz-configurador{padding:6px}
+  .ctz-listo-total{font-size:32px}
+}
 @media (min-width:760px){
   .ctz-form{grid-template-columns:1fr 1fr}
   .ctz-form .ctz-boton,.ctz-form .ctz-nota,.ctz-form .ctz-error{grid-column:1 / -1}

@@ -37,7 +37,7 @@ try {
   await expect(cfg.getByText('C · 160 cm').first()).toBeVisible()
   await shot('01-medidas.png')
   // En la esquina, C o D ya no se rotulan en el plano.
-  await cfg.getByRole('button', { name: 'En la esquina izquierda' }).click()
+  await cfg.getByRole('button', { name: 'Esquina izquierda' }).click()
   await expect(cfg.locator('svg.cli-planta text', { hasText: /^D ·/ })).toHaveCount(0)
   await expect(cfg.locator('svg.cli-planta text', { hasText: 'C · 320 cm' })).toHaveCount(1)
   // Una puerta imposible avisa y no deja seguir.
@@ -72,12 +72,12 @@ try {
   await posicion.fill('160')
   await cfg.getByRole('button', { name: 'Ver mis repisas' }).click()
 
-  // En L: el fondo (el muro mas largo) va entero y el costado se acomoda. El costado mide
-  // 220 - 48 = 172 cm, pero se recorta a 165 porque asi cae en un rango mas barato.
+  // En L: el fondo (el muro mas largo) va entero y el costado se acomoda en la esquina:
+  // 220 - 48 = 172 cm, cubiertos completos.
   await cfg.getByRole('button', { name: /Fondo \+ derecha/ }).click()
   const costado = modulos.filter({ hasText: 'Derecha (B)' })
   await expect(costado).toHaveCount(1)
-  await expect(costado).toContainText('1,65 m')
+  await expect(costado).toContainText('1,72 m')
   await expect(modulos.filter({ hasText: 'Fondo (A)' })).toHaveCount(2)
   // Otra profundidad cambia los precios.
   const totalL48 = await cfg.getByTestId('cliente-total').textContent()
