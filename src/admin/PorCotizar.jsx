@@ -1,8 +1,21 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { ADMIN_PASSWORD, DEFAULTS_REPISA, C, apiFetch, fmtDate, fmt, styles } from './utils.js'
+import { DEFAULTS_REPISA, C, adminFetch, apiFetch, fmtDate, fmt, styles } from './utils.js'
 import { precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } from './preciosRepisas.js'
 import './PorCotizar.css'
-import { filasDeModulos, productoCotizacion } from './modulosCotizacion.js'
+import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
+
+const AD_NOMBRES_INICIALES = {
+  retiro_orden: 'Retiro y orden de articulos',
+  retiro_basura: 'Retiro de basura',
+  cajas: 'Cajas organizadoras',
+  bici: 'Soporte bicicleta / ski',
+}
+const ADICIONALES_INICIALES = {
+  qty_retiro_orden: 0,  precio_retiro_orden: 40000,
+  qty_retiro_basura: 0, precio_retiro_basura: 30000,
+  qty_cajas: 0,         precio_cajas: 15000,
+  qty_bici: 0,          precio_bici: 20000,
+}
 
 function repisaPorDefecto(tabla) {
   const { l, p, a } = DEFAULTS_REPISA
@@ -186,37 +199,34 @@ function Grafica3D({ project, onProject, onModulos, frameRef }) {
 }
 
 const STORAGE_KEY = 'dm_cotizador_state'
-const COT_NUM_KEY = 'dm_cot_num'
 function loadState() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null } }
 function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) }
-function getCotNum() { return parseInt(localStorage.getItem(COT_NUM_KEY) || '1421') }
-function setCotNumStorage(n) { localStorage.setItem(COT_NUM_KEY, String(n)) }
 
-export default function PorCotizarSection({ statuses, visitaSeleccionada, allVisits, onVisitCotizada }) {
+// Hay trabajo sin guardar si el borrador es una cotizacion nueva con cliente o con plano 3D.
+// Cotizaciones lo consulta antes de reemplazarlo al abrir una guardada.
+export function hayBorradorSinGuardar() {
+  const s = loadState()
+  return Boolean(s && !s.cotGuardada && (s.project3d || s.manualCliente?.nombre?.trim()))
+}
+
+export default function PorCotizarSection({ statuses, visitaSeleccionada, cotizacionAbierta, allVisits, onVisitCotizada }) {
   const realizadas = allVisits.filter(v => statuses[v.id] === 'realizada')
   const saved = loadState()
 
   const [mode, setMode]                   = useState(saved?.mode || 'visita')
   const [selectedVisit, setSelectedVisit] = useState(null)
   const [manualCliente, setManualCliente] = useState(saved?.manualCliente || { nombre: '', email: '', celular: '', direccion: '' })
-  const [cotNum, setCotNum]               = useState(getCotNum)
+  // El numero lo asigna el servidor. cotGuardada es la cotizacion que se esta editando: si hay
+  // una, generar la actualiza; si no, generar crea una nueva con el siguiente numero libre.
+  const [cotGuardada, setCotGuardada]     = useState(saved?.cotGuardada || null)
+  const [siguienteNum, setSiguienteNum]   = useState(null)
   const [tablaPrecios, setTablaPrecios]   = useState(TABLA_PRECIOS)
   const [preciosDeRespaldo, setPreciosDeRespaldo] = useState(true)
   const [actualizandoPrecio, setActualizandoPrecio] = useState(false)
   const [mensajePrecio, setMensajePrecio] = useState('')
   const [repisas, setRepisas]             = useState(saved?.repisas || [repisaPorDefecto(TABLA_PRECIOS)])
-  const [adNombres, setAdNombres]         = useState(saved?.adNombres || {
-    retiro_orden: 'Retiro y orden de articulos',
-    retiro_basura: 'Retiro de basura',
-    cajas: 'Cajas organizadoras',
-    bici: 'Soporte bicicleta / ski',
-  })
-  const [adicionales, setAdicionales]     = useState(saved?.adicionales || {
-    qty_retiro_orden: 0,  precio_retiro_orden: 40000,
-    qty_retiro_basura: 0, precio_retiro_basura: 30000,
-    qty_cajas: 0,         precio_cajas: 15000,
-    qty_bici: 0,          precio_bici: 20000,
-  })
+  const [adNombres, setAdNombres]         = useState(saved?.adNombres || AD_NOMBRES_INICIALES)
+  const [adicionales, setAdicionales]     = useState(saved?.adicionales || ADICIONALES_INICIALES)
   // Proyecto que se arma en el configurador 3D. Sus vistas van en la pagina 1 del PDF.
   // Mantener el plano junto al borrador evita perderlo al cambiar entre móvil y escritorio.
   const [project3d, setProject3d] = useState(saved?.project3d || null)
@@ -229,9 +239,40 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   const [error, setError]           = useState('')
   const [editingNombre, setEditingNombre] = useState(null)
 
+  // Cotizar una visita desde la agenda es siempre una cotizacion nueva: si habia una guardada
+  // abierta, generar la habria sobrescrito con el cliente de la visita.
   useEffect(() => {
-    if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada) }
+    if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada); setCotGuardada(null) }
   }, [visitaSeleccionada])
+
+  // Reabre una cotizacion guardada con su proyecto 3D, tal como quedo.
+  useEffect(() => {
+    if (!cotizacionAbierta) return
+    const q = cotizacionAbierta
+    setMode('manual')
+    setSelectedVisit(null)
+    setManualCliente({ nombre: q.nombre || '', email: q.email || '', celular: q.telefono || '', direccion: q.direccion || '' })
+    setRepisas(q.repisas?.length ? q.repisas.map(filaDesdeProducto) : [repisaPorDefecto(tablaPrecios)])
+    setAdicionales({ ...ADICIONALES_INICIALES, ...(q.adicionales || {}) })
+    setProject3d(q.proyecto3d || null)
+    setCotGuardada({ cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
+    setTotalInfo({ subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
+    setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
+  }, [cotizacionAbierta])
+
+  async function pedirSiguienteNumero() {
+    const res = await apiFetch('/.netlify/functions/get-quotes?siguiente=1')
+    if (!res.ok || !res.siguiente) throw new Error(res.error || 'No se pudo obtener el número de cotización')
+    setSiguienteNum(res.siguiente)
+    return res.siguiente
+  }
+
+  // Muestra el proximo numero libre mientras se arma una cotizacion nueva. Es referencial:
+  // se confirma al guardar, y si otro lo tomo antes se usa el siguiente.
+  useEffect(() => {
+    if (cotGuardada) return
+    pedirSiguienteNumero().catch(() => setSiguienteNum(null))
+  }, [cotGuardada])
 
   // La planilla del cliente manda. Hasta que responda se usa el respaldo del bundle.
   useEffect(() => {
@@ -242,17 +283,16 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
   }, [])
 
   useEffect(() => {
-    saveState({ mode, manualCliente, repisas, adNombres, adicionales, totalInfo, project3d })
-  }, [mode, manualCliente, repisas, adNombres, adicionales, totalInfo, project3d])
+    saveState({ mode, manualCliente, repisas, adNombres, adicionales, totalInfo, project3d, cotGuardada })
+  }, [mode, manualCliente, repisas, adNombres, adicionales, totalInfo, project3d, cotGuardada])
 
   function resetCotizador() {
-    const newNum = getCotNum()
     setMode('visita')
     setManualCliente({ nombre: '', email: '', celular: '', direccion: '' })
-    setCotNum(newNum)
+    setCotGuardada(null)
     setRepisas([repisaPorDefecto(tablaPrecios)])
-    setAdNombres({ retiro_orden: 'Retiro y orden de articulos', retiro_basura: 'Retiro de basura', cajas: 'Cajas organizadoras', bici: 'Soporte bicicleta / ski' })
-    setAdicionales({ qty_retiro_orden: 0, precio_retiro_orden: 40000, qty_retiro_basura: 0, precio_retiro_basura: 30000, qty_cajas: 0, precio_cajas: 15000, qty_bici: 0, precio_bici: 20000 })
+    setAdNombres(AD_NOMBRES_INICIALES)
+    setAdicionales(ADICIONALES_INICIALES)
     setTotalInfo({ subtotal: 0, iva: 0, total: 0 })
     setProject3d(null)
     setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
@@ -348,88 +388,101 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
     })
   }
 
+  async function generarPdf(numero, grafica3d) {
+    const res = await adminFetch('/.netlify/functions/generate-quote', {
+      method: 'POST',
+      body: JSON.stringify({
+        cot_num:   numero,
+        // Tal como se escribieron: el diseño de Maxi muestra los datos del cliente sin mayusculas forzadas.
+        nombre:    cliente.nombre || '',
+        direccion: cliente.direccion || '',
+        rut: '',
+        telefono:  cliente.celular || cliente.telefono || '',
+        email:     cliente.email || '',
+        repisas:   repisas.map(productoCotizacion),
+        ...adicionales,
+        ...(grafica3d ? { grafica3d } : {}),
+      }),
+    })
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + res.status) }
+    return {
+      blob: await res.blob(),
+      totales: {
+        subtotal: parseInt(res.headers.get('x-subtotal') || '0'),
+        iva:      parseInt(res.headers.get('x-iva')      || '0'),
+        total:    parseInt(res.headers.get('x-total')    || '0'),
+      },
+    }
+  }
+
   async function handleGenerar() {
     if (repisas.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.v) || r.v <= 0))) return setError('Ingresa el precio neto de cada rack completo antes de generar la cotización.')
     if (mode === 'visita' && !selectedVisit) return
     if (mode === 'manual' && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
     setGenerating(true); setError(''); setPdfUrl(null); setAutoSaved(false)
 
-    const grafica3d = await pedirGrafica3d()
-    if (project3d && !grafica3d) {
-      setError('No se pudieron generar las tres vistas 3D. Reintenta antes de emitir la cotización.')
-      setGenerating(false)
-      return
-    }
-
-    const t = calcTotales()
-    setTotalInfo(t)
-
-    const payload = {
-      cot_num:   cotNum,
-      // Tal como se escribieron: el diseño de Maxi muestra los datos del cliente sin mayusculas forzadas.
-      nombre:    cliente.nombre || '',
-      direccion: cliente.direccion || '',
-      rut: '',
-      telefono:  cliente.celular || cliente.telefono || '',
-      email:     cliente.email || '',
-      repisas:   repisas.map(productoCotizacion),
-      ...adicionales,
-      ...(grafica3d ? { grafica3d } : {}),
-    }
-
     try {
-      const res = await fetch('/.netlify/functions/generate-quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + res.status) }
+      const grafica3d = await pedirGrafica3d()
+      if (project3d && !grafica3d) throw new Error('No se pudieron generar las vistas 3D. Reintenta antes de emitir la cotización.')
 
-      const finalTotals = {
-        subtotal: parseInt(res.headers.get('x-subtotal') || '0'),
-        iva:      parseInt(res.headers.get('x-iva')      || '0'),
-        total:    parseInt(res.headers.get('x-total')    || '0'),
+      setTotalInfo(calcTotales())
+
+      const datos = {
+        nombre:      cliente.nombre || '',
+        email:       cliente.email || '',
+        telefono:    cliente.celular || cliente.telefono || '',
+        direccion:   cliente.direccion || '',
+        fechaVisita: mode === 'visita' ? (selectedVisit?.start || '') : (cotGuardada?.fechaVisita || ''),
+        repisas:     repisas.map(productoCotizacion),
+        adicionales,
+        // El modelo 3D se guarda con la cotizacion para poder reabrirla tal como se envio.
+        proyecto3d:  project3d || null,
       }
-      setTotalInfo(finalTotals)
 
-      const blob = await res.blob()
-      setPdfBlob(blob); setPdfUrl(URL.createObjectURL(blob))
+      // Nueva: se pide el siguiente numero libre y se crea. Si alguien lo tomo entre medio, el
+      // servidor responde con otro y se rehace el PDF, porque el numero va impreso.
+      // Guardada: se actualiza la misma, sin tocar su estado ni su fecha de creacion.
+      let numero = cotGuardada ? cotGuardada.cotNum : await pedirSiguienteNumero()
+      let pdf
+      for (let intento = 0; ; intento++) {
+        pdf = await generarPdf(numero, grafica3d)
+        const guardado = await apiFetch('/.netlify/functions/save-quote', {
+          method: 'POST',
+          body: JSON.stringify(cotGuardada
+            ? { ...datos, ...pdf.totales, cotNum: numero }
+            : { ...datos, ...pdf.totales, crear: true, cotNum: numero, status: 'por confirmar', notas: '' }),
+        })
+        if (guardado.ok) break
+        if (!cotGuardada && guardado.siguiente && intento < 2) { numero = guardado.siguiente; continue }
+        throw new Error(guardado.error || 'No se pudo guardar la cotización')
+      }
 
-      const next = cotNum + 1; setCotNum(next); setCotNumStorage(next)
+      // Desde aqui la cotizacion existe: volver a generar la actualiza en vez de duplicarla.
+      setCotGuardada({ cotNum: String(numero), fechaVisita: datos.fechaVisita })
+      setTotalInfo(pdf.totales)
+      setPdfBlob(pdf.blob); setPdfUrl(URL.createObjectURL(pdf.blob))
 
-      // Subir PDF a Drive
-      let uploadedPdfUrl = ''
+      // Subir PDF a Drive y dejar el link en la cotizacion
+      let avisoPdf = ''
       try {
-        const pdfBase64ToUpload = await blob.arrayBuffer().then(bytesABase64)
+        const pdfBase64ToUpload = await pdf.blob.arrayBuffer().then(bytesABase64)
         const nombreInicial = (cliente.nombre || 'cliente').split(' ')
           .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
         const pdfFileName = 'Cotizacion ' + nombreInicial + ' - Repisas Don Maxi.pdf'
         const uploadRes = await apiFetch('/.netlify/functions/upload-pdf', {
           method: 'POST',
-          body: JSON.stringify({ pdfBase64: pdfBase64ToUpload, fileName: pdfFileName, cotNum }),
+          body: JSON.stringify({ pdfBase64: pdfBase64ToUpload, fileName: pdfFileName, cotNum: numero }),
         })
-        if (uploadRes.ok) uploadedPdfUrl = uploadRes.viewUrl || ''
-      } catch (e) { console.warn('upload-pdf error:', e.message) }
-
-      // Guardar cotizacion
-      await apiFetch('/.netlify/functions/save-quote', {
-        method: 'POST',
-        body: JSON.stringify({
-          cotNum,
-          nombre:      cliente.nombre || '',
-          email:       cliente.email || '',
-          telefono:    cliente.celular || cliente.telefono || '',
-          direccion:   cliente.direccion || '',
-          fechaVisita: mode === 'visita' ? (selectedVisit?.start || '') : '',
-          subtotal:    finalTotals.subtotal,
-          iva:         finalTotals.iva,
-          total:       finalTotals.total,
-          notas: '', status: 'por confirmar',
-          repisas:     repisas.map(productoCotizacion),
-          adicionales,
-          pdfUrl:      uploadedPdfUrl,
-        }),
-      })
+        if (!uploadRes.ok || !uploadRes.viewUrl) throw new Error(uploadRes.error || 'Drive no respondió')
+        const conPdf = await apiFetch('/.netlify/functions/save-quote', {
+          method: 'POST',
+          body: JSON.stringify({ cotNum: numero, pdfUrl: uploadRes.viewUrl }),
+        })
+        if (!conPdf.ok) throw new Error(conPdf.error || 'No se guardó el link del PDF')
+      } catch (e) {
+        console.warn('upload-pdf error:', e.message)
+        avisoPdf = 'La cotización N° ' + numero + ' quedó guardada, pero el PDF no se pudo subir a Drive (' + e.message + '). Vuelve a generar para reintentar.'
+      }
 
       // Si vino de visita, marcarla como realizada_cotizada
       if (mode === 'visita' && selectedVisit) {
@@ -453,6 +506,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
       }
 
       setAutoSaved(true)
+      if (avisoPdf) setError(avisoPdf)
     } catch (e) { setError(e.message) }
     finally { setGenerating(false) }
   }
@@ -529,15 +583,20 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
         )}
       </div>
 
-      {/* Numero de cotizacion */}
+      {/* Numero de cotizacion: lo asigna el servidor, no se escribe a mano */}
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Numero de Cotizacion</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: C.textSub }}>N</span>
-          <input type="number" value={cotNum}
-            onChange={e => { const v = parseInt(e.target.value) || 0; setCotNum(v); setCotNumStorage(v) }}
-            style={{ width: 100, padding: '8px 10px', borderRadius: 9, border: '1.5px solid ' + C.border, fontSize: 16, fontWeight: 700, fontFamily: 'inherit', textAlign: 'center', background: '#FAFAFA', outline: 'none' }} />
-          <span style={{ color: C.textMuted, fontSize: 12 }}>Se incrementa automaticamente al generar</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span data-testid="numero-cotizacion" style={{ fontSize: 18, fontWeight: 800, color: cotGuardada ? C.text : C.textSub }}>
+            N° {cotGuardada ? cotGuardada.cotNum : (siguienteNum ?? '...')}
+          </span>
+          {cotGuardada
+            ? <>
+                <span style={styles.badge(C.green)}>Guardada</span>
+                <span style={{ color: C.textMuted, fontSize: 12, flex: 1, minWidth: 200 }}>Al generar se actualiza esta cotización: PDF, montos y modelo 3D. Su estado no cambia.</span>
+                <button type="button" onClick={resetCotizador} style={{ ...styles.btnSecondary, fontSize: 12 }}>Nueva cotización</button>
+              </>
+            : <span style={{ color: C.textMuted, fontSize: 12 }}>Próximo número libre. Se confirma al guardar; si otra persona lo toma antes, se usa el siguiente.</span>}
         </div>
       </div>
 
@@ -690,7 +749,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, allVis
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <p style={{ fontWeight: 700, color: autoSaved ? C.green : C.orange, marginBottom: 2, marginTop: 0 }}>
-                {autoSaved ? 'PDF generado y guardado' : 'PDF generado'}
+                {autoSaved ? `Cotización N° ${cotGuardada?.cotNum} guardada${project3d ? ' con su modelo 3D' : ''}` : 'PDF generado'}
               </p>
               <p style={{ fontSize: 13, color: C.textSub, margin: 0 }}>Total: {fmt(totalInfo.total)}</p>
             </div>

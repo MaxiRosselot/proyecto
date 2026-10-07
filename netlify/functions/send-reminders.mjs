@@ -2,14 +2,15 @@
 // Netlify scheduled function — corre cada día a las 10:00 AM Santiago (13:00 UTC)
 // netlify.toml: [functions."send-reminders"] schedule = "0 13 * * *"
 import { google } from 'googleapis'
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
+import { creadoEnMs } from './lib/cotizaciones.mjs'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 const SHEET_ID       = process.env.GOOGLE_SHEET_ID
 const ADMIN_EMAIL    = 'repisasdonmaxi@gmail.com'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
@@ -35,8 +36,8 @@ export async function handler(event) {
 
   // Permitir disparo manual con password
   const isScheduled = !event.httpMethod || event.httpMethod === 'GET'
-  if (!isScheduled && event.headers['x-admin-password'] !== ADMIN_PASSWORD)
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
+  const denied = isScheduled ? null : requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
@@ -137,13 +138,11 @@ export async function handler(event) {
         const status  = r[9] || ''
         const creado  = r[14] || ''
         if (status !== 'por confirmar') return false
-        if (!creado) return false
-        try {
-          const creadoDate = new Date(creado)
-          const diff = (hoy - creadoDate) / (1000*60*60*24)
-          return diff >= 3
-        } catch { return false }
-      }).map(r => ({ cotNum: r[0], nombre: r[1], email: r[2], dias: Math.floor((hoy - new Date(r[14])) / (1000*60*60*24)) }))
+        // "Creado" viene como "05-10-2026, 1:23:45 p. m.", que new Date() no entiende.
+        const creadoMs = creadoEnMs(creado)
+        if (creadoMs === null) return false
+        return (hoy - creadoMs) / (1000*60*60*24) >= 3
+      }).map(r => ({ cotNum: r[0], nombre: r[1], email: r[2], dias: Math.floor((hoy - creadoEnMs(r[14])) / (1000*60*60*24)) }))
     }
 
     // ── 3. SEGUIMIENTO: visitas realizadas sin cotización hace 2+ días ─────────

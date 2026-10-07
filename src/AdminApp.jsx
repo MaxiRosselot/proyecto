@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ADMIN_PASSWORD, SESSION_KEY, SECTIONS, C, styles } from './admin/utils.js'
+import { SECTIONS, SESSION_EXPIRED_EVENT, C, styles, leerSesion, guardarSesion, cerrarSesion } from './admin/utils.js'
 import DashboardSection    from './admin/Dashboard.jsx'
 import VisitasSection      from './admin/Visitas.jsx'
 import PorCotizarSection   from './admin/PorCotizar.jsx'
@@ -27,12 +27,24 @@ function useIsMobile() {
 }
 
 function LoginScreen({ onLogin }) {
-  const [pwd, setPwd]     = useState('')
-  const [error, setError] = useState('')
-  function handleSubmit(e) {
+  const [pwd, setPwd]         = useState('')
+  const [error, setError]     = useState('')
+  const [entrando, setEntrando] = useState(false)
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (pwd === ADMIN_PASSWORD) { sessionStorage.setItem(SESSION_KEY, '1'); onLogin() }
-    else { setError('Contrasena incorrecta'); setPwd('') }
+    if (!pwd || entrando) return
+    setEntrando(true); setError('')
+    try {
+      const res = await fetch('/.netlify/functions/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.token) { guardarSesion(data); onLogin(); return }
+      setError(data.error || 'No se pudo ingresar'); setPwd('')
+    } catch { setError('No se pudo conectar con el servidor') }
+    finally { setEntrando(false) }
   }
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(145deg, #18181B 0%, #2c1a08 60%, #1a1005 100%)', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' }}>
@@ -54,28 +66,38 @@ function LoginScreen({ onLogin }) {
               style={{ width: '100%', padding: '13px 14px', borderRadius: 10, fontSize: 16, border: '1.5px solid ' + (error ? '#EF4444' : '#E8E8EC'), outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', background: '#FAFAFA' }} />
             {error && <p style={{ color: '#EF4444', fontSize: 12, marginTop: 6, marginBottom: 0 }}>{error}</p>}
           </div>
-          <button type="submit" style={{ ...styles.btnPrimary, width: '100%', padding: '14px', fontSize: 15, borderRadius: 11, marginTop: 4 }}>Ingresar</button>
+          <button type="submit" disabled={entrando} style={{ ...styles.btnPrimary, width: '100%', padding: '14px', fontSize: 15, borderRadius: 11, marginTop: 4, opacity: entrando ? .6 : 1 }}>{entrando ? 'Ingresando...' : 'Ingresar'}</button>
         </form>
       </div>
     </div>
   )
 }
 
-function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllVisits: handleVisitsLoaded, allVisits, visitaParaCotizar, onVisitCotizada }) {
+function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllVisits: handleVisitsLoaded, allVisits, visitaParaCotizar, onVisitCotizada, cotizacionParaAbrir, abrirCotizacion }) {
   if (section === 'inicio')       return <DashboardSection navigateTo={navigateTo} />
   if (section === 'visitas')      return <VisitasSection statuses={statuses} onStatusChange={onStatusChange} navigateTo={navigateTo} onVisitsLoaded={handleVisitsLoaded} />
-  if (section === 'cotizador')    return <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} allVisits={allVisits} onVisitCotizada={onVisitCotizada} />
-  if (section === 'cotizaciones') return <CotizacionesSection />
+  if (section === 'cotizador')    return <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} cotizacionAbierta={cotizacionParaAbrir} allVisits={allVisits} onVisitCotizada={onVisitCotizada} />
+  if (section === 'cotizaciones') return <CotizacionesSection onAbrirEnCotizador={abrirCotizacion} />
   return null
 }
 
 export default function AdminApp() {
-  const [authed, setAuthed]                       = useState(() => sessionStorage.getItem(SESSION_KEY) === '1')
+  const [authed, setAuthed]                       = useState(() => Boolean(leerSesion()))
   const [section, setSection]                     = useState('inicio')
   const [statuses, setStatuses]                   = useState({})
   const [visitaParaCotizar, setVisitaParaCotizar] = useState(null)
   const [allVisits, setAllVisits]                 = useState([])
+  const [cotizacionParaAbrir, setCotizacionParaAbrir] = useState(null)
   const isMobile = useIsMobile()
+
+  // Cualquier llamada rechazada por sesion vencida devuelve al login.
+  useEffect(() => {
+    const alVencer = () => setAuthed(false)
+    window.addEventListener(SESSION_EXPIRED_EVENT, alVencer)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, alVencer)
+  }, [])
+
+  function salir() { cerrarSesion(); setAuthed(false) }
 
   function handleStatusChange(visitId, newStatus) {
     setStatuses(prev => ({ ...prev, [visitId]: newStatus }))
@@ -96,8 +118,15 @@ export default function AdminApp() {
 
   function navigateTo(sec, visitData) {
     setSection(sec)
-    if (sec === 'cotizador' && visitData) setVisitaParaCotizar(visitData)
-    else if (sec !== 'cotizador') setVisitaParaCotizar(null)
+    if (sec === 'cotizador' && visitData) { setVisitaParaCotizar(visitData); setCotizacionParaAbrir(null) }
+    else if (sec !== 'cotizador') { setVisitaParaCotizar(null); setCotizacionParaAbrir(null) }
+  }
+
+  // Lleva una cotizacion guardada (con su proyecto 3D) al cotizador para seguir editandola.
+  function abrirCotizacion(quote) {
+    setVisitaParaCotizar(null)
+    setCotizacionParaAbrir({ ...quote, abiertaEn: Date.now() })
+    setSection('cotizador')
   }
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
@@ -107,6 +136,7 @@ export default function AdminApp() {
     section, statuses, onStatusChange: handleStatusChange,
     navigateTo, setAllVisits: handleVisitsLoaded, allVisits, visitaParaCotizar,
     onVisitCotizada: handleVisitCotizada,
+    cotizacionParaAbrir, abrirCotizacion,
   }
 
   // MOBILE
@@ -118,7 +148,7 @@ export default function AdminApp() {
           <Icon name={currentSection?.icon} size={15} color={C.orange} />
           <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{currentSection?.label}</span>
         </div>
-        <button onClick={() => { sessionStorage.removeItem(SESSION_KEY); setAuthed(false) }}
+        <button onClick={salir}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}>
           <Icon name="logout" size={18} color="#6B7280" />
         </button>
@@ -175,7 +205,7 @@ export default function AdminApp() {
           })}
         </nav>
         <div style={{ padding: '14px', borderTop: '1px solid rgba(255,255,255,.06)' }}>
-          <button onClick={() => { sessionStorage.removeItem(SESSION_KEY); setAuthed(false) }}
+          <button onClick={salir}
             style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: '#4B5563', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>
             <Icon name="logout" size={14} color="#4B5563" />
             Cerrar sesion

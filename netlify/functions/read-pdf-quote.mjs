@@ -1,12 +1,12 @@
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 // netlify/functions/read-pdf-quote.mjs
 // Recibe un PDF en base64, extrae texto de la página 1 y parsea los datos de cotización Don Maxi
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 
 // Helpers de parseo
 function cleanNum(str) {
@@ -160,8 +160,8 @@ function parsePdfText(text) {
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
-  if (event.headers['x-admin-password'] !== ADMIN_PASSWORD)
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
+  const denied = requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     const { pdfBase64 } = JSON.parse(event.body || '{}')

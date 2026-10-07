@@ -1,13 +1,15 @@
 import { google } from 'googleapis';
 import { resolvePriceUpdate } from './lib/price-update.mjs';
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs';
 
 const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+  'Access-Control-Allow-Headers': AUTH_HEADERS, 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 export async function handler(event) {
   const reply = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) });
   if (event.httpMethod === 'OPTIONS') return reply(204, {});
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Método no permitido' });
-  if (event.headers?.['x-admin-password'] !== (process.env.ADMIN_PASSWORD || '2003')) return reply(401, { error: 'No autorizado' });
+  const denied = requireAdmin(event, headers);
+  if (denied) return denied;
   try {
     let input;
     try { input = JSON.parse(event.body || '{}'); } catch { return reply(400, { error: 'JSON inválido' }); }

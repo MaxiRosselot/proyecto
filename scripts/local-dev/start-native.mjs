@@ -13,7 +13,8 @@ function start(cwd,args,env={}) {
 }
 function stop(){for(const child of children) if(!child.killed) child.kill();}
 process.on('SIGINT',stop);process.on('SIGTERM',stop);
-start(configurator,['apps/api/dist/index.js'],{HOST:'127.0.0.1',PORT:'3000',REPISAS_API_KEY:'local-dev-key',PUBLIC_BASE_URL:publicUrl,WEB_DIST_DIR:resolve(configurator,'apps/web/dist')});
+// El configurador ya compilado (pnpm build) se sirve con vite preview; el ERP lo proxea en /embed y /configurador.
+start(resolve(configurator,'apps/web'),['node_modules/vite/bin/vite.js','preview','--host','127.0.0.1','--port','3000','--strictPort']);
 start(erp,['scripts/local-dev/server.mjs'],{LOCAL_PUBLIC_URL:publicUrl});
 start(erp,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','5176','--strictPort'],{VITE_NETLIFY_FUNCTIONS_PROXY:'http://127.0.0.1:8899',VITE_REPISAS_3D_PROXY:'http://127.0.0.1:3000'});
 console.log(`ERP: ${publicUrl}/admin`);

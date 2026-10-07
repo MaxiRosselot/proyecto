@@ -15,8 +15,8 @@ export default defineConfig({
     // Allow temporary ngrok hostnames when exposing the local dev server.
     allowedHosts: true,
     // Local-only proxies. Both are opt-in via env so production builds are unaffected.
-    // VITE_REPISAS_3D_PROXY routes the embedded configurator, its assets and the generated
-    // PDFs through this same origin, so a single tunnel serves the whole flow.
+    // VITE_REPISAS_3D_PROXY routes the embedded configurator and its assets through this same
+    // origin, so a single tunnel serves the whole flow.
     proxy: {
       ...(process.env.VITE_NETLIFY_FUNCTIONS_PROXY ? {
         '/.netlify/functions': {
@@ -30,7 +30,6 @@ export default defineConfig({
         // hace que la app 3D monte su interfaz entera.
         '/configurador': { target: process.env.VITE_REPISAS_3D_PROXY, changeOrigin: true },
         '/assets': { target: process.env.VITE_REPISAS_3D_PROXY, changeOrigin: true },
-        '/generated': { target: process.env.VITE_REPISAS_3D_PROXY, changeOrigin: true },
       } : {}),
     },
   },

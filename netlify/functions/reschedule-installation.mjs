@@ -1,12 +1,12 @@
 // netlify/functions/reschedule-installation.mjs
 import { google } from 'googleapis'
+import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '2003'
 
 function fmtLocal(d) {
   const pad = n => String(n).padStart(2, '0')
@@ -20,8 +20,8 @@ function parseLocalDateTime(dateStr, timeStr) {
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
-  if (event.headers['x-admin-password'] !== ADMIN_PASSWORD)
-    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'No autorizado' }) }
+  const denied = requireAdmin(event, corsHeaders)
+  if (denied) return denied
 
   try {
     const { eventId, fecha, horaInicio, horaFin, notas } = JSON.parse(event.body || '{}')

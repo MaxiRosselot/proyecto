@@ -34,7 +34,9 @@ Colocar este repositorio en `erp` y el configurador en la carpeta vecina `config
 1. En `configurator`: `pnpm install --frozen-lockfile` y `pnpm build`.
 2. En `erp`: `npm ci`.
 3. En `erp`: `node scripts/local-dev/start-native.mjs`.
-4. Abrir `http://127.0.0.1:5176/admin`. La contraseña de demostración está en `scripts/local-dev/server.mjs`.
+4. Abrir `http://127.0.0.1:5176/admin`. La contraseña de demostración (solo local) es `donmaxi-local-demo`; se puede cambiar con `ADMIN_PASSWORD`. El login y las sesiones usan el mismo código que producción.
+
+El configurador compilado se sirve con `vite preview` en el puerto 3000; ya no hace falta la API del repo 3D, que se eliminó.
 
 Si el configurador está en otra ubicación, definir `REPISAS_CONFIGURATOR_DIR` con esa ruta antes de ejecutar el script. Se necesitan libres los puertos 3000, 8899 y 5176. Ctrl+C cierra los procesos que inició el lanzador.
 Para un túnel temporal existente, definir `LOCAL_PUBLIC_URL` antes del arranque: así los enlaces locales a PDFs usan la misma dirección de prueba.
@@ -47,14 +49,15 @@ Visitas, cotizaciones, tabla de precios y PDFs se guardan localmente. No se carg
 npm test
 npm run build
 node scripts/local-dev/verify-refinements.mjs
+node scripts/local-dev/verify-cotizaciones.mjs
 ```
 
-La prueba E2E usa Chrome instalado nativamente, solo acepta localhost y guarda capturas en `docs/evidence/2026-09-21-refinements/`. El PDF descargado queda en `output/quote-e2e.pdf`. Incluye cambio de precio, lectura posterior, edición integrada y generación/descarga del PDF. Los ejemplos utilizan datos ficticios.
+La prueba E2E usa Chrome instalado nativamente, solo acepta localhost y guarda capturas en `docs/evidence/2026-09-21-refinements/`. El PDF descargado queda en `output/quote-e2e.pdf`. Incluye cambio de precio, lectura posterior, edición integrada y generación/descarga del PDF. `verify-cotizaciones.mjs` revisa el login, el correlativo, que cada cotización guarde y reabra su propio modelo 3D, el orden de la lista y que regenerar no cree otra cotización (capturas en `docs/evidence/2026-10-05-cotizaciones/`). Los ejemplos utilizan datos ficticios.
 
-Para producción, `ADMIN_PASSWORD`, `PRECIOS_SHEET_ID` y las credenciales Google existentes siguen siendo necesarias para la tabla. La cuenta de Google debe tener permiso de edición. El control de precio previo detecta cambios entre la lectura de pantalla y el guardado; Google Sheets no ofrece una transacción compare-and-swap, por lo que no sustituye un bloqueo distribuido entre escrituras simultáneas.
+Para producción se necesitan `ADMIN_PASSWORD` (mínimo 12 caracteres), `ADMIN_SESSION_SECRET` (32 o más), `PRECIOS_SHEET_ID`, `GOOGLE_SHEET_ID` y las credenciales Google existentes. Sin las dos primeras el panel no deja entrar a nadie. La cuenta de Google debe tener permiso de edición. El control de precio previo detecta cambios entre la lectura de pantalla y el guardado; Google Sheets no ofrece una transacción compare-and-swap, por lo que no sustituye un bloqueo distribuido entre escrituras simultáneas.
 
 ## Colaboración y siguiente producto
 
 Maxi puede crear una rama, cambiar la plantilla o las vistas, ejecutar estas pruebas y abrir un PR con capturas. Revisar juntos el resultado y fusionar después de la revisión. No compartir archivos `.env` ni credenciales.
 
-La futura vista pública del cotizador es un producto separado: reutilizar la configuración y las exportaciones, definir primero qué puede editar el cliente, qué precio se muestra y cuándo se requiere revisión humana. Nunca exponer `update-precio` ni controles administrativos en esa vista. Antes de publicarla, sustituir la contraseña compartida del administrador por autenticación individual y autorización del lado del servidor.
+La futura vista pública del cotizador es un producto separado: reutilizar la configuración y las exportaciones, definir primero qué puede editar el cliente, qué precio se muestra y cuándo se requiere revisión humana. Nunca exponer `update-precio` ni controles administrativos en esa vista. La contraseña ya se valida en el servidor y las funciones exigen una sesión firmada, pero sigue siendo una sola contraseña compartida: antes de publicar esa vista, pasar a cuentas individuales.
