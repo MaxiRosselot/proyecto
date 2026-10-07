@@ -6,7 +6,7 @@ import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { creadoEnMs } from './lib/cotizaciones.mjs'
 
 const SHEET_ID       = process.env.GOOGLE_SHEET_ID
-const ADMIN_EMAIL    = 'repisasdonmaxi@gmail.com'
+const ADMIN_EMAIL    = process.env.NOTIFY_EMAIL || 'repisas@donmaxi.cl'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

@@ -47,7 +47,7 @@ export async function handler(event) {
       generarPdf: generateQuotePdf,
       subirPdf: datos => subirPdfCotizacion(drive, datos),
       enviarCorreo: correo => enviarCorreoGmail(gmail, correo),
-      avisoA: process.env.NOTIFY_EMAIL || 'repisasdonmaxi@gmail.com',
+      avisoA: process.env.NOTIFY_EMAIL || 'repisas@donmaxi.cl',
     })
     return responder(200, { ok: true, ...resultado })
   } catch (err) {

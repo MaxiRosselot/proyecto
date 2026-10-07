@@ -36,7 +36,7 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 - `cotizacion-web` (pública):
   - con `GET` entrega la tabla de precios;
   - con `POST` recalcula los precios con la planilla (no confía en el navegador), asigna el número, arma el PDF, lo sube a Drive y lo guarda en Cotizaciones como "por confirmar", con nota "Cotización web" y su modelo 3D;
-  - envía el PDF al cliente y una copia a `NOTIFY_EMAIL` (o repisasdonmaxi@gmail.com).
+  - envía el PDF al cliente y una copia a `NOTIFY_EMAIL` (o repisas@donmaxi.cl).
 - Protección: campo trampa para robots y máximo 3 cotizaciones por correo cada 2 horas.
 - Si falla el correo, la cotización queda guardada igual.
 - Lógica y pruebas: `netlify/functions/lib/cotizacion-web.mjs`. Prueba E2E local: `node scripts/local-dev/verify-cotiza.mjs`.
