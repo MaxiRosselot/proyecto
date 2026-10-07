@@ -23,21 +23,29 @@ try {
   await expect(page.getByRole('heading', { name: 'Cotiza tus repisas' })).toBeVisible()
   const cfg = page.frameLocator('iframe[title="Arma tus repisas"]')
 
-  // ── Paso 1: medidas ──
+  // ── Paso 1: medidas y puerta ──
   await expect(cfg.getByRole('heading', { name: 'Mide tu bodega' })).toBeVisible({ timeout: 30000 })
-  const medida = letra => cfg.getByLabel(new RegExp(`^${letra} `))
-  await medida('A').fill('400')
-  await medida('B y E').fill('220')
-  await medida('D').fill('160')
-  await medida('C').fill('160')
+  const medida = etiqueta => cfg.getByLabel(new RegExp(`^${etiqueta}`))
+  await medida('A Muro').fill('400')
+  await medida('B · E').fill('220')
   await medida('Alto').fill('260')
-  await expect(cfg.getByText('Puerta de 80 cm.')).toBeVisible()
+  await expect(medida('Ancho de la puerta')).toHaveValue('80')
+  const posicion = cfg.getByLabel('Posición de la puerta, desde la esquina izquierda')
+  await posicion.fill('160')
+  // C y D salen solos de la posicion de la puerta, y el plano los rotula.
+  await expect(cfg.getByText('D · 160 cm').first()).toBeVisible()
+  await expect(cfg.getByText('C · 160 cm').first()).toBeVisible()
   await shot('01-medidas.png')
-  // Una medida imposible avisa y no deja seguir.
-  await medida('C').fill('300')
-  await expect(cfg.getByText(/la puerta queda de -60 cm/)).toBeVisible()
+  // En la esquina, C o D ya no se rotulan en el plano.
+  await cfg.getByRole('button', { name: 'En la esquina izquierda' }).click()
+  await expect(cfg.locator('svg.cli-planta text', { hasText: /^D ·/ })).toHaveCount(0)
+  await expect(cfg.locator('svg.cli-planta text', { hasText: 'C · 320 cm' })).toHaveCount(1)
+  // Una puerta imposible avisa y no deja seguir.
+  await medida('Ancho de la puerta').fill('500')
+  await expect(cfg.getByText(/ancho de la puerta debe estar/)).toBeVisible()
   await expect(cfg.getByRole('button', { name: 'Ver mis repisas' })).toBeDisabled()
-  await medida('C').fill('160')
+  await medida('Ancho de la puerta').fill('80')
+  await posicion.fill('160')
   await cfg.getByRole('button', { name: 'Ver mis repisas' }).click()
 
   // ── Paso 2: repisas ──
@@ -50,9 +58,27 @@ try {
   await expect(modulos.nth(1)).toContainText(pesos(107100))
   await expect(cfg.getByTestId('cliente-total')).toHaveText(pesos(238000))
 
-  // En L aparece el costado derecho y el fondo se acorta.
+  // Puerta a 30 cm de la esquina izquierda: una repisa de 48 cm a la izquierda la taparia 18 cm,
+  // asi que esa profundidad se bloquea y se ajusta sola a 38 cm.
+  await cfg.getByRole('button', { name: /Tu bodega/ }).click()
+  await posicion.fill('30')
+  await cfg.getByRole('button', { name: 'Ver mis repisas' }).click()
+  await cfg.getByRole('button', { name: /Fondo \+ izquierda/ }).click()
+  await expect(cfg.getByRole('button', { name: '48 cm' })).toBeDisabled()
+  await expect(cfg.getByRole('button', { name: '38 cm' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(cfg.getByRole('status')).toContainText('tapa 18 cm de la puerta por la izquierda')
+  await shot('02a-puerta-tapada.png')
+  await cfg.getByRole('button', { name: /Tu bodega/ }).click()
+  await posicion.fill('160')
+  await cfg.getByRole('button', { name: 'Ver mis repisas' }).click()
+
+  // En L: el fondo (el muro mas largo) va entero y el costado se acomoda. El costado mide
+  // 220 - 48 = 172 cm, pero se recorta a 165 porque asi cae en un rango mas barato.
   await cfg.getByRole('button', { name: /Fondo \+ derecha/ }).click()
-  await expect(modulos.filter({ hasText: 'Derecha (B)' })).toHaveCount(1)
+  const costado = modulos.filter({ hasText: 'Derecha (B)' })
+  await expect(costado).toHaveCount(1)
+  await expect(costado).toContainText('1,65 m')
+  await expect(modulos.filter({ hasText: 'Fondo (A)' })).toHaveCount(2)
   // Otra profundidad cambia los precios.
   const totalL48 = await cfg.getByTestId('cliente-total').textContent()
   await cfg.getByRole('button', { name: '38 cm' }).click()
@@ -60,8 +86,13 @@ try {
   await cfg.getByRole('button', { name: '48 cm' }).click()
   await expect(cfg.getByTestId('cliente-total')).toHaveText(totalL48)
 
+  // Vista en plano con los modulos numerados.
+  await cfg.getByRole('tab', { name: 'Plano' }).click()
+  await expect(cfg.locator('.cli-visor svg .cli-planta-modulo')).toHaveCount(3)
+  await shot('02b-plano.png')
+  await cfg.getByRole('tab', { name: '3D' }).click()
+
   // Colgador en el modulo del costado: quedan menos niveles y el precio no cambia.
-  const costado = modulos.filter({ hasText: 'Derecha (B)' })
   await expect(costado).toContainText('4 niveles')
   await costado.getByText('Colgador').click()
   await expect(costado).toContainText('2 niveles')

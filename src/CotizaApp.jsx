@@ -23,6 +23,33 @@ function urlConfigurador() {
   return url.toString()
 }
 
+// Etapas que ve el cliente mientras se prepara la cotizacion. La primera es real (el dibujo 3D);
+// el servidor hace el resto en una sola llamada, asi que su avance se estima por tiempo y la barra
+// nunca llega al final antes de que el servidor responda.
+const ETAPAS = ['Dibujando tu bodega en 3D', 'Calculando precios', 'Armando el PDF', 'Enviándola a tu correo']
+const SEGUNDOS_SERVIDOR = 14
+
+function Progreso({ progreso }) {
+  const { pct, etapa, segundos } = progreso
+  return (
+    <div className="ctz-progreso-fondo" role="dialog" aria-modal="true" aria-labelledby="ctz-progreso-titulo">
+      <div className="ctz-progreso">
+        <h2 id="ctz-progreso-titulo">Preparando tu cotización</h2>
+        <div className="ctz-progreso-barra" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+          <span style={{ width: pct + '%' }} />
+        </div>
+        <div className="ctz-progreso-cifras"><span>{Math.round(pct)}%</span><span>{segundos} s</span></div>
+        <ol className="ctz-progreso-etapas">
+          {ETAPAS.map((texto, i) => (
+            <li key={texto} className={i < etapa ? 'hecha' : i === etapa ? 'actual' : ''}>{texto}</li>
+          ))}
+        </ol>
+        <p className="ctz-nota">No cierres esta página. Suele tardar entre 10 y 20 segundos.</p>
+      </div>
+    </div>
+  )
+}
+
 function bytesADataUrl(buffer) {
   const bytes = new Uint8Array(buffer)
   let binario = ''
@@ -40,6 +67,7 @@ export default function CotizaApp() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
   const [resultado, setResultado] = useState(null)
+  const [progreso, setProgreso] = useState(null)      // { pct, etapa, segundos } mientras se envia
   const preciosRef = useRef(null)
   preciosRef.current = precios
 
@@ -102,8 +130,21 @@ export default function CotizaApp() {
     e.preventDefault()
     if (!listo || !datosOk || enviando) return
     setEnviando(true); setError('')
+    const inicio = Date.now()
+    const segundos = () => Math.floor((Date.now() - inicio) / 1000)
+    setProgreso({ pct: 3, etapa: 0, segundos: 0 })
+    const reloj = setInterval(() => setProgreso(p => p && { ...p, segundos: segundos() }), 1000)
+    let avance
     try {
       const vistas = await pedirVistas()
+      // Desde aca el servidor: la barra avanza de 30 a 95% sobre el tiempo esperado, sin llegar al 100.
+      const inicioServidor = Date.now()
+      setProgreso({ pct: 30, etapa: 1, segundos: segundos() })
+      avance = setInterval(() => {
+        const t = Math.min(1, (Date.now() - inicioServidor) / (SEGUNDOS_SERVIDOR * 1000))
+        const pct = 30 + 65 * (1 - Math.pow(1 - t, 2))
+        setProgreso(p => p && { ...p, pct, etapa: pct < 55 ? 1 : pct < 80 ? 2 : 3 })
+      }, 200)
       const res = await fetch(ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,10 +158,13 @@ export default function CotizaApp() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.ok) throw new Error(data.error || 'No pudimos enviar la cotización.')
+      clearInterval(avance)
+      setProgreso(p => p && { ...p, pct: 100, etapa: ETAPAS.length })
+      await new Promise(r => setTimeout(r, 450))
       setResultado({ ...data, email: form.email.trim() })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) { setError(err.message) }
-    finally { setEnviando(false) }
+    finally { clearInterval(avance); clearInterval(reloj); setProgreso(null); setEnviando(false) }
   }
 
   // El cliente ya tiene sus medidas: la pantalla final empuja a cerrar ahora, con la oferta
@@ -197,6 +241,8 @@ export default function CotizaApp() {
           <p className="ctz-nota">Te llega un PDF con el detalle por módulo y el dibujo de tu bodega, y puedes reservar tu instalación al tiro.</p>
         </form>
       </section>
+
+      {progreso && <Progreso progreso={progreso} />}
 
       {listo && (
         <div className="ctz-barra" aria-hidden="true">

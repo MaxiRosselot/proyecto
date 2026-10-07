@@ -5,7 +5,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 CLIENT_ID     = sys.argv[1]
 CLIENT_SECRET = sys.argv[2]
 REDIRECT_URI  = 'http://localhost:3333/callback'
-SCOPES        = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file'
+SCOPES        = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send'
 
 auth_url = (
     'https://accounts.google.com/o/oauth2/v2/auth?'

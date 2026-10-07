@@ -6,9 +6,13 @@ const CLIENT_ID     = process.argv[2]
 const CLIENT_SECRET = process.argv[3]
 const REDIRECT_URI  = 'http://localhost:3333/callback'
 
+// Todo lo que usan las funciones de Netlify. Si falta uno, esa parte falla en silencio:
+// sin gmail.send no salen los correos (cotizaciones web, recordatorios, cancelaciones).
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/gmail.send',
 ]
 
 const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI)
