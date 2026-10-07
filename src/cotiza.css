@@ -38,6 +38,8 @@
 .ctz-confianza li::before{content:"✓ "}
 .ctz-enlace{background:none;border:none;color:var(--acento-osc);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;padding:6px}
 .ctz-acciones{display:grid;gap:10px}
+.ctz-pdf{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ctz-pdf .ctz-boton{min-height:44px;font-size:14px}
 /* Envio en curso: tarjeta al centro con barra, porcentaje, segundos y etapas. */
 .ctz-progreso-fondo{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;background:rgba(28,25,23,.45);backdrop-filter:blur(3px)}
 .ctz-progreso{width:min(420px,100%);background:#fff;border-radius:20px;padding:24px 22px;box-shadow:0 24px 60px rgba(0,0,0,.25);display:grid;gap:12px}

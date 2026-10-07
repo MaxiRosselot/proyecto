@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { MAX_POR_CORREO, NOTA_WEB, filasConPrecio, procesarCotizacionWeb, validarSolicitud } from './cotizacion-web.mjs'
 import { almacenEnMemoria, obtenerCotizacion } from './cotizaciones.mjs'
-import { armarCorreo } from './correo.mjs'
+import { armarCorreo, explicarErrorCorreo } from './correo.mjs'
 import { generateQuotePdf } from './quote-pdf.mjs'
 import { TABLA_PRECIOS } from '../../../src/admin/preciosRepisas.js'
 
@@ -82,11 +82,28 @@ test('crea la cotizacion con su modelo, sube el PDF y la envia al cliente con co
   assert.equal(correos[1].responderA, 'ana@example.com')
 })
 
-test('si el correo falla la cotizacion igual queda guardada', async () => {
+test('si el correo falla la cotizacion queda guardada, con el motivo anotado y el PDF en la respuesta', async () => {
   const { deps, almacen } = entorno()
-  const r = await procesarCotizacionWeb(solicitud(), { ...deps, enviarCorreo: async () => { throw new Error('sin cuota') } })
+  const sinPermiso = Object.assign(new Error('Request had insufficient authentication scopes.'), { response: { data: { error: { message: 'Request had insufficient authentication scopes.' } } } })
+  const r = await procesarCotizacionWeb(solicitud(), { ...deps, enviarCorreo: async () => { throw sinPermiso } })
   assert.equal(r.correoEnviado, false)
-  assert.ok(await obtenerCotizacion(almacen, r.cotNum))
+  const guardada = await obtenerCotizacion(almacen, r.cotNum)
+  assert.match(guardada.notas, /^Cotización web.*Correo no enviado: El token de Google no tiene permiso/)
+  assert.equal(Buffer.from(r.pdfBase64, 'base64').subarray(0, 4).toString(), '%PDF')
+  assert.equal(r.pdfUrl, `https://drive.example/${r.cotNum}`)
+  // Las cotizaciones con el correo fallido siguen contando para el limite por correo.
+  await procesarCotizacionWeb(solicitud(), { ...deps, enviarCorreo: async () => { throw sinPermiso } })
+  await procesarCotizacionWeb(solicitud(), { ...deps, enviarCorreo: async () => { throw sinPermiso } })
+  await assert.rejects(procesarCotizacionWeb(solicitud(), deps), { estado: 429 })
+})
+
+test('explica los errores de Google con la causa y que hacer', () => {
+  const de = message => explicarErrorCorreo({ response: { data: { error: { message } } } }).causa
+  assert.match(de('Request had insufficient authentication scopes.'), /no tiene permiso/)
+  assert.match(de('Gmail API has not been used in project 123 before or it is disabled.'), /no está habilitada/)
+  assert.match(explicarErrorCorreo({ response: { data: { error: 'invalid_grant' } } }).causa, /expiró o fue revocado/)
+  assert.match(explicarErrorCorreo(new Error('algo raro')).causa, /Google rechazó/)
+  assert.equal(explicarErrorCorreo(new Error('algo raro')).detalle, 'algo raro')
 })
 
 test('frena muchas cotizaciones seguidas desde el mismo correo', async () => {

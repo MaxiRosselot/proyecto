@@ -161,7 +161,15 @@ export default function CotizaApp() {
       clearInterval(avance)
       setProgreso(p => p && { ...p, pct: 100, etapa: ETAPAS.length })
       await new Promise(r => setTimeout(r, 450))
-      setResultado({ ...data, email: form.email.trim() })
+      // El PDF viene en la respuesta: se abre desde el navegador, sin depender del correo ni de Drive.
+      let pdfDisponible = ''
+      if (data.pdfBase64) {
+        const binario = atob(data.pdfBase64)
+        const bytes = new Uint8Array(binario.length)
+        for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i)
+        pdfDisponible = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+      } else if (data.pdfUrl) pdfDisponible = data.pdfUrl
+      setResultado({ ...data, pdfBase64: undefined, pdfDisponible, email: form.email.trim() })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) { setError(err.message) }
     finally { clearInterval(avance); clearInterval(reloj); setProgreso(null); setEnviando(false) }
@@ -170,7 +178,7 @@ export default function CotizaApp() {
   // El cliente ya tiene sus medidas: la pantalla final empuja a cerrar ahora, con la oferta
   // de 48 horas, el pago en linea, la transferencia o el WhatsApp.
   if (resultado) {
-    const { cotNum, total, oferta, pago, whatsapp } = resultado
+    const { cotNum, total, oferta, pago, whatsapp, pdfDisponible } = resultado
     const mensaje = `Hola, quiero aceptar la cotización N° ${cotNum} por ${pesos(total)}`
     return (
       <div className="ctz">
@@ -180,7 +188,14 @@ export default function CotizaApp() {
           <p className="ctz-listo-total">{pesos(total)} <small>con IVA</small></p>
           {resultado.correoEnviado
             ? <p className="ctz-nota">Te enviamos el PDF a <strong>{resultado.email}</strong>.</p>
-            : <p className="ctz-nota">No pudimos enviarla a tu correo, pero quedó registrada: te escribimos por WhatsApp.</p>}
+            : <p className="ctz-nota">No pudimos enviarla a tu correo, pero quedó registrada. Descárgala aquí abajo; también te la mandamos por WhatsApp.</p>}
+
+          {pdfDisponible && (
+            <div className="ctz-pdf">
+              <a className="ctz-boton secundario" href={pdfDisponible} target="_blank" rel="noreferrer">Ver PDF</a>
+              <a className="ctz-boton secundario" href={pdfDisponible} download={`Cotizacion ${cotNum} - Repisas Don Maxi.pdf`}>Descargar PDF</a>
+            </div>
+          )}
 
           <div className="ctz-oferta">
             <strong>{oferta.descuento}% de descuento adicional</strong>

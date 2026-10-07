@@ -32,6 +32,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
   const [confirmDel, setConfirmDel]     = useState(null)
   const [buscar, setBuscar]             = useState('')
   const [abriendo, setAbriendo]         = useState(null)
+  const [probandoCorreo, setProbandoCorreo] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -107,6 +108,18 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
     finally { setAbriendo(null) }
   }
 
+  // Diagnostico: manda un correo de prueba y muestra la causa exacta si Google lo rechaza.
+  async function probarCorreo() {
+    setProbandoCorreo(true)
+    try {
+      const r = await apiFetch('/.netlify/functions/probar-correo', { method: 'POST' })
+      alert(r.ok
+        ? `Correo de prueba enviado a ${r.para}${r.remitente ? ' desde ' + r.remitente : ''}. Revisa esa bandeja.`
+        : `No se pudo enviar el correo de prueba a ${r.para || 'NOTIFY_EMAIL'}.\n\n${r.causa || r.error}\n\nDetalle de Google: ${r.detalle || '-'}`)
+    } catch (e) { alert('No se pudo probar el correo: ' + e.message) }
+    finally { setProbandoCorreo(false) }
+  }
+
   const TABS = [
     { key: 'por confirmar', label: 'Por confirmar', color: C.yellow },
     { key: 'confirmada',    label: 'Confirmadas',   color: C.green  },
@@ -138,6 +151,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
             placeholder="Buscar por nombre..."
             style={{ ...styles.input, width: 190, padding: '7px 12px', fontSize: 13 }}
           />
+          <button onClick={probarCorreo} disabled={probandoCorreo} style={styles.btnSecondary}>{probandoCorreo ? 'Probando...' : 'Probar correo'}</button>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
@@ -260,6 +274,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                     {q.iva      > 0 && <><span style={styles.detailLabel}>IVA</span><span style={{ fontSize: 13 }}>{fmt(q.iva)}</span></>}
                     {q.total    > 0 && <><span style={styles.detailLabel}>Total</span><span style={{ fontSize: 13, fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span></>}
                     {q.motivoRechazo && <><span style={styles.detailLabel}>Motivo</span><span style={{ fontSize: 13, color: C.red }}>{q.motivoRechazo}</span></>}
+                    {q.notas && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13, color: /Correo no enviado/.test(q.notas) ? C.red : C.textSub }}>{q.notas}</span></>}
                   </div>
 
                   {/* PDF */}

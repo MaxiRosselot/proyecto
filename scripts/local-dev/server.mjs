@@ -148,6 +148,11 @@ const routes = {
     })
     return { ok: true, ...resultado }
   },
+  // Mismo contrato que netlify/functions/probar-correo.mjs (el correo queda como .eml)
+  'probar-correo': async () => {
+    guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })
+    return { ok: true, para: 'admin-local@example.com', remitente: 'local' }
+  },
   // Mismo contrato que netlify/functions/horarios.mjs
   'horarios': async (body, params, method) => {
     if (method === 'POST') {

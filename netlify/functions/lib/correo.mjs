@@ -45,6 +45,23 @@ export function armarCorreo({ para, asunto, texto, html, adjuntos = [], responde
   return partes.join(SALTO)
 }
 
+// Traduce el error de Google a la causa y a lo que hay que hacer. Lo usan la cotizacion web
+// (queda anotado en la cotizacion) y el boton "Probar correo" del admin.
+export function explicarErrorCorreo(error) {
+  const detalle = String(error?.response?.data?.error?.message || error?.response?.data?.error_description
+    || error?.response?.data?.error || error?.message || error)
+  const causas = [
+    [/insufficient.*(scope|permission)/i, 'El token de Google no tiene permiso para enviar correos: genera GOOGLE_REFRESH_TOKEN de nuevo con get-refresh-token.mjs.'],
+    [/has not been used|is disabled|SERVICE_DISABLED|accessNotConfigured/i, 'La API de Gmail no está habilitada en el proyecto de Google Cloud: actívala en APIs y servicios → Biblioteca → Gmail API.'],
+    [/invalid_grant|expired|revoked/i, 'El token de Google expiró o fue revocado: genera GOOGLE_REFRESH_TOKEN de nuevo.'],
+    [/invalid_client|unauthorized_client/i, 'GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no corresponden al token.'],
+    [/Mail service not enabled|failedPrecondition/i, 'La cuenta que firma el token no tiene Gmail activo.'],
+    [/Invalid To header|invalid.*address/i, 'La dirección de correo del destinatario no es válida.'],
+  ]
+  const causa = causas.find(([patron]) => patron.test(detalle))?.[1] || 'Google rechazó el envío.'
+  return { causa, detalle: detalle.slice(0, 300) }
+}
+
 export async function enviarCorreoGmail(gmail, correo) {
   await gmail.users.messages.send({ userId: 'me', requestBody: { raw: base64Url(armarCorreo(correo)) } })
 }

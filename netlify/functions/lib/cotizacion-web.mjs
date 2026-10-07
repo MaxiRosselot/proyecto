@@ -10,6 +10,7 @@
 import { precioRepisa } from '../../../src/admin/preciosRepisas.js'
 import { actualizarCotizacion, crearCotizacion, listarCotizaciones, siguienteDisponible } from './cotizaciones.mjs'
 import { MARCA, OFERTA, WHATSAPP } from './marca.mjs'
+import { explicarErrorCorreo } from './correo.mjs'
 
 export const NOTA_WEB = 'Cotización web: la armó el cliente en /cotiza'
 export const MAX_MODULOS = 40
@@ -126,7 +127,7 @@ export async function procesarCotizacionWeb(body, deps) {
   const repisas = filasConPrecio(modulos, tabla)
 
   const { quotes } = await listarCotizaciones(almacen)
-  const recientes = quotes.filter(q => String(q.email).toLowerCase() === cliente.email && q.notas === NOTA_WEB
+  const recientes = quotes.filter(q => String(q.email).toLowerCase() === cliente.email && String(q.notas).startsWith(NOTA_WEB)
     && q.creadoMs != null && ahora.getTime() - q.creadoMs < VENTANA_MS)
   if (recientes.length >= MAX_POR_CORREO) falla('Ya recibimos varias cotizaciones de este correo. Revisa tu bandeja o escríbenos por WhatsApp.', 429)
 
@@ -156,7 +157,13 @@ export async function procesarCotizacionWeb(body, deps) {
   const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, ofertaHasta, avisoA }
   let correoEnviado = true
   try { await enviarCorreo({ ...correoCliente(datos), adjuntos: [adjunto] }) }
-  catch (e) { correoEnviado = false; console.error(`cotizacion-web: no se envió el correo de la N° ${numero}:`, e) }
+  catch (e) {
+    correoEnviado = false
+    const { causa, detalle } = explicarErrorCorreo(e)
+    console.error(`cotizacion-web: no se envió el correo de la N° ${numero}: ${causa} (${detalle})`)
+    // Queda anotado en la cotizacion: en el admin se ve a quien hay que mandarsela a mano.
+    await actualizarCotizacion(almacen, { cotNum: numero, notas: `${NOTA_WEB} · Correo no enviado: ${causa}` }).catch(() => {})
+  }
   if (avisoA) {
     try { await enviarCorreo({ ...correoAviso(datos), adjuntos: [adjunto] }) }
     catch (e) { console.error(`cotizacion-web: no se envió el aviso de la N° ${numero}:`, e) }
@@ -165,6 +172,8 @@ export async function procesarCotizacionWeb(body, deps) {
   // Lo que la pagina necesita para cerrar ahi mismo.
   return {
     cotNum: String(numero), total: pdf.total, correoEnviado,
+    // El PDF va en la respuesta para verlo en la pantalla final aunque el correo o Drive fallen.
+    pdfBase64: Buffer.from(pdf.bytes).toString('base64'), pdfUrl,
     oferta: { hasta: ofertaHasta.toISOString(), descuento: OFERTA.descuento },
     pago: { link: MARCA.linkPago, razonSocial: MARCA.razonSocial, rut: MARCA.rut, banco: MARCA.banco, tipoCuenta: MARCA.tipoCuenta, numeroCuenta: MARCA.numeroCuenta },
     whatsapp: WHATSAPP,

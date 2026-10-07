@@ -113,6 +113,13 @@ try {
   const numero = (await page.locator('.ctz-listo-numero').textContent()).match(/\d+/)[0]
   // Empuja a cerrar ahora: oferta, pago en linea y WhatsApp con la cotizacion. Nada de agendar visita.
   await expect(page.locator('.ctz-listo-total')).toContainText(totalL48)
+  // El PDF se puede ver y descargar ahi mismo, aunque el correo falle.
+  await expect(page.getByRole('link', { name: 'Ver PDF' })).toHaveAttribute('href', /^blob:/)
+  const pdfVisto = await page.evaluate(async () => {
+    const r = await fetch(document.querySelector('.ctz-pdf a').href)
+    return new TextDecoder().decode((await r.arrayBuffer()).slice(0, 4))
+  })
+  expect(pdfVisto).toBe('%PDF')
   await expect(page.getByText('10% de descuento adicional')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Pagar y reservar instalación' })).toHaveAttribute('href', 'https://link.mercadopago.cl/repisasdonmaxi')
   await expect(page.getByRole('link', { name: 'Aceptar por WhatsApp' })).toHaveAttribute('href', new RegExp(`wa\\.me/56951020367\\?text=.*${numero}`))
