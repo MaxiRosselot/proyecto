@@ -127,16 +127,20 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     else text('Vista no disponible', x, 248 - shrink / 2, w, 9, C.faint, F.sans, { align: 'center' });
   }
   // Client fields are spread like the template's flex row: each as wide as its content, equal gaps.
-  const client = [['Cliente', data.nombre], ['Dirección', data.direccion], ['Teléfono', data.telefono], ['Correo', data.email]]
-    .map(([title, value]) => ({ title, value: String(value || '-').slice(0, 60), w: Math.max(widthOf(title.toUpperCase(), 6.75, F.bold, LABEL), widthOf(value || '-', 10.5, F.bold)) }));
+  // Long values first shrink the font (down to 7 pt) so they fit whole; only beyond that they share
+  // the width proportionally and get an ellipsis.
+  const clientValues = [['Cliente', data.nombre], ['Dirección', data.direccion], ['Teléfono', data.telefono], ['Correo', data.email]]
+    .map(([title, value]) => ({ title, value: String(value || '-').slice(0, 60) }));
+  const measure = size => clientValues.map(c => ({ ...c, w: Math.max(widthOf(c.title.toUpperCase(), 6.75, F.bold, LABEL), widthOf(c.value, size, F.bold)) }));
+  let valueSize = 10.5, client = measure(valueSize);
+  while (valueSize > 7 && client.reduce((s, c) => s + c.w, 0) > W - 3 * 13.5) client = measure(valueSize -= .25);
   const used = client.reduce((s, c) => s + c.w, 0);
-  // Long values would overflow the row; they share the width proportionally instead.
   const scale = Math.min(1, (W - 3 * 13.5) / used), gapX = used * scale < W ? (W - used * scale) / 3 : 13.5;
   let cx = L;
   for (const c of client) {
     const w = c.w * scale;
     label(c.title, cx, 407.1 - shrink, w + 2);
-    text(c.value, cx, 419.9 - shrink, w + 2, 10.5, C.ink, F.bold, { ellipsis: true, height: 14, lineBreak: false });
+    text(c.value, cx, 419.9 - shrink + (10.5 - valueSize) / 2, w + 2, valueSize, C.ink, F.bold, { ellipsis: true, height: 14, lineBreak: false });
     cx += w + gapX;
   }
   // Column x positions; VALOR and TOTAL are right-aligned to their end.
