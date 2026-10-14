@@ -3,6 +3,8 @@ import { QUOTE_STATUS_LABELS, C, apiFetch, fmt, fmtDate, styles, DEFAULTS_REPISA
 import { hayBorradorSinGuardar } from './PorCotizar.jsx'
 import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx'
 import { fechaLarga } from './whatsappInstalacion.js'
+import { BadgePago, PagosCotizacion } from './PagosCotizacion.jsx'
+import { regenerarPdf } from './regenerarPdf.js'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 
@@ -17,7 +19,7 @@ function driveFileId(url) {
   return m ? m[1] : ''
 }
 
-export default function CotizacionesSection({ onAbrirEnCotizador }) {
+export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [quotes, setQuotes]             = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState('')
@@ -36,6 +38,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
   const [abriendo, setAbriendo]         = useState(null)
   const [probandoCorreo, setProbandoCorreo] = useState(false)
   const [agendandoId, setAgendandoId]   = useState(null)
+  const [pdfEnCurso, setPdfEnCurso]     = useState(null)   // { cotNum, etapa }
+  const [pdfNuevo, setPdfNuevo]         = useState({})     // cotNum -> 'sugerido' | { blobUrl } | { error }
   const actualizarLocal = (cotNum, cambios) => setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
 
   const load = useCallback(async () => {
@@ -49,6 +53,25 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Desde el calendario: abrir la cotizacion de ese evento, en su pestaña.
+  useEffect(() => {
+    if (!enfocar || loading) return
+    const q = quotes.find(x => String(x.cotNum) === String(enfocar.cotNum))
+    if (!q) return
+    setBuscar(''); setTab(q.status); setExpanded(q.cotNum)
+    setTimeout(() => document.getElementById('cot-' + q.cotNum)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+  }, [enfocar, loading])
+
+  async function rehacerPdf(q) {
+    setPdfEnCurso({ cotNum: q.cotNum, etapa: 'Empezando' })
+    try {
+      const r = await regenerarPdf(q.cotNum, { alAvanzar: etapa => setPdfEnCurso({ cotNum: q.cotNum, etapa }) })
+      actualizarLocal(q.cotNum, { pdfUrl: r.pdfUrl })
+      setPdfNuevo(p => ({ ...p, [q.cotNum]: { blobUrl: r.blobUrl } }))
+    } catch (e) { setPdfNuevo(p => ({ ...p, [q.cotNum]: { error: e.message } })) }
+    finally { setPdfEnCurso(null) }
+  }
 
   // Solo viajan los campos que cambian: el resto (incluido el modelo 3D) queda como estaba.
   async function updateStatus(quote, newStatus, motivo) {
@@ -193,7 +216,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
           const borderColor = QUOTE_STATUS_LABELS[q.status]?.color || C.border
 
           return (
-            <div key={q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + borderColor }}>
+            <div key={q.cotNum} id={'cot-' + q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + borderColor, scrollMarginTop: 70 }}>
               {/* Header */}
               <div
                 onClick={() => !isEdit && setExpanded(isExp ? null : q.cotNum)}
@@ -210,6 +233,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                     {q.direccion && <span style={{ marginLeft: 10, color: C.textMuted }}>{q.direccion}</span>}
                     {q.creado && <span style={{ marginLeft: 10, color: C.textMuted }}>Creada {String(q.creado).split(/[ ,]/)[0]}</span>}
                     {q.tieneProyecto3d && <span style={{ ...styles.badge(C.purple), marginLeft: 10 }}>Modelo 3D</span>}
+                    <BadgePago quote={q} />
                     {q.instalacion && <span style={{ ...styles.badge(C.green), marginLeft: 10 }}>Instalación {fechaLarga(q.instalacion.fecha).split(',')[1]?.trim()} · {q.instalacion.inicio}</span>}
                   </div>
                 </div>
@@ -283,6 +307,19 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                   </div>
 
                   {/* PDF */}
+                  {pdfNuevo[q.cotNum] === 'sugerido' && (
+                    <div style={{ ...styles.errorBox, background: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E', marginBottom: 10 }}>
+                      El total cambió con los servicios agregados: regenera el PDF para mandarle al cliente el valor actualizado.
+                    </div>
+                  )}
+                  {pdfNuevo[q.cotNum]?.error && <div style={{ ...styles.errorBox, marginBottom: 10 }}>No se pudo regenerar el PDF: {pdfNuevo[q.cotNum].error}</div>}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button onClick={() => rehacerPdf(q)} disabled={Boolean(pdfEnCurso)}
+                      style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', opacity: pdfEnCurso ? .6 : 1 }}>
+                      {pdfEnCurso?.cotNum === q.cotNum ? pdfEnCurso.etapa + '…' : 'Regenerar PDF'}
+                    </button>
+                    {pdfNuevo[q.cotNum]?.blobUrl && <a href={pdfNuevo[q.cotNum].blobUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: C.green }}>✓ PDF actualizado · ver</a>}
+                  </div>
                   {q.pdfUrl && (
                     <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                       <a href={q.pdfUrl} target="_blank" rel="noreferrer"
@@ -296,6 +333,10 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                         Descargar
                       </a>
                     </div>
+                  )}
+
+                  {(q.status === 'confirmada' || q.pagos?.length > 0) && (
+                    <PagosCotizacion quote={q} onCambio={cambios => actualizarLocal(q.cotNum, cambios)} />
                   )}
 
                   {q.instalacion && agendandoId !== q.cotNum && (
@@ -348,6 +389,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                   {agendandoId === q.cotNum && (
                     <AgendarInstalacion quote={q} onCancelar={() => setAgendandoId(null)}
                       onListo={cambios => {
+                        if (Number(cambios.total) !== Number(q.total)) setPdfNuevo(p => ({ ...p, [q.cotNum]: 'sugerido' }))
                         actualizarLocal(q.cotNum, cambios)
                         setAgendandoId(null)
                         // Queda en Confirmadas, abierta, con el resumen y el boton de WhatsApp a la vista.

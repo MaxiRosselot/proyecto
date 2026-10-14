@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
@@ -28,7 +28,20 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
   const [error, setError] = useState('')
 
   const totales = useMemo(() => totalesCotizacion(quote.repisas || [], adicionales), [quote.repisas, adicionales])
+
+  // Lo que ya hay ese dia en el calendario, para no topar horarios.
+  const [delDia, setDelDia] = useState([])
+  useEffect(() => {
+    if (!fecha) { setDelDia([]); return }
+    let vigente = true
+    apiFetch(`/.netlify/functions/calendario?desde=${fecha}&hasta=${fecha}`)
+      .then(r => vigente && setDelDia(r.ok ? r.eventos.filter(e => e.id !== previa?.eventId) : []))
+      .catch(() => {})
+    return () => { vigente = false }
+  }, [fecha])
+  const aMin = h => { const [a, b] = h.split(':').map(Number); return a * 60 + b }
   const horarioOk = fecha && inicio && fin && fin > inicio
+  const choques = horarioOk ? delDia.filter(e => e.todoElDia || (e.minutoInicio < aMin(fin) && e.minutoFin > aMin(inicio))) : []
   const emailOk = !email.trim() || correoValido(email)
   const numero = (clave, valor) => setAdicionales(a => ({ ...a, [clave]: Math.max(0, Math.round(Number(valor) || 0)) }))
 
@@ -78,6 +91,13 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
       <div style={{ fontSize: 12, color: horarioOk || !fecha ? C.textMuted : C.red, marginBottom: 12 }}>
         {!fecha ? 'Elige el día.' : fin > inicio ? `${fechaLarga(fecha)} · ${inicio} a ${fin} · ${duracion(inicio, fin)}` : 'La hora de término debe ser después de la de inicio.'}
       </div>
+      {fecha && delDia.length > 0 && (
+        <div data-testid="agenda-del-dia" style={{ fontSize: 12, marginTop: -6, marginBottom: 12, padding: '8px 10px', borderRadius: 8,
+          background: choques.length ? '#FEF2F2' : C.bg, color: choques.length ? '#B91C1C' : C.textSub }}>
+          <strong>{choques.length ? '⚠ Se cruza con: ' : 'Ese día ya tienes: '}</strong>
+          {(choques.length ? choques : delDia).map(e => `${e.todoElDia ? 'todo el día' : e.inicio + '–' + e.fin} ${e.cliente || e.titulo}`).join(' · ')}
+        </div>
+      )}
 
       <label style={{ display: 'block', marginBottom: 6 }}>
         <span style={etiqueta}>Correo del cliente</span>

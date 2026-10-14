@@ -33,6 +33,7 @@ export const QUOTE_STATUS_LABELS = {
 
 export const SECTIONS = [
   { id: 'inicio',       label: 'Inicio',       icon: 'home'  },
+  { id: 'calendario',   label: 'Calendario',   icon: 'agenda' },
   { id: 'visitas',      label: 'Visitas',      icon: 'calendar' },
   { id: 'cotizador',    label: 'Cotizar',      icon: 'doc'   },
   { id: 'cotizaciones', label: 'Cotizaciones', icon: 'files' },

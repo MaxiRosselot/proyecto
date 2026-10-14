@@ -19,6 +19,8 @@ import {
 } from '../../netlify/functions/lib/horarios.mjs'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
+import { eventoParaVista } from '../../netlify/functions/lib/calendario.mjs'
+import { borrarPago, registrarPago } from '../../netlify/functions/lib/pagos.mjs'
 import { armarCorreo } from '../../netlify/functions/lib/correo.mjs'
 import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
 
@@ -83,6 +85,23 @@ const calendarLocal = {
       return { data: { id: eventId, htmlLink: `${PUBLIC_URL}/#evento-${eventId}` } }
     },
   },
+}
+
+// Calendario local: las instalaciones guardadas en db.eventos y las visitas de db.visits, con la
+// misma forma que entrega Google Calendar, para que la vista use la logica de produccion.
+function eventosLocales() {
+  const aUTC = fechaHora => { const [fecha, hora] = fechaHora.split('T'); return horaLocalAUTC(fecha, hora.slice(0, 5)).toISOString() }
+  const instalaciones = Object.entries(db.eventos || {}).map(([id, ev]) => ({
+    ...ev, id, htmlLink: `${PUBLIC_URL}/#evento-${id}`,
+    start: { dateTime: aUTC(ev.start.dateTime) }, end: { dateTime: aUTC(ev.end.dateTime) },
+  }))
+  const visitas = db.visits.map(v => ({
+    id: v.id, summary: `Visita — ${v.nombre} (Repisas Don Maxi)`,
+    description: `Cliente: ${v.nombre}\nEmail: ${v.email || ''}\nCelular: ${v.celular || ''}\nDirección: ${v.direccion || ''}`,
+    start: { dateTime: v.start }, end: { dateTime: v.end }, attendees: v.email ? [{ email: v.email }] : [],
+    extendedProperties: { shared: { created_by: 'agendador-netlify', status: db.visitStatuses[v.id] || v.status || '' } },
+  }))
+  return [...instalaciones, ...visitas]
 }
 
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
@@ -172,6 +191,17 @@ const routes = {
     return { ok: true, ...r }
   },
   'eventos-local': () => ({ ok: true, eventos: db.eventos || {} }),
+  // Mismo contrato que netlify/functions/calendario.mjs
+  'calendario': async (_body, params) => {
+    const desde = params.get('desde'), hasta = params.get('hasta')
+    const { quotes } = await listarCotizaciones(cotizaciones)
+    const porNumero = new Map(quotes.map(q => [String(q.cotNum), q]))
+    const eventos = eventosLocales().map(ev => eventoParaVista(ev, porNumero)).filter(e => e.fecha >= desde && e.fecha <= hasta)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.minutoInicio - b.minutoInicio)
+    return { ok: true, eventos }
+  },
+  // Mismo contrato que netlify/functions/pagos.mjs
+  'pagos': async (body) => ({ ok: true, ...(body.accion === 'borrar' ? await borrarPago(cotizaciones, body) : await registrarPago(cotizaciones, body)) }),
   // Mismo contrato que netlify/functions/probar-correo.mjs (el correo queda como .eml)
   'probar-correo': async () => {
     guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })

@@ -54,6 +54,21 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 - **Avisar por WhatsApp** abre el chat del cliente con el mensaje listo: día, hora, duración y el aviso de hasta 1 hora de retraso.
 - Lógica y pruebas: `netlify/functions/lib/instalaciones.mjs`. Prueba E2E local: `node scripts/local-dev/verify-instalacion.mjs`.
 
+## Calendario, pagos y recordatorios
+
+- **Admin → Calendario** muestra el calendario del negocio en tres vistas: **semana**, **mes** y **agenda** (la de celular). Incluye instalaciones, visitas y el resto de los eventos. Al hacer clic en un evento se abre su detalle: mapa, teléfono, saldo, WhatsApp y la cotización.
+- **Recordatorios de mañana** (arriba del calendario): cada uno con su WhatsApp listo.
+- Cron diario a las 10:00 (`send-reminders`):
+  - manda el recordatorio por correo a cada cliente con instalación o visita al día siguiente;
+  - te manda un resumen a `NOTIFY_EMAIL` con los links de WhatsApp y el saldo a cobrar.
+- Al agendar se avisa si el horario **se cruza** con otro evento de ese día.
+- **Pagos** (columna **S** de `Cotizaciones`):
+  - abonos con monto, medio, fecha y nota;
+  - atajos "Abono 50%" y "Saldo completo";
+  - etiqueta "Abono %" o "Pagada" en la tarjeta.
+- **Regenerar PDF**: rehace el PDF con el 3D y el total actual, lo sube a Drive y actualiza el link. Se sugiere solo cuando al agendar cambia el total.
+- Lógica y pruebas: `lib/calendario.mjs`, `lib/pagos.mjs`, `lib/recordatorios.mjs`, `lib/mensajes.mjs`. Prueba E2E local: `node scripts/local-dev/verify-calendario.mjs`.
+
 ## Horarios de visita
 
 - En **Admin → Horarios** se define:
