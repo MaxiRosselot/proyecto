@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { CONDICIONES, MARCA } from './marca.mjs';
+import { CONDICIONES, MARCA, SERVICIOS } from './marca.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -10,12 +10,7 @@ const L = 42, R = 570, W = R - L, FOOT = 751.8;
 const F = { serif: 'Lora-Bold', sans: 'Poppins', bold: 'Poppins-Bold' };
 const money = value => '$' + Math.round(value).toLocaleString('es-CL');
 const metres = value => (Number.isInteger(value) ? String(value) : value.toFixed(2)) + ' m';
-const services = [
-  ['retiro_orden', 'Retiro y orden de artículos', 40000, 'Retiramos todo lo que tengas en el espacio y lo reordenamos una vez instaladas las repisas. Si no se contrata, el área debe estar despejada antes de la instalación.'],
-  ['retiro_basura', 'Retiro de basura', 30000, 'Nos llevamos muebles, cajas, escombros y todo lo que ya no necesites, para que no tengas que preocuparte de desecharlo.'],
-  ['cajas', 'Cajas organizadoras', 15000, 'Cajas plásticas apilables para mantener tus artículos protegidos y bien distribuidos entre los niveles.'],
-  ['bici', 'Soporte de bicicleta/ski', 20000, 'Soportes anclados al muro para que tus artículos deportivos ocupen menos espacio en el suelo.'],
-];
+const services = SERVICIOS;
 const faq = [
   ['¿Qué pasa si las medidas varían en terreno?', 'No hay problema: llevamos el material sobredimensionado para ajustarlo perfectamente a tu espacio al momento de instalar.'],
   ['¿Las repisas son desmontables?', 'Sí. Si te cambias de domicilio puedes llevártelas contigo — te ayudamos con el proceso de desmontaje.'],

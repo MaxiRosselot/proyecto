@@ -95,19 +95,18 @@ try {
   await expect.poll(() => page.getByText('Modelo 3D', { exact: true }).count()).toBeGreaterThanOrEqual(2)
   await shot('02-lista-ordenada.png')
 
-  // Confirmar A desde la lista no debe borrarle el modelo.
-  await page.getByText('Cliente Prueba A').click()
-  await page.getByRole('button', { name: 'Confirmada', exact: true }).click()
-  await expect.poll(async () => (await (await api('get-quotes?cotNum=' + a.numero)).json()).quote.status).toBe('confirmada')
+  // Confirmar A no debe borrarle el modelo. En la lista, confirmar es agendar la instalacion
+  // (lo prueba verify-instalacion.mjs); aca se cambia el estado directo, como lo hace esa pantalla.
+  expect((await api('save-quote', { method: 'POST', data: { cotNum: Number(a.numero), status: 'confirmada' } })).ok()).toBe(true)
   const confirmada = (await (await api('get-quotes?cotNum=' + a.numero)).json()).quote
+  expect(confirmada.status).toBe('confirmada')
   expect(confirmada.proyecto3d).toEqual(a.project3d)
 
   // ── Reabrir A en el cotizador, con su bodega, y regenerarla sin crear otra ──
+  await page.getByRole('button', { name: 'Actualizar' }).click()
   await page.getByRole('button', { name: /^Confirmadas/ }).click()
-  // La tarjeta sigue expandida desde la otra pestaña; un clic en el nombre la cerraria.
-  const abrir = page.getByRole('button', { name: 'Abrir en cotizador' })
-  if (!(await abrir.isVisible())) await page.getByText('Cliente Prueba A').click()
-  await abrir.click()
+  await page.getByText('Cliente Prueba A').click()
+  await page.getByRole('button', { name: 'Abrir en cotizador' }).click()
   await expect(page.getByTestId('numero-cotizacion')).toHaveText('N° ' + a.numero)
   await expect(page.getByText('Guardada', { exact: true })).toBeVisible()
   await expect(page.getByPlaceholder('Nombre completo')).toHaveValue('Cliente Prueba A')

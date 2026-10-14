@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { QUOTE_STATUS_LABELS, C, apiFetch, fmt, fmtDate, styles, DEFAULTS_REPISA, porCreacion } from './utils.js'
 import { hayBorradorSinGuardar } from './PorCotizar.jsx'
+import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx'
+import { fechaLarga } from './whatsappInstalacion.js'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 
@@ -33,6 +35,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
   const [buscar, setBuscar]             = useState('')
   const [abriendo, setAbriendo]         = useState(null)
   const [probandoCorreo, setProbandoCorreo] = useState(false)
+  const [agendandoId, setAgendandoId]   = useState(null)
+  const actualizarLocal = (cotNum, cambios) => setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -206,6 +210,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                     {q.direccion && <span style={{ marginLeft: 10, color: C.textMuted }}>{q.direccion}</span>}
                     {q.creado && <span style={{ marginLeft: 10, color: C.textMuted }}>Creada {String(q.creado).split(/[ ,]/)[0]}</span>}
                     {q.tieneProyecto3d && <span style={{ ...styles.badge(C.purple), marginLeft: 10 }}>Modelo 3D</span>}
+                    {q.instalacion && <span style={{ ...styles.badge(C.green), marginLeft: 10 }}>Instalación {fechaLarga(q.instalacion.fecha).split(',')[1]?.trim()} · {q.instalacion.inicio}</span>}
                   </div>
                 </div>
                 {!isEdit && (
@@ -293,10 +298,21 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                     </div>
                   )}
 
-                  {/* Cambio de estado */}
+                  {q.instalacion && agendandoId !== q.cotNum && (
+                    <ResumenInstalacion quote={q} onReagendar={() => setAgendandoId(q.cotNum)}
+                      onInvitado={cambios => actualizarLocal(q.cotNum, cambios)} />
+                  )}
+
+                  {/* Cambio de estado. Confirmar es agendar la instalacion: ahi se cierra la venta. */}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: rechazandoId === q.cotNum ? 10 : 0 }}>
                     <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Estado</span>
-                    {Object.entries(QUOTE_STATUS_LABELS).map(([key, val]) => (
+                    {Object.entries(QUOTE_STATUS_LABELS).map(([key, val]) => key === 'confirmada' && !q.instalacion ? (
+                      <button key={key} onClick={() => setAgendandoId(agendandoId === q.cotNum ? null : q.cotNum)}
+                        style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                          border: '1.5px solid ' + C.green, background: agendandoId === q.cotNum ? C.green : C.green + '14', color: agendandoId === q.cotNum ? 'white' : C.green }}>
+                        Agendar instalación
+                      </button>
+                    ) : (
                       <button key={key}
                         onClick={() => {
                           if (key === 'rechazada') { setRechazandoId(q.cotNum); setMotivoSelec('') }
@@ -328,6 +344,16 @@ export default function CotizacionesSection({ onAbrirEnCotizador }) {
                       </button>
                     )}
                   </div>
+
+                  {agendandoId === q.cotNum && (
+                    <AgendarInstalacion quote={q} onCancelar={() => setAgendandoId(null)}
+                      onListo={cambios => {
+                        actualizarLocal(q.cotNum, cambios)
+                        setAgendandoId(null)
+                        // Queda en Confirmadas, abierta, con el resumen y el boton de WhatsApp a la vista.
+                        setTab('confirmada'); setExpanded(q.cotNum)
+                      }} />
+                  )}
 
                   {/* Motivo de rechazo */}
                   {rechazandoId === q.cotNum && (

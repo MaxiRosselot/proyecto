@@ -18,6 +18,7 @@ import {
   DURACION_MIN, aHHMM, ahoraEnZona, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario,
 } from '../../netlify/functions/lib/horarios.mjs'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
+import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
 import { armarCorreo } from '../../netlify/functions/lib/correo.mjs'
 import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
 
@@ -69,6 +70,21 @@ function slotDeVisita(v) {
   const { fecha, minutos } = ahoraEnZona(new Date(v.start))
   return `${fecha}T${aHHMM(minutos)}`
 }
+// Calendar falso para las instalaciones: los eventos quedan en data.json (db.eventos).
+const calendarLocal = {
+  events: {
+    async insert({ requestBody }) {
+      const id = 'ev-local-' + randomUUID().slice(0, 8)
+      db.eventos = { ...(db.eventos || {}), [id]: requestBody }; saveData(db)
+      return { data: { id, htmlLink: `${PUBLIC_URL}/#evento-${id}` } }
+    },
+    async patch({ eventId, requestBody }) {
+      db.eventos = { ...(db.eventos || {}), [eventId]: { ...(db.eventos?.[eventId] || {}), ...requestBody } }; saveData(db)
+      return { data: { id: eventId, htmlLink: `${PUBLIC_URL}/#evento-${eventId}` } }
+    },
+  },
+}
+
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
 const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web'])
 
@@ -148,6 +164,14 @@ const routes = {
     })
     return { ok: true, ...resultado }
   },
+  // Mismo contrato que netlify/functions/instalacion.mjs
+  'instalacion': async (body) => {
+    const r = body.accion === 'invitar'
+      ? await invitarClienteInstalacion(cotizaciones, calendarLocal, 'repisas@donmaxi.cl', body)
+      : await agendarInstalacion(cotizaciones, calendarLocal, 'repisas@donmaxi.cl', body)
+    return { ok: true, ...r }
+  },
+  'eventos-local': () => ({ ok: true, eventos: db.eventos || {} }),
   // Mismo contrato que netlify/functions/probar-correo.mjs (el correo queda como .eml)
   'probar-correo': async () => {
     guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })

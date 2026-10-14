@@ -10,10 +10,11 @@ export const HOJA = 'Cotizaciones'
 // correlativo lo llevara el servidor.
 export const NUMERO_INICIAL = 1421
 
-// Columnas A-Q. La Q es nueva: el proyecto del configurador 3D con que se armo la cotizacion.
-export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D']
-export const ULTIMA_COLUMNA = 'Q'
-const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d']
+// Columnas A-R. Q: el proyecto del configurador 3D con que se armo la cotizacion.
+// R: la instalacion agendada (fecha, horas, evento de Calendar), en JSON.
+export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D', 'Instalación (JSON)']
+export const ULTIMA_COLUMNA = 'R'
+const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d', 'instalacion']
 // Lo que se puede cambiar al actualizar. El numero identifica la fila y la fecha de creacion
 // es historia: ninguno de los dos se reescribe.
 const EDITABLES = CAMPOS.filter(c => c !== 'cotNum' && c !== 'creado')
@@ -96,6 +97,7 @@ export function filaACotizacion(valores, { conProyecto = false } = {}) {
     repisas: jsonOr(v(12), []), adicionales: jsonOr(v(13), {}),
     creado: v(14), creadoMs: creadoEnMs(v(14)), pdfUrl: v(15),
     tieneProyecto3d: Boolean(v(16)),
+    instalacion: jsonOr(v(17), null),
   }
   if (conProyecto) {
     try { cotizacion.proyecto3d = decodificarProyecto(v(16)) }
@@ -111,6 +113,7 @@ export function cotizacionAFila(c) {
     c.status || 'por confirmar', c.motivoRechazo || '', c.notas || '',
     JSON.stringify(c.repisas || []), JSON.stringify(c.adicionales || {}),
     c.creado || '', c.pdfUrl || '', codificarProyecto(c.proyecto3d),
+    c.instalacion ? JSON.stringify(c.instalacion) : '',
   ]
 }
 
@@ -199,6 +202,8 @@ export async function actualizarCotizacion(almacen, datos) {
   const encontrada = buscar(await almacen.leerFilas(), cotNum)
   if (!encontrada) throw new ErrorCotizacion(404, `La cotización N° ${cotNum} no existe`)
 
+  // Una hoja creada antes de la columna R no tiene su titulo: se agrega al guardar la primera instalacion.
+  if (datos.instalacion) await almacen.asegurarEncabezado()
   const actual = filaACotizacion(encontrada.valores, { conProyecto: true })
   const cambios = pick(datos, EDITABLES)
   const nueva = { ...actual, ...cambios, cotNum, creado: actual.creado }

@@ -42,6 +42,18 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 - Lógica y pruebas: `netlify/functions/lib/cotizacion-web.mjs`. Prueba E2E local: `node scripts/local-dev/verify-cotiza.mjs`.
   En local los correos quedan como `.eml` en `scripts/local-dev/correos/`.
 
+## Agendar la instalación
+
+- En **Admin → Cotizaciones**, cada cotización tiene **Agendar instalación** (reemplaza a "Confirmada": agendar es confirmar).
+- El panel permite sumar **servicios adicionales con precio editable**, para cuando el cliente los pide después de recibir la cotización. El total se recalcula con IVA.
+- La instalación puede ser **cualquier día**, con hora de inicio y de término.
+- Crea el evento **"Instalación - Nombre"** en el calendario `CALENDAR_ID` (repisas@donmaxi.cl), con dirección y detalle, e **invita al cliente** si hay correo.
+- Sin correo, se agenda igual y después se usa **Invitar por correo**.
+- La cotización queda **confirmada**, con los adicionales y el total al día, y la instalación en la columna **R** de `Cotizaciones`.
+- **Reagendar** mueve el mismo evento.
+- **Avisar por WhatsApp** abre el chat del cliente con el mensaje listo: día, hora, duración y el aviso de hasta 1 hora de retraso.
+- Lógica y pruebas: `netlify/functions/lib/instalaciones.mjs`. Prueba E2E local: `node scripts/local-dev/verify-instalacion.mjs`.
+
 ## Horarios de visita
 
 - En **Admin → Horarios** se define:
