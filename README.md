@@ -69,6 +69,21 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 - **Regenerar PDF**: rehace el PDF con el 3D y el total actual, lo sube a Drive y actualiza el link. Se sugiere solo cuando al agendar cambia el total.
 - Lógica y pruebas: `lib/calendario.mjs`, `lib/pagos.mjs`, `lib/recordatorios.mjs`, `lib/mensajes.mjs`. Prueba E2E local: `node scripts/local-dev/verify-calendario.mjs`.
 
+## Dashboard de instalaciones
+
+- **Admin → Instalaciones**: cuánto entra por mes según la fecha de cada instalación agendada (no cuenta las rechazadas).
+  - vendido, cobrado y por cobrar, con el saldo de trabajos ya hechos en rojo;
+  - realizado vs agendado, ticket promedio y la variación contra el mes anterior.
+- **¿De dónde viene la plata?** tiene dos vistas:
+  - **por servicio**: repisas, retiro y orden, retiro de basura, cajas y soportes;
+  - **por tipo de trabajo**: solo repisas, con retiro y orden, o con otros servicios.
+- Gráficos de los últimos 6 meses (cada barra abre ese mes) y de las semanas del mes.
+- Tabla con filtros: tipo de trabajo y "con saldo".
+  - Al hacer clic en una fila se abre la cotización.
+  - Se puede descargar en CSV para Excel.
+- Todo se puede ver **con IVA o neto**. Si un subtotal se editó a mano, la diferencia aparece como "Ajustes de precio" para que todo cuadre.
+- Lógica y pruebas: `lib/resumen-instalaciones.mjs`. Prueba E2E local: `node scripts/local-dev/verify-instalaciones.mjs`.
+
 ## Horarios de visita
 
 - En **Admin → Horarios** se define:

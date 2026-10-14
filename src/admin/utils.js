@@ -36,7 +36,8 @@ export const SECTIONS = [
   { id: 'calendario',   label: 'Calendario',   icon: 'agenda' },
   { id: 'visitas',      label: 'Visitas',      icon: 'calendar' },
   { id: 'cotizador',    label: 'Cotizar',      icon: 'doc'   },
-  { id: 'cotizaciones', label: 'Cotizaciones', icon: 'files' },
+  { id: 'cotizaciones', label: 'Cotizaciones', icon: 'files', corto: 'Cotiz.' },
+  { id: 'instalaciones', label: 'Instalaciones', icon: 'chart', corto: 'Instal.' },
   { id: 'horarios',     label: 'Horarios',     icon: 'clock' },
 ]
 

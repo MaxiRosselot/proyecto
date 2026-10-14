@@ -6,6 +6,7 @@ import PorCotizarSection   from './admin/PorCotizar.jsx'
 import CotizacionesSection from './admin/Cotizaciones.jsx'
 import HorariosSection     from './admin/Horarios.jsx'
 import CalendarioSection   from './admin/Calendario.jsx'
+import InstalacionesSection from './admin/Instalaciones.jsx'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -15,6 +16,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     files:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>),
     agenda:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="7" y="13" width="4" height="4" rx="1" fill={color} stroke="none"/></svg>),
     clock:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
+    chart:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="7" width="3" height="10" rx="1"/><rect x="16" y="4" width="3" height="13" rx="1"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
   return icons[name] || null
@@ -83,6 +85,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'cotizador')    return <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} cotizacionAbierta={cotizacionParaAbrir} allVisits={allVisits} onVisitCotizada={onVisitCotizada} />
   if (section === 'cotizaciones') return <CotizacionesSection onAbrirEnCotizador={abrirCotizacion} enfocar={cotizacionEnfocada} />
   if (section === 'calendario')   return <CalendarioSection onVerCotizacion={verCotizacion} />
+  if (section === 'instalaciones') return <InstalacionesSection onVerCotizacion={verCotizacion} />
   if (section === 'horarios')     return <HorariosSection />
   return null
 }
@@ -181,7 +184,7 @@ export default function AdminApp() {
             }}>
               {active && <div style={{ position: 'absolute', top: 0, width: 28, height: 2, borderRadius: '0 0 2px 2px', background: C.orange }}/>}
               <Icon name={s.icon} size={19} color={active ? C.orange : '#6B7280'} />
-              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: .2 }}>{s.label}</span>
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: .2, whiteSpace: 'nowrap' }}>{s.corto || s.label}</span>
             </button>
           )
         })}
