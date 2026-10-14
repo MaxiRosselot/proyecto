@@ -1,5 +1,6 @@
-// Textos para el cliente: confirmacion de la instalacion y recordatorios del dia anterior.
+// Textos para el cliente: envio de la cotizacion, confirmacion de la instalacion y recordatorios.
 // Sin dependencias de Node: los usan el cron de recordatorios y el panel admin.
+import { OFERTA } from './marca.mjs'
 
 // Numero chileno en formato internacional sin "+": 9 1234 5678 -> 56912345678.
 export function telefonoWhatsapp(telefono) {
@@ -62,6 +63,23 @@ export function mensajeRecordatorio({ tipo, cliente, fecha, inicio, fin, ubicaci
     ...(ubicacion ? ['', `📍 ${ubicacion}`] : []),
     '',
     'Cualquier cambio, respóndanos por aquí.',
+    '',
+    'Repisas Don Maxi',
+  ].join('\n')
+}
+
+const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
+
+// Para mandar la cotizacion por WhatsApp: con el link al PDF si ya esta en Drive.
+export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl }) {
+  return [
+    `${saludo(nombre)} Le envío su cotización N° ${cotNum} de Repisas Don Maxi 📄`,
+    '',
+    `Total: ${pesos(total)} con IVA incluido.`,
+    ...(pdfUrl ? [`Puede verla aquí: ${pdfUrl}`] : []),
+    '',
+    `Si la acepta dentro de las próximas ${OFERTA.horas} horas, tiene un ${OFERTA.descuento}% de descuento adicional.`,
+    'Cualquier duda, respóndanos por aquí.',
     '',
     'Repisas Don Maxi',
   ].join('\n')

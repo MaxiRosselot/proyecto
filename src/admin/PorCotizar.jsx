@@ -3,19 +3,12 @@ import { DEFAULTS_REPISA, C, adminFetch, apiFetch, fmtDate, fmt, styles } from '
 import { precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } from './preciosRepisas.js'
 import './PorCotizar.css'
 import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
+import EnviarCotizacion from './EnviarCotizacion.jsx'
+import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 
-const AD_NOMBRES_INICIALES = {
-  retiro_orden: 'Retiro y orden de articulos',
-  retiro_basura: 'Retiro de basura',
-  cajas: 'Cajas organizadoras',
-  bici: 'Soporte bicicleta / ski',
-}
-const ADICIONALES_INICIALES = {
-  qty_retiro_orden: 0,  precio_retiro_orden: 40000,
-  qty_retiro_basura: 0, precio_retiro_basura: 30000,
-  qty_cajas: 0,         precio_cajas: 15000,
-  qty_bici: 0,          precio_bici: 20000,
-}
+// Nombres y precios de lista de los servicios: los mismos del PDF (lib/marca.mjs).
+const AD_NOMBRES_INICIALES = Object.fromEntries(SERVICIOS.map(([clave, nombre]) => [clave, nombre]))
+const ADICIONALES_INICIALES = Object.fromEntries(SERVICIOS.flatMap(([clave, , precio]) => [['qty_' + clave, 0], ['precio_' + clave, precio]]))
 
 function repisaPorDefecto(tabla) {
   const { l, p, a } = DEFAULTS_REPISA
@@ -234,6 +227,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [generating, setGenerating] = useState(false)
   const [pdfUrl, setPdfUrl]         = useState(null)
   const [pdfBlob, setPdfBlob]       = useState(null)
+  const [pdfDrive, setPdfDrive]     = useState('')
   const [totalInfo, setTotalInfo]   = useState(saved?.totalInfo || { subtotal: 0, iva: 0, total: 0 })
   const [autoSaved, setAutoSaved]   = useState(false)
   const [error, setError]           = useState('')
@@ -257,7 +251,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setProject3d(q.proyecto3d || null)
     setCotGuardada({ cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
     setTotalInfo({ subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
-    setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
+    setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
   }, [cotizacionAbierta])
 
   async function pedirSiguienteNumero() {
@@ -295,7 +289,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setAdicionales(ADICIONALES_INICIALES)
     setTotalInfo({ subtotal: 0, iva: 0, total: 0 })
     setProject3d(null)
-    setPdfUrl(null); setPdfBlob(null); setAutoSaved(false); setError('')
+    setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
     setSelectedVisit(null); saveState({})
   }
 
@@ -419,7 +413,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     if (repisas.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.v) || r.v <= 0))) return setError('Ingresa el precio neto de cada rack completo antes de generar la cotización.')
     if (mode === 'visita' && !selectedVisit) return
     if (mode === 'manual' && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
-    setGenerating(true); setError(''); setPdfUrl(null); setAutoSaved(false)
+    setGenerating(true); setError(''); setPdfUrl(null); setPdfDrive(''); setAutoSaved(false)
 
     try {
       const grafica3d = await pedirGrafica3d()
@@ -479,6 +473,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           body: JSON.stringify({ cotNum: numero, pdfUrl: uploadRes.viewUrl }),
         })
         if (!conPdf.ok) throw new Error(conPdf.error || 'No se guardó el link del PDF')
+        setPdfDrive(uploadRes.viewUrl)
       } catch (e) {
         console.warn('upload-pdf error:', e.message)
         avisoPdf = 'La cotización N° ' + numero + ' quedó guardada, pero el PDF no se pudo subir a Drive (' + e.message + '). Vuelve a generar para reintentar.'
@@ -759,6 +754,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
                 style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
+              {autoSaved && <EnviarCotizacion pdfBlob={pdfBlob} cotizacion={{ nombre: cliente.nombre, telefono: cliente.celular || cliente.telefono, cotNum: cotGuardada?.cotNum, total: totalInfo.total, pdfUrl: pdfDrive }} />}
             </div>
           </div>
         </div>

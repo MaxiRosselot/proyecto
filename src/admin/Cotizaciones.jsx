@@ -5,6 +5,7 @@ import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx
 import { fechaLarga } from './whatsappInstalacion.js'
 import { BadgePago, PagosCotizacion } from './PagosCotizacion.jsx'
 import { regenerarPdf } from './regenerarPdf.js'
+import EnviarCotizacion from './EnviarCotizacion.jsx'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 
@@ -321,7 +322,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                     {pdfNuevo[q.cotNum]?.blobUrl && <a href={pdfNuevo[q.cotNum].blobUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: C.green }}>✓ PDF actualizado · ver</a>}
                   </div>
                   {q.pdfUrl && (
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
                       <a href={q.pdfUrl} target="_blank" rel="noreferrer"
                         style={{ ...styles.btnPrimary, fontSize: 12, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -332,6 +333,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         Descargar
                       </a>
+                      <EnviarCotizacion cotizacion={q} tamano={12} />
                     </div>
                   )}
 

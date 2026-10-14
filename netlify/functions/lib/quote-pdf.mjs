@@ -11,6 +11,7 @@ const F = { serif: 'Lora-Bold', sans: 'Poppins', bold: 'Poppins-Bold' };
 const money = value => '$' + Math.round(value).toLocaleString('es-CL');
 const metres = value => (Number.isInteger(value) ? String(value) : value.toFixed(2)) + ' m';
 const services = SERVICIOS;
+const SERVICES_BAND = 16;
 const faq = [
   ['¿Qué pasa si las medidas varían en terreno?', 'No hay problema: llevamos el material sobredimensionado para ajustarlo perfectamente a tu espacio al momento de instalar.'],
   ['¿Las repisas son desmontables?', 'Sí. Si te cambias de domicilio puedes llevártelas contigo — te ayudamos con el proceso de desmontaje.'],
@@ -104,11 +105,12 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   text(`Válida hasta ${fecha(new Date(now.getTime() + 7 * 86400000))}`, 330, 41.6, R - 330, 7.5, C.muted, F.sans, { align: 'right' });
   box(L, 60.4, W, 28.8, C.accent, undefined, 6);
   withIcon('Repisas Don Maxi — N.º 1 en Google (', star, `${MARCA.rating} · ${MARCA.resenas} reseñas)`, L, 68.7, 9.75, '#FFFFFF', F.bold, 'center');
-  // Drawings give up to 110 pt of height so a quote of about six rows still ends on page 1.
+  // Drawings give up to 125 pt of height so a quote of about six rows still ends on page 1.
   // Una fila con titulo (rack o repisa con colgador) ocupa 13 pt mas.
   const heading = r => r.kind === 'rack' ? `${r.label} · cajas incluidas` : r.colgador ? 'Repisa con colgador' : undefined;
-  const tableHeight = rows.reduce((h, r) => h + 23.85 + (heading(r) ? 13 : 0), 0) + extras.filter(r => r.qty > 0).length * 23.85;
-  const shrink = Math.min(110, Math.max(0, tableHeight - 47.7));
+  const contracted = extras.filter(r => r.qty > 0);
+  const tableHeight = rows.reduce((h, r) => h + 23.85 + (heading(r) ? 13 : 0), 0) + contracted.length * 23.85 + (contracted.length ? SERVICES_BAND : 0);
+  const shrink = Math.min(125, Math.max(0, tableHeight - 47.7));
   // Maxi's frames: 227 x 283 pt isometric and 160 x 283 pt plan, centred. The plan frame follows the
   // plan's own proportions (a long bodega is narrow, a square one wide); the isometric takes the rest.
   const images = Object.fromEntries(Object.entries(views).map(([k, v]) => [k, v && doc.openImage(v)]));
@@ -153,7 +155,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   function row(cells, value, units, heading) {
     if (y > 640) { page(FOOTER_MATERIAL, 'Detalle (continuación)'); y = 120; tableHeader(); }
     if (heading) { text(heading, col.largo, y + 5.3, 420, 8.6, C.ink, F.bold); y += 13; }
-    cells.forEach(([v, x]) => text(v, x, y + 5.3, 80, 9, C.ink, F.sans, { lineBreak: false }));
+    cells.forEach(([v, x, w = 80]) => text(v, x, y + 5.3, w, 9, C.ink, F.sans, { lineBreak: false, ellipsis: true, height: 12 }));
     text(money(value), col.valorEnd - 100, y + 5.3, 100, 9, C.ink, F.sans, { align: 'right' });
     text(money(value * units), col.totalEnd - 100, y + 5.3, 100, 9, C.ink, F.bold, { align: 'right' });
     y += 23.85; rule(y, C.rowLine);
@@ -162,7 +164,14 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   for (const r of rows)
     row([[metres(r.largo), col.largo], [metres(r.prof), col.prof], [metres(r.alto), col.alto], [r.niveles, col.niveles], [r.unidades, col.uds]], r.valor, r.unidades, heading(r));
   // Contracted services are charged, so they are listed with the items (the handoff's README: "agréguenlo como una fila más").
-  for (const r of extras.filter(r => r.qty > 0)) row([[r.title, col.largo], [r.qty, col.uds]], r.price, r.qty);
+  // Los servicios van aparte, bajo su propia franja, y el nombre ocupa el ancho de las medidas.
+  if (contracted.length) {
+    if (y > 640 - SERVICES_BAND) { page(FOOTER_MATERIAL, 'Detalle (continuación)'); y = 120; tableHeader(); }
+    doc.rect(L, y, W, SERVICES_BAND).fill(C.card);
+    label('Servicios adicionales', col.largo, y + 5.2, 300, C.muted);
+    y += SERVICES_BAND; rule(y, C.rowLine);
+  }
+  for (const r of contracted) row([[r.title, col.largo, col.uds - col.largo - 12], [r.qty, col.uds]], r.price, r.qty);
 
   if (y > 540) { page(FOOTER_MATERIAL, 'Resumen de cotización'); y = 110; }
   y += 33.5;
