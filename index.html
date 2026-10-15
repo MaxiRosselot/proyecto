@@ -11,6 +11,23 @@
     <meta property="og:description" content="Agenda tu visita en minutos. Fechas habilitadas, confirmación inmediata." />
     <meta property="og:image" content="/og-cover.png" />
     <meta name="theme-color" content="#FF931E" />
+    <script>
+      // El panel (/admin) se instala como app en el iPhone: "Compartir → Agregar a inicio".
+      // Solo ahi: la pagina publica sigue siendo una pagina web normal.
+      if (location.pathname.startsWith('/admin')) {
+        var etiquetas = [
+          ['link', { rel: 'manifest', href: '/admin.webmanifest' }],
+          ['link', { rel: 'apple-touch-icon', href: '/app/icon-180.png' }],
+          ['meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }],
+          ['meta', { name: 'mobile-web-app-capable', content: 'yes' }],
+          ['meta', { name: 'apple-mobile-web-app-title', content: 'Don Maxi' }],
+          ['meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }],
+        ]
+        etiquetas.forEach(function (e) { var el = document.createElement(e[0]); for (var k in e[1]) el.setAttribute(k, e[1][k]); document.head.appendChild(el) })
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', '#18181B')
+        document.title = 'Don Maxi · Panel'
+      }
+    </script>
 
     <style>
       :root{

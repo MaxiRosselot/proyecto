@@ -115,6 +115,17 @@ Lógica y pruebas: `lib/reservas.mjs`, `lib/reserva-cliente.mjs`, `lib/mercadopa
 
 **Cotizaciones**: cada tarjeta parte con el **siguiente paso**: enviar, verificar la transferencia, agendar o cobrar el saldo. Debajo están **Cliente y montos**, **Documento**, **Enviar al cliente**, **Instalación** y **Pagos**. Cambiar el estado y eliminar quedan en "Más acciones".
 
+## App del panel en el iPhone
+
+El panel se instala como app, sin App Store:
+1. Abre `https://<sitio>/admin` en **Safari**.
+2. Toca **Compartir → Agregar a inicio**.
+3. Queda el ícono "Don Maxi", que abre el panel a pantalla completa.
+
+- Solo `/admin` declara el manifest (`public/admin.webmanifest`) y el ícono. La página pública sigue siendo web normal.
+- Los íconos (`public/app/`) se generan desde `public/logo.png` con `node scripts/generar-iconos.mjs`.
+- Prueba local: `node scripts/local-dev/verify-app.mjs`.
+
 ## Dashboard de instalaciones
 
 - **Admin → Instalaciones**: cuánto entra por mes según la fecha de cada instalación agendada (no cuenta las rechazadas).

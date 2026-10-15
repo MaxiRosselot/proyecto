@@ -88,6 +88,7 @@ export default function DashboardSection({ navigateTo }) {
       // Cotizaciones
       const porConfirmar = quotes.filter(q => q.status === 'por confirmar')
       const confirmadas  = quotes.filter(q => q.status === 'confirmada')
+      const porVerificar = quotes.filter(q => q.reserva?.estado === 'por verificar')
 
       // Cotizaciones sin respuesta hace 3+ dias
       const tresDias = new Date(hoy); tresDias.setDate(hoy.getDate() - 3)
@@ -103,7 +104,7 @@ export default function DashboardSection({ navigateTo }) {
         return d >= hoy && d < manana && (v.status === 'agendada' || v.status === 'reagendar')
       })
 
-      setData({ visitasProximas, pendientes, realizadasSinCotizar, porConfirmar, confirmadas, sinRespuesta, visitasHoy })
+      setData({ visitasProximas, pendientes, realizadasSinCotizar, porConfirmar, confirmadas, sinRespuesta, visitasHoy, porVerificar })
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [])
@@ -113,7 +114,7 @@ export default function DashboardSection({ navigateTo }) {
   if (loading) return <div style={styles.empty}>Cargando resumen...</div>
   if (!data)   return null
 
-  const { visitasProximas, pendientes, realizadasSinCotizar, porConfirmar, confirmadas, sinRespuesta, visitasHoy } = data
+  const { visitasProximas, pendientes, realizadasSinCotizar, porConfirmar, confirmadas, sinRespuesta, visitasHoy, porVerificar } = data
   const now = new Date()
   const hoy = now.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' })
 
@@ -126,6 +127,14 @@ export default function DashboardSection({ navigateTo }) {
         </div>
         <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
       </div>
+
+      {/* Lo urgente primero: transferencias que el cliente avisó y hay que revisar en la cuenta. */}
+      {porVerificar.length > 0 && (
+        <button data-testid="aviso-transferencias" onClick={() => navigateTo('cotizaciones')}
+          style={{ width: '100%', textAlign: 'left', marginBottom: 16, padding: '14px 16px', borderRadius: 14, border: '1.5px solid #FCD34D', background: '#FFFBEB', cursor: 'pointer', fontFamily: 'inherit', color: '#92400E', fontSize: 14 }}>
+          💸 <strong>{porVerificar.length} {porVerificar.length === 1 ? 'transferencia' : 'transferencias'} por verificar</strong> · {porVerificar.map(q => q.nombre).join(', ')} <span style={{ float: 'right', fontWeight: 700 }}>Revisar →</span>
+        </button>
+      )}
 
       {/* KPIs */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -160,7 +169,8 @@ export default function DashboardSection({ navigateTo }) {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+      {/* Dos columnas en computador; una sola en el celular (antes se salian de la pantalla). */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 16, alignItems: 'start' }}>
         {/* Visitas proximas */}
         <SectionCard title="Proximas visitas (7 dias)" action={() => navigateTo('visitas')} actionLabel="Ver todas">
           {visitasProximas.length === 0

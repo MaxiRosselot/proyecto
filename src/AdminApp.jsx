@@ -158,7 +158,8 @@ export default function AdminApp() {
   // MOBILE
   if (isMobile) return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: C.bg, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <header style={{ background: C.sidebar, padding: '0 16px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40 }}>
+      {/* Instalada como app en el iPhone, la pantalla llega hasta arriba: el encabezado deja libre la hora y la isla. */}
+      <header style={{ background: C.sidebar, padding: '0 16px', paddingTop: 'env(safe-area-inset-top)', height: 'calc(52px + env(safe-area-inset-top))', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40 }}>
         <img src="/logo.png" alt="Don Maxi" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} onError={e => { e.target.style.display='none' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name={currentSection?.icon} size={15} color={C.orange} />
@@ -169,7 +170,7 @@ export default function AdminApp() {
           <Icon name="logout" size={18} color="#6B7280" />
         </button>
       </header>
-      <main style={{ flex: 1, padding: '16px', paddingBottom: 80, overflowY: 'auto' }}>
+      <main style={{ flex: 1, padding: '16px', paddingBottom: 'calc(80px + env(safe-area-inset-bottom))', overflowY: 'auto' }}>
         <SectionContent {...contentProps} />
       </main>
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sidebar, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>

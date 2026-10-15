@@ -52,7 +52,7 @@ function Detalle({ evento, onCerrar, onVerCotizacion }) {
   return (
     <div onClick={e => e.target === e.currentTarget && onCerrar()} role="dialog" aria-modal="true" aria-label={evento.cliente || evento.titulo}
       style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(17,24,39,.35)', display: 'flex', justifyContent: 'flex-end' }}>
-      <div style={{ width: 'min(420px, 100%)', height: '100%', background: 'white', boxShadow: '-12px 0 40px rgba(0,0,0,.18)', padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ width: 'min(420px, 100%)', height: '100%', background: 'white', boxShadow: '-12px 0 40px rgba(0,0,0,.18)', padding: 24, paddingTop: 'max(24px, env(safe-area-inset-top))', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ ...styles.badge(t.color) }}>{t.nombre}</span>
           <button onClick={onCerrar} aria-label="Cerrar" style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: C.textMuted }}>✕</button>
