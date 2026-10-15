@@ -9,7 +9,7 @@
 // en los tests son falsas. La logica es la misma.
 import { precioRepisa } from '../../../src/admin/preciosRepisas.js'
 import { actualizarCotizacion, crearCotizacion, listarCotizaciones, siguienteDisponible } from './cotizaciones.mjs'
-import { MARCA, OFERTA, WHATSAPP } from './marca.mjs'
+import { MARCA, OFERTA, TEXTO_OFERTA, WHATSAPP } from './marca.mjs'
 import { explicarErrorCorreo } from './correo.mjs'
 
 export const NOTA_WEB = 'Cotización web: la armó el cliente en /cotiza'
@@ -77,22 +77,21 @@ export function filasConPrecio(modulos, tabla) {
 const pesos = n => '$' + Math.round(n).toLocaleString('es-CL')
 const escapar = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-const fechaHora = d => new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' }).format(d)
 const linkWhatsapp = texto => `https://wa.me/${WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(texto)}`
 
 // El cliente ya midio: el correo empuja a cerrar ahora (pago o WhatsApp), no a agendar una visita.
-export function correoCliente({ cliente, cotNum, total, modulos, ofertaHasta, avisoA, linkPago = MARCA.linkPago }) {
+export function correoCliente({ cliente, cotNum, total, modulos, avisoA, linkPago = MARCA.linkPago }) {
   const nombre = cliente.nombre.split(' ')[0]
   const lineas = [
     `Hola ${nombre}:`,
     '',
     `Te adjuntamos la cotización N° ${cotNum} de las repisas que armaste: ${modulos} ${modulos === 1 ? 'módulo' : 'módulos'} por ${pesos(total)} con IVA incluido.`,
     '',
-    `Acéptala antes del ${fechaHora(ofertaHasta)} y obtén ${OFERTA.descuento}% de descuento adicional.`,
+    `${TEXTO_OFERTA}.`,
     '',
     'Para reservar tu instalación:',
-    `• Paga en línea (débito o crédito, hasta 3 cuotas sin interés): ${linkPago}`,
-    `• O por transferencia: ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
+    `• Elige tu día y paga aquí (transferencia con ${OFERTA.descuento}% de descuento, o Mercado Pago): ${linkPago}`,
+    `• Datos para transferir: ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
     `• O confírmanos por WhatsApp: ${linkWhatsapp(`Hola, quiero aceptar la cotización N° ${cotNum}`)}`,
     '',
     'Puedes abonar el 50% para reservar y pagar el resto al terminar la instalación. Garantía de 5 años.',
@@ -123,7 +122,6 @@ export function correoAviso({ cliente, cotNum, total, modulos, pdfUrl, avisoA })
 export async function procesarCotizacionWeb(body, deps) {
   // linkPago: el link de pago de cada cotizacion (lib/mercadopago.mjs); sin el, el link fijo.
   const { tabla, almacen, generarPdf, subirPdf, enviarCorreo, avisoA, ahora = new Date(), linkPago: linkDe = () => MARCA.linkPago } = deps
-  const ofertaHasta = new Date(ahora.getTime() + OFERTA.horas * 3600 * 1000)
   const { cliente, modulos, proyecto3d, vistas } = validarSolicitud(body)
   const repisas = filasConPrecio(modulos, tabla)
 
@@ -156,7 +154,7 @@ export async function procesarCotizacionWeb(body, deps) {
 
   const adjunto = { nombre: nombreArchivo, tipo: 'application/pdf', contenido: pdf.bytes }
   const linkPago = linkDe(numero)
-  const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, ofertaHasta, avisoA, linkPago }
+  const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, avisoA, linkPago }
   let correoEnviado = true
   try { await enviarCorreo({ ...correoCliente(datos), adjuntos: [adjunto] }) }
   catch (e) {
@@ -176,7 +174,7 @@ export async function procesarCotizacionWeb(body, deps) {
     cotNum: String(numero), total: pdf.total, correoEnviado,
     // El PDF va en la respuesta para verlo en la pantalla final aunque el correo o Drive fallen.
     pdfBase64: Buffer.from(pdf.bytes).toString('base64'), pdfUrl,
-    oferta: { hasta: ofertaHasta.toISOString(), descuento: OFERTA.descuento },
+    oferta: { descuento: OFERTA.descuento, medio: OFERTA.medio },
     pago: { link: linkPago, razonSocial: MARCA.razonSocial, rut: MARCA.rut, banco: MARCA.banco, tipoCuenta: MARCA.tipoCuenta, numeroCuenta: MARCA.numeroCuenta },
     whatsapp: WHATSAPP,
   }

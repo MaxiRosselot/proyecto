@@ -7,12 +7,12 @@ test('mensaje de la cotizacion: numero, total, link al PDF y la oferta', () => {
   assert.match(texto, /^¡Hola Marta! Le envío su cotización N° 1579/)
   assert.match(texto, /Total: \$303\.450 con IVA incluido\./)
   assert.match(texto, /Puede verla aquí: https:\/\/drive\.google\.com\/file\/d\/abc\/view/)
-  assert.match(texto, /48 horas, tiene un 10% de descuento adicional/)
+  assert.match(texto, /Si paga por transferencia, tiene un 10% de descuento\./)
 })
 
-test('con link de pago el mensaje invita a pagar en linea', () => {
-  const texto = mensajeCotizacion({ nombre: 'Ana', cotNum: 3, total: 1000, linkPago: 'https://donmaxi.example/pagar?c=3&t=x' })
-  assert.match(texto, /pagar en línea \(total o abono del 50%\): https:\/\/donmaxi\.example\/pagar\?c=3&t=x/)
+test('con su link el mensaje invita a elegir el dia y pagar', () => {
+  const texto = mensajeCotizacion({ nombre: 'Ana', cotNum: 3, total: 1000, linkPago: 'https://donmaxi.example/reserva?c=3&t=x' })
+  assert.match(texto, /elegir el día de su instalación y pagar \(total o abono del 50%\): https:\/\/donmaxi\.example\/reserva\?c=3&t=x/)
 })
 
 test('sin link de Drive el mensaje no promete el PDF', () => {

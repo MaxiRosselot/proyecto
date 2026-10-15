@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { CONDICIONES, MARCA, OFERTA, SERVICIOS } from './marca.mjs';
+import { CONDICIONES, MARCA, SERVICIOS, TEXTO_OFERTA } from './marca.mjs';
 import { nombreServicio, porcentajeDescuento } from './totales.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -198,7 +198,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   box(L, y, W, 32.5, C.amber, C.amberLine);
   withIcon('', clock, descuento
     ? `Incluye ${descuentoPct}% de descuento sobre el precio de lista`
-    : `Acéptala dentro de las próximas ${OFERTA.horas} horas y obtén ${OFERTA.descuento}% de descuento adicional`, L, y + 11, 9, C.amberInk, F.bold, 'center');
+    : TEXTO_OFERTA, L, y + 11, 9, C.amberInk, F.bold, 'center');
   y += 40.8;
   box(L, y, W, 77.3, C.card, C.cardLine);
   label('Transferencia', 56.2, y + 15.2);
@@ -206,10 +206,12 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   doc.moveTo(306, y + 12).lineTo(306, y + 65).strokeColor(C.frame).lineWidth(.75).stroke();
   // El link de pago de esta cotizacion (lo arma el servidor); si no hay, el link fijo de Maxi.
   const payUrl = typeof data.payment_url === 'string' && /^https?:\/\//.test(data.payment_url) ? data.payment_url : MARCA.linkPago;
-  label('Link de pago', 319.9, y + 15.2);
-  text('Hasta 3 cuotas sin interés.', 319.9, y + 28.8, 230, 8.62, C.body);
-  withIcon('Pagar cotización', arrow, '', 319.9, y + 45.4, 9.38, C.accent, F.bold, 'left', 230);
-  doc.link(319.9, y + 44, 95, 14, payUrl);
+  // Con el link de reserva el cliente elige su dia y paga; con el link fijo, solo paga.
+  const reserva = payUrl.includes('/reserva?');
+  label(reserva ? 'Agenda y paga en línea' : 'Link de pago', 319.9, y + 15.2);
+  text(reserva ? 'Elige el día de tu instalación y paga.' : 'Hasta 3 cuotas sin interés.', 319.9, y + 28.8, 230, 8.62, C.body);
+  withIcon(reserva ? 'Agendar y pagar' : 'Pagar cotización', arrow, '', 319.9, y + 45.4, 9.38, C.accent, F.bold, 'left', 230);
+  doc.link(319.9, y + 44, 110, 14, payUrl);
 
   // Page 2: optional services, gross prices shown next to net.
   page('Consulta disponibilidad de cada servicio según tu comuna', 'Servicios adicionales', 'Puedes sumarlos a tu cotización si los necesitas. Precio neto y total con IVA incluido.');

@@ -89,7 +89,7 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
         <span style={{ fontSize: 13, color: C.textSub }}>%</span>
         <button type="button" onClick={() => descuento(totales.descuentoPct === OFERTA.descuento ? 0 : OFERTA.descuento)} aria-pressed={totales.descuentoPct === OFERTA.descuento}
           style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 10px', ...(totales.descuentoPct === OFERTA.descuento ? { borderColor: C.green, color: C.green, background: C.green + '12' } : {}) }}>
-          Oferta {OFERTA.horas} h · {OFERTA.descuento}%
+          Transferencia · {OFERTA.descuento}%
         </button>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 13, color: C.textSub, marginBottom: 14 }}>

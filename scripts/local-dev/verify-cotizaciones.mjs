@@ -71,7 +71,7 @@ try {
   await expect(whatsapp).toHaveAttribute('href', /local-pdf/)
   const mensaje = decodeURIComponent(await whatsapp.getAttribute('href'))
   expect(mensaje).toContain(`cotización N° ${a.numero} de Repisas Don Maxi`)
-  expect(mensaje).toMatch(new RegExp(`pagar en línea .*?/pagar\\?c=${a.numero}&t=`))
+  expect(mensaje).toMatch(new RegExp(`elegir el día de su instalación y pagar .*?/reserva\\?c=${a.numero}&t=`))
   await shot('01-cotizacion-a-guardada.png')
   const b = await cotizar('Cliente Prueba B', BODEGA_B)
   expect(Number(a.numero)).toBe(siguienteInicial)

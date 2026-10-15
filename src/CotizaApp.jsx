@@ -13,7 +13,6 @@ const ENDPOINT = '/.netlify/functions/cotizacion-web'
 
 const pesos = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const soloDigitos = s => String(s).replace(/[^0-9]/g, '')
-const fechaHora = iso => new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' }).format(new Date(iso))
 
 function urlConfigurador() {
   const url = new URL('/embed', URL_3D)
@@ -175,8 +174,8 @@ export default function CotizaApp() {
     finally { clearInterval(avance); clearInterval(reloj); setProgreso(null); setEnviando(false) }
   }
 
-  // El cliente ya tiene sus medidas: la pantalla final empuja a cerrar ahora, con la oferta
-  // de 48 horas, el pago en linea, la transferencia o el WhatsApp.
+  // El cliente ya tiene sus medidas: la pantalla final empuja a cerrar ahora: elegir su dia y
+  // pagar (transferencia con descuento o Mercado Pago), o aceptar por WhatsApp.
   if (resultado) {
     const { cotNum, total, oferta, pago, whatsapp, pdfDisponible } = resultado
     const mensaje = `Hola, quiero aceptar la cotización N° ${cotNum} por ${pesos(total)}`
@@ -198,15 +197,15 @@ export default function CotizaApp() {
           )}
 
           <div className="ctz-oferta">
-            <strong>{oferta.descuento}% de descuento adicional</strong>
-            <span>si la aceptas antes del {fechaHora(oferta.hasta)}</span>
+            <strong>{oferta.descuento}% de descuento pagando por transferencia</strong>
+            <span>Elige el día de tu instalación y reserva en un par de minutos</span>
           </div>
 
           <div className="ctz-acciones">
-            <a className="ctz-boton" href={pago.link} target="_blank" rel="noreferrer">Pagar y reservar instalación</a>
+            <a className="ctz-boton" href={pago.link}>Agendar y pagar mi instalación</a>
             <a className="ctz-boton whatsapp" href={`https://wa.me/${soloDigitos(whatsapp)}?text=${encodeURIComponent(mensaje)}`} target="_blank" rel="noreferrer">Aceptar por WhatsApp</a>
           </div>
-          <p className="ctz-nota">Puedes abonar el 50% para reservar y pagar el resto al terminar. Débito, crédito (hasta 3 cuotas sin interés) o transferencia.</p>
+          <p className="ctz-nota">Puedes abonar el 50% para reservar y pagar el resto al terminar. Transferencia, o débito y crédito con Mercado Pago.</p>
 
           <details className="ctz-transferencia">
             <summary>Pagar por transferencia</summary>

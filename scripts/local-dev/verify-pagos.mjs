@@ -27,40 +27,37 @@ try {
     return r.json()
   }
 
-  // Cotizacion recien creada: $200.000 neto → $238.000; con la oferta, $214.200.
+  // Cotizacion recien creada: $200.000 neto → $238.000.
   const creada = await api('save-quote', { crear: true, nombre: 'Rocío Fuentes', email: 'rocio@example.cl', telefono: '9 5555 1234', direccion: 'Los Leones 200',
     subtotal: 200000, iva: 38000, total: 238000, repisas: [{ largo: 2.43, prof: .48, alto: 2, niveles: 4, unidades: 1, valor: 200000 }], adicionales: {} })
-  expect(creada.linkPago).toMatch(new RegExp(`^${base}/pagar\\?c=${creada.cotNum}&t=`))
+  expect(creada.linkPago).toMatch(new RegExp(`^${base}/reserva\\?c=${creada.cotNum}&t=`))
   const { quote } = await api('get-quotes?cotNum=' + creada.cotNum)
   expect(quote.linkPago).toBe(creada.linkPago)
 
-  // ── El cliente abre el link en el celular ──
+  // ── El cliente abre el link, elige el primer bloque libre y abona el 50% con Mercado Pago ──
   const cliente = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   cliente.on('pageerror', e => errors.push(e.stack || e.message))
+  // Un link alterado no muestra nada.
+  expect((await cliente.request.get(`${base}/.netlify/functions/reserva?c=${creada.cotNum}&t=alterado`)).status()).toBe(404)
   await cliente.goto(creada.linkPago)
   await expect(cliente.getByRole('heading', { name: /Hola Rocío/ })).toBeVisible()
-  await expect(cliente.getByText(/10% de descuento si pagas antes/)).toBeVisible()
-  await expect(cliente.getByRole('link', { name: /Pagar el total/ })).toContainText(pesos(214200))
-  await expect(cliente.getByRole('link', { name: /Abonar el 50%/ })).toContainText(pesos(107100))
-  await cliente.screenshot({ path: path.join(evidence, '01-pagar-celular.png'), fullPage: true })
-  // Un link alterado no muestra nada.
-  expect((await cliente.request.get(creada.linkPago.replace(/t=[^&]+/, 't=alterado'))).status()).toBe(404)
-
-  await cliente.getByRole('link', { name: /Abonar el 50%/ }).click()
+  await cliente.locator('.rsv-bloque:not([disabled])').first().click()
+  await cliente.getByRole('button', { name: 'Continuar' }).click()
+  await cliente.getByRole('button', { name: /Mercado Pago/ }).click()
+  await cliente.getByRole('button', { name: /Abono 50% ahora/ }).click()
+  await cliente.getByRole('button', { name: `Pagar ${pesos(119000)} con Mercado Pago` }).click()
   await expect(cliente.getByText('Mercado Pago · simulado')).toBeVisible()
   await cliente.getByRole('button', { name: 'Pagar (simulado)' }).click()
-  await expect(cliente.getByRole('heading', { name: /Pago recibido/ })).toBeVisible()
+  // Vuelve agendado y con el saldo por pagar.
+  await expect(cliente.getByRole('heading', { name: 'Tu instalación' })).toBeVisible({ timeout: 20000 })
+  await expect(cliente.getByText(/Te queda un saldo de \$119\.000/)).toBeVisible()
   await cliente.screenshot({ path: path.join(evidence, '02-pago-recibido.png'), fullPage: true })
 
-  // Quedo registrado solo: abono, oferta aplicada y cotizacion confirmada.
+  // Quedo registrado solo: abono por Mercado Pago (sin descuento) y cotizacion confirmada.
   const pagada = (await api('get-quotes?cotNum=' + creada.cotNum)).quote
   expect(pagada.status).toBe('confirmada')
-  expect(pagada.adicionales.descuento_pct).toBe(10)
-  expect(Number(pagada.total)).toBe(214200)
-  expect(pagada.pagos.map(p => [p.monto, p.medio])).toEqual([[107100, 'Mercado Pago']])
-  // Volver a abrir el link: solo queda el saldo.
-  await cliente.goto(creada.linkPago)
-  await expect(cliente.getByRole('link', { name: /Pagar el saldo/ })).toContainText(pesos(107100))
+  expect(Number(pagada.total)).toBe(238000)
+  expect(pagada.pagos.map(p => [p.monto, p.medio])).toEqual([[119000, 'Mercado Pago']])
 
   // ── En el panel: el pago en linea, la boleta y el link para cobrar el saldo ──
   await admin.getByRole('navigation').getByRole('button', { name: 'Cotizaciones', exact: true }).click()
@@ -69,18 +66,20 @@ try {
   const tarjeta = admin.locator('#cot-' + creada.cotNum)
   const pagos = tarjeta.getByTestId('pagos')
   await expect(pagos).toContainText('Mercado Pago (en línea)')
-  await expect(pagos).toContainText('saldo ' + pesos(107100))
-  await expect(pagos.getByRole('button', { name: 'Copiar link de pago' })).toBeVisible()
-  await expect(tarjeta.getByRole('link', { name: 'WhatsApp al cliente' })).toHaveCount(0) // sin PDF todavia
+  await expect(pagos).toContainText('saldo ' + pesos(119000))
+  await expect(tarjeta.getByTestId('siguiente-paso').getByRole('button', { name: 'Copiar link para pagar' })).toBeVisible()
+  await expect(tarjeta.getByTestId('instalacion-agendada')).toBeVisible()
   await pagos.getByRole('button', { name: 'Anotar boleta' }).click()
   await pagos.getByLabel('N° de boleta').fill('4521')
   await pagos.getByRole('button', { name: 'OK' }).click()
   await expect(pagos.getByRole('button', { name: 'Boleta N° 4521' })).toBeVisible()
-  // Al agendar, el descuento de la oferta ya viene marcado.
-  await tarjeta.getByRole('button', { name: 'Agendar instalación' }).click()
-  await expect(tarjeta.getByRole('button', { name: /Oferta 48 h · 10%/ })).toHaveAttribute('aria-pressed', 'true')
+  // Al reagendar se puede aplicar el descuento por transferencia: el total baja.
+  await tarjeta.getByRole('button', { name: 'Reagendar' }).click()
+  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText('Total ' + pesos(238000))
+  await tarjeta.getByRole('button', { name: /Transferencia · 10%/ }).click()
   await expect(tarjeta.getByTestId('total-instalacion')).toHaveText('Total ' + pesos(214200))
   await admin.screenshot({ path: path.join(evidence, '03-panel-pagos.png'), fullPage: true })
+  await tarjeta.getByRole('button', { name: 'Cancelar' }).click()
 
   // ── Dashboard: un pago por transferencia sin boleta aparece pendiente, y se anota ahi ──
   await api('pagos', { accion: 'registrar', cotNum: creada.cotNum, monto: 50000, medio: 'Transferencia', fecha: '2026-10-15' })

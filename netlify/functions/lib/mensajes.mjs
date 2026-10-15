@@ -1,6 +1,6 @@
 // Textos para el cliente: envio de la cotizacion, confirmacion de la instalacion y recordatorios.
 // Sin dependencias de Node: los usan el cron de recordatorios y el panel admin.
-import { OFERTA } from './marca.mjs'
+import { MARCA, OFERTA } from './marca.mjs'
 
 // Numero chileno en formato internacional sin "+": 9 1234 5678 -> 56912345678.
 export function telefonoWhatsapp(telefono) {
@@ -29,13 +29,15 @@ const saludo = nombre => `¡Hola${primerNombre(nombre) ? ' ' + primerNombre(nomb
 export const AVISO_RETRASO = 'Puede existir un retraso máximo de 1 hora, pero intentaremos llegar puntual.'
 
 // Al agendar: "Su hora ya esta agendada".
-export function mensajeInstalacion({ nombre, direccion }, { fecha, inicio, fin }) {
+// pago: { pagado, saldo } si ya hay pagos, para confirmarle que llegaron.
+export function mensajeInstalacion({ nombre, direccion }, { fecha, inicio, fin }, pago) {
   return [
     `${saludo(nombre)} Su hora ya está agendada ✅`,
     '',
     `📅 ${fechaLarga(fecha)}`,
     `🕙 De ${inicio} a ${fin} hrs (duración aprox. ${duracion(inicio, fin)})`,
     ...(direccion ? [`📍 ${direccion}`] : []),
+    ...(pago?.pagado ? [`💳 Recibimos su pago de ${pesos(pago.pagado)}${pago.saldo > 0 ? ` (saldo de ${pesos(pago.saldo)} al terminar)` : ''}`] : []),
     '',
     AVISO_RETRASO,
     '',
@@ -77,13 +79,70 @@ export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl, linkPago }) {
     '',
     `Total: ${pesos(total)} con IVA incluido.`,
     ...(pdfUrl ? [`Puede verla aquí: ${pdfUrl}`] : []),
-    ...(linkPago ? [`Para reservar su instalación puede pagar en línea (total o abono del 50%): ${linkPago}`] : []),
+    ...(linkPago ? [`Aquí puede elegir el día de su instalación y pagar (total o abono del 50%): ${linkPago}`] : []),
     '',
-    `Si la acepta dentro de las próximas ${OFERTA.horas} horas, tiene un ${OFERTA.descuento}% de descuento adicional.`,
+    `Si paga por transferencia, tiene un ${OFERTA.descuento}% de descuento.`,
     'Cualquier duda, respóndanos por aquí.',
     '',
     'Repisas Don Maxi',
   ].join('\n')
+}
+
+const lineaReserva = r => r?.fecha ? `${fechaLarga(r.fecha)}, de ${r.inicio} a ${r.fin} hrs` : ''
+
+// El cliente avisa que transfirio: acuso de recibo (al cliente) y aviso para verificar (a Don Maxi).
+export function correoTransferenciaAvisada({ nombre, email, cotNum }, reserva) {
+  return {
+    para: email,
+    asunto: `Recibimos tu aviso de transferencia — Cotización N° ${cotNum}`,
+    texto: [
+      `Hola ${primerNombre(nombre)},`.replace(' ,', ','),
+      '',
+      `Recibimos tu aviso de transferencia por ${pesos(reserva.monto)} (cotización N° ${cotNum}).`,
+      ...(reserva.fecha ? [`Te reservamos la instalación para el ${lineaReserva(reserva).replace(/^./, c => c.toLowerCase())}.`] : []),
+      '',
+      'Apenas veamos el pago en nuestra cuenta te confirmamos por correo y WhatsApp. Si no la has hecho todavía, estos son los datos:',
+      `${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
+      '',
+      'Repisas Don Maxi',
+    ].join('\n'),
+  }
+}
+
+export function correoAvisoTransferencia({ nombre, telefono, cotNum }, reserva, linkPanel) {
+  return {
+    asunto: `💸 Transferencia por verificar: ${pesos(reserva.monto)} · ${nombre} (N° ${cotNum})`,
+    texto: [
+      `${nombre} avisó que transfirió ${pesos(reserva.monto)} (${reserva.opcion === 'abono' ? 'abono del 50%' : reserva.opcion === 'saldo' ? 'saldo' : 'total'}${reserva.descuentoPct ? `, con ${reserva.descuentoPct}% de descuento por transferencia` : ''}).`,
+      ...(reserva.fecha ? [`Pidió instalar el ${lineaReserva(reserva).replace(/^./, c => c.toLowerCase())}. Ese bloque queda reservado mientras lo verificas.`] : []),
+      ...(telefono ? [`Teléfono: ${telefono}`] : []),
+      '',
+      `Revisa la cuenta y confírmalo en el panel (Cotizaciones → N° ${cotNum}): ${linkPanel}`,
+      'Al confirmar se registra el pago, se agenda la instalación y se le manda la invitación.',
+    ].join('\n'),
+  }
+}
+
+export function correoReservaConfirmada({ nombre, email, cotNum, direccion }, instalacion, { pagado, saldo }) {
+  return {
+    para: email,
+    asunto: `¡Tu instalación está confirmada! — Repisas Don Maxi`,
+    texto: [
+      `Hola ${primerNombre(nombre)},`.replace(' ,', ','),
+      '',
+      `Recibimos tu pago de ${pesos(pagado)} y tu instalación quedó confirmada ✅`,
+      '',
+      `📅 ${fechaLarga(instalacion.fecha)}`,
+      `🕙 De ${instalacion.inicio} a ${instalacion.fin} hrs (duración aprox. ${duracion(instalacion.inicio, instalacion.fin)})`,
+      ...(direccion ? [`📍 ${direccion}`] : []),
+      ...(saldo > 0 ? ['', `Saldo pendiente: ${pesos(saldo)}, a pagar al terminar la instalación.`] : []),
+      '',
+      AVISO_RETRASO,
+      'Te llegará también la invitación de calendario. Cotización N° ' + cotNum + '.',
+      '',
+      'Repisas Don Maxi',
+    ].join('\n'),
+  }
 }
 
 // Sin telefono, WhatsApp pide elegir el contacto.

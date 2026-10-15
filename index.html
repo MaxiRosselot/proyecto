@@ -173,7 +173,7 @@
       document.getElementById('year').textContent = new Date().getFullYear()
       // En /admin y /cotiza, ocultar el shell estático y el container del agendador:
       // esas páginas dibujan su propio diseño.
-      if (/^\/(admin|cotiza)/.test(window.location.pathname)) {
+      if (/^\/(admin|cotiza|reserva)/.test(window.location.pathname)) {
         document.querySelector('.container').style.display = 'none'
         if (window.location.pathname.startsWith('/admin')) {
           document.body.style.background = 'none'

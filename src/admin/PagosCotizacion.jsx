@@ -56,10 +56,6 @@ export function PagosCotizacion({ quote, onCambio }) {
     if (await llamar({ accion: 'registrar', monto: Number(monto), medio, fecha, nota })) { setAbierto(false); setMonto(''); setNota('') }
   }
   const anotar = (pago, boleta) => llamar({ accion: 'boleta', id: pago.id, boleta })
-  const [copiado, setCopiado] = useState(false)
-  async function copiarLink() {
-    try { await navigator.clipboard.writeText(quote.linkPago); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { window.prompt('Copia el link de pago:', quote.linkPago) }
-  }
   async function borrar(pago) {
     if (window.confirm(`¿Borrar el pago de ${fmt(pago.monto)} del ${fechaCorta(pago.fecha)}?`)) await llamar({ accion: 'borrar', id: pago.id })
   }
@@ -95,10 +91,6 @@ export function PagosCotizacion({ quote, onCambio }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
           <button onClick={() => { setAbierto(true); setMonto(String((quote.pagos || []).length ? r.saldo : mitad)) }}
             style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>Registrar pago</button>
-          {quote.linkPago && <>
-            <button onClick={copiarLink} style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>{copiado ? '✓ Link copiado' : 'Copiar link de pago'}</button>
-            <a href={quote.linkPago} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.textSub }}>ver</a>
-          </>}
         </div>
       )}
       {abierto && (

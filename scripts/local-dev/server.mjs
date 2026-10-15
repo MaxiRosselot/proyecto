@@ -24,7 +24,8 @@ import { anotarBoleta, borrarPago, registrarPago } from '../../netlify/functions
 import { armarCorreo } from '../../netlify/functions/lib/correo.mjs'
 import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
 import { configPago, conLinkPago, linkPagoCotizacion } from '../../netlify/functions/lib/mercadopago.mjs'
-import { atenderAvisoMercadoPago, atenderPagar } from '../../netlify/functions/lib/pagina-pago.mjs'
+import { atenderAvisoMercadoPago, atenderReservaGet, atenderReservaPost } from '../../netlify/functions/lib/reserva-cliente.mjs'
+import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netlify/functions/lib/reservas-admin.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -130,12 +131,22 @@ async function pagarLocal(prefId) {
   const id = String(Date.now())
   db.mpPagos = { ...(db.mpPagos || {}), [id]: { id, status: 'approved', transaction_amount: pref.items[0].unit_price, external_reference: pref.external_reference, metadata: pref.metadata, date_approved: new Date().toISOString() } }
   saveData(db)
-  await atenderAvisoMercadoPago({ body: { type: 'payment', data: { id } } }, { almacen: cotizaciones, mp: mpLocal })
+  await atenderAvisoMercadoPago({ body: { type: 'payment', data: { id } } }, depsReserva())
   return pref.back_urls.success
 }
 
+// Lo mismo que netlify/functions/lib/google-servicios.mjs, pero local: planilla y calendario en
+// data.json, correos como .eml.
+function depsReserva() {
+  return {
+    almacen: cotizaciones, config: configPago(), mp: mpLocal, calendar: calendarLocal, calendarId: 'repisas@donmaxi.cl',
+    leerEventos: async (desde, hasta) => eventosLocales().map(ev => eventoParaVista(ev)).filter(e => e.fecha >= desde && e.fecha <= hasta),
+    enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com',
+  }
+}
+
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva'])
 
 // Los PDF y correos de las cotizaciones web quedan en disco: nada sale a Google ni a un correo real.
 function guardarPdfLocal(bytes) {
@@ -233,7 +244,14 @@ const routes = {
     return { ok: true, eventos }
   },
   // Mismo contrato que netlify/functions/pagos.mjs
-  'pagos': async (body) => ({ ok: true, ...(body.accion === 'borrar' ? await borrarPago(cotizaciones, body) : body.accion === 'boleta' ? await anotarBoleta(cotizaciones, body) : await registrarPago(cotizaciones, body)) }),
+  'pagos': async (body) => ({
+    ok: true,
+    ...(body.accion === 'borrar' ? await borrarPago(cotizaciones, body)
+      : body.accion === 'boleta' ? await anotarBoleta(cotizaciones, body)
+      : body.accion === 'confirmar-transferencia' ? await confirmarTransferenciaYAvisar(depsReserva(), body)
+      : body.accion === 'rechazar-transferencia' ? await rechazarTransferencia(cotizaciones, body)
+      : await registrarPago(cotizaciones, body)),
+  }),
   // Mismo contrato que netlify/functions/probar-correo.mjs (el correo queda como .eml)
   'probar-correo': async () => {
     guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })
@@ -292,12 +310,10 @@ const server = http.createServer(async (req, res) => {
     return res.end(fs.readFileSync(file))
   }
 
-  // Pago en linea: /pagar (pagina publica) y el checkout simulado de Mercado Pago.
+  // Links antiguos /pagar → /reserva (el handler de produccion) y el checkout simulado de Mercado Pago.
   if (name === 'pagar' && req.method === 'GET') {
-    try {
-      const r = await atenderPagar(Object.fromEntries(url.searchParams), { almacen: cotizaciones, mp: mpLocal, config: configPago() })
-      res.writeHead(r.statusCode, r.headers); return res.end(r.body)
-    } catch (e) { console.error('[local-api] pagar failed:', e); return send(res, 500, { ok: false, error: e.message }) }
+    const r = await (await import('../../netlify/functions/pagar.mjs')).handler({ httpMethod: 'GET', queryStringParameters: Object.fromEntries(url.searchParams) })
+    res.writeHead(r.statusCode, r.headers); return res.end(r.body)
   }
   if (name === 'mp-checkout-local') {
     const pref = db.mpPreferencias?.[url.searchParams.get('pref')]
@@ -338,6 +354,14 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(result.statusCode, { ...CORS, ...(result.headers || {}) })
       // El PDF viaja en base64: Netlify lo decodifica en produccion, aca hay que hacerlo.
       return res.end(result.isBase64Encoded ? Buffer.from(result.body, 'base64') : (result.body || ''))
+    }
+
+    // Pagina /reserva del cliente: mismas reglas que netlify/functions/reserva.mjs.
+    if (name === 'reserva') {
+      try {
+        const r = req.method === 'POST' ? await atenderReservaPost(raw ? JSON.parse(raw) : {}, depsReserva()) : await atenderReservaGet(Object.fromEntries(url.searchParams), depsReserva())
+        res.writeHead(r.statusCode, { ...CORS, ...r.headers }); return res.end(r.body)
+      } catch (e) { if (!(e.estado < 500)) console.error('[local-api] reserva failed:', e); return send(res, e.estado || 500, { ok: false, error: e.message }) }
     }
 
     const route = routes[name]

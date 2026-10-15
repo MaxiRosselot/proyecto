@@ -10,12 +10,13 @@ export const HOJA = 'Cotizaciones'
 // correlativo lo llevara el servidor.
 export const NUMERO_INICIAL = 1421
 
-// Columnas A-R. Q: el proyecto del configurador 3D con que se armo la cotizacion.
+// Columnas A-T. Q: el proyecto del configurador 3D con que se armo la cotizacion.
 // R: la instalacion agendada (fecha, horas, evento de Calendar), en JSON.
 // S: los pagos recibidos (abonos y saldo), en JSON.
-export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D', 'Instalación (JSON)', 'Pagos (JSON)']
-export const ULTIMA_COLUMNA = 'S'
-const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d', 'instalacion', 'pagos']
+// T: la reserva que hizo el cliente desde su link (dia elegido y pago por verificar o en curso), en JSON.
+export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D', 'Instalación (JSON)', 'Pagos (JSON)', 'Reserva (JSON)']
+export const ULTIMA_COLUMNA = 'T'
+const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d', 'instalacion', 'pagos', 'reserva']
 // Lo que se puede cambiar al actualizar. El numero identifica la fila y la fecha de creacion
 // es historia: ninguno de los dos se reescribe.
 const EDITABLES = CAMPOS.filter(c => c !== 'cotNum' && c !== 'creado')
@@ -100,6 +101,7 @@ export function filaACotizacion(valores, { conProyecto = false } = {}) {
     tieneProyecto3d: Boolean(v(16)),
     instalacion: jsonOr(v(17), null),
     pagos: jsonOr(v(18), []),
+    reserva: jsonOr(v(19), null),
   }
   if (conProyecto) {
     try { cotizacion.proyecto3d = decodificarProyecto(v(16)) }
@@ -117,6 +119,7 @@ export function cotizacionAFila(c) {
     c.creado || '', c.pdfUrl || '', codificarProyecto(c.proyecto3d),
     c.instalacion ? JSON.stringify(c.instalacion) : '',
     c.pagos?.length ? JSON.stringify(c.pagos) : '',
+    c.reserva ? JSON.stringify(c.reserva) : '',
   ]
 }
 
@@ -206,7 +209,7 @@ export async function actualizarCotizacion(almacen, datos) {
   if (!encontrada) throw new ErrorCotizacion(404, `La cotización N° ${cotNum} no existe`)
 
   // Una hoja creada antes de la columna R no tiene su titulo: se agrega al guardar la primera instalacion.
-  if (datos.instalacion || datos.pagos) await almacen.asegurarEncabezado()
+  if (datos.instalacion || datos.pagos || datos.reserva) await almacen.asegurarEncabezado()
   const actual = filaACotizacion(encontrada.valores, { conProyecto: true })
   const cambios = pick(datos, EDITABLES)
   const nueva = { ...actual, ...cambios, cotNum, creado: actual.creado }

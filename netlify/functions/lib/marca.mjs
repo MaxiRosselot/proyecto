@@ -2,8 +2,11 @@
 // Un solo lugar: si cambia la cuenta, el link de pago o la oferta, cambia en todos lados.
 export const MARCA = { razonSocial: 'Don Maxi SPA', rut: '77.386.684-8', banco: 'Banco BCI', tipoCuenta: 'Corriente', numeroCuenta: '13702807', rating: '5.0', resenas: '231', linkPago: 'https://link.mercadopago.cl/repisasdonmaxi', galeriaUrl: 'www.donmaxi.cl/galeria' };
 export const CONDICIONES = 'Puede abonar un 50% antes de la instalación, o pagar el total al finalizar el trabajo. Garantía de 5 años sobre estructura e instalación.';
-// "Acéptala dentro de las próximas 48 horas y obtén 10% de descuento adicional"
-export const OFERTA = { horas: 48, descuento: 10 };
+// Descuento por pagar con transferencia: Mercado Pago cobra comision, la transferencia no.
+// Lo muestran el PDF, /cotiza, el correo, WhatsApp y la pagina de reserva; se aplica al confirmar
+// el primer pago por transferencia (si la cotizacion no tiene ya otro descuento).
+export const OFERTA = { descuento: 10, medio: 'transferencia' };
+export const TEXTO_OFERTA = `Paga por transferencia y obtén ${OFERTA.descuento}% de descuento`;
 export const WHATSAPP = '+56951020367';
 
 // Servicios adicionales: clave, nombre, precio neto de lista y descripcion para el PDF.

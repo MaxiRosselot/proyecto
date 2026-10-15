@@ -5,9 +5,14 @@ import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx
 import { fechaLarga } from './whatsappInstalacion.js'
 import { BadgePago, PagosCotizacion } from './PagosCotizacion.jsx'
 import { regenerarPdf } from './regenerarPdf.js'
-import EnviarCotizacion from './EnviarCotizacion.jsx'
+import EnviarCotizacion, { CopiarLink } from './EnviarCotizacion.jsx'
+import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
+import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
+import { porcentajeDescuento } from '../../netlify/functions/lib/totales.mjs'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
+const AMBAR = '#D97706'
+const porVerificar = q => q.reserva?.estado === 'por verificar'
 
 function Badge({ status }) {
   const s = QUOTE_STATUS_LABELS[status] || QUOTE_STATUS_LABELS['por confirmar']
@@ -18,6 +23,41 @@ function driveFileId(url) {
   if (!url) return ''
   const m = url.match(/\/d\/([^/]+)/)
   return m ? m[1] : ''
+}
+
+// Un bloque de la tarjeta con su titulo: Cliente, Documento, Enviar al cliente.
+function Seccion({ titulo, children, testid }) {
+  return (
+    <section data-testid={testid} style={{ padding: 14, borderRadius: 12, border: '1px solid ' + C.border, background: '#FCFCFD', minWidth: 0 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .8, marginBottom: 10 }}>{titulo}</div>
+      {children}
+    </section>
+  )
+}
+
+const boton = { ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }
+const fila = { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }
+
+// Lo que toca hacer ahora con esta cotizacion, arriba y con un solo boton.
+function SiguientePaso({ q, onAgendar }) {
+  const pago = resumenPagos(q.total, q.pagos)
+  const caja = (color, fondo, texto, accion) => (
+    <div data-testid="siguiente-paso" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 14px', borderRadius: 12, background: fondo, border: '1px solid ' + color + '40', marginBottom: 14 }}>
+      <div style={{ fontSize: 13.5, color: C.text }}><span style={{ fontSize: 11, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: .8, display: 'block' }}>Siguiente paso</span>{texto}</div>
+      {accion && <div style={fila}>{accion}</div>}
+    </div>
+  )
+  if (q.status === 'rechazada') return null
+  if (q.reserva?.estado === 'esperando pago') return caja(C.blue, '#EFF6FF', <>El cliente está pagando con Mercado Pago{q.reserva.fecha ? ` (reservó ${fechaLarga(q.reserva.fecha).toLowerCase()}, ${q.reserva.inicio})` : ''}. Se agenda solo cuando se apruebe.</>)
+  if (q.status === 'por confirmar') return caja(C.orange, C.orangeLight,
+    <>Mándale la cotización con su link: ahí elige su día y paga. Si ya aceptó por otro lado, agenda tú.</>,
+    <><EnviarCotizacion cotizacion={q} tamano={12} soloWhatsapp /><CopiarLink link={q.linkPago} texto="Copiar link" />
+      <button onClick={onAgendar} style={{ ...boton, color: C.green, borderColor: C.green }}>Agendar instalación</button></>)
+  if (!q.instalacion) return caja(C.green, C.green + '0F', <>Aceptada{pago.pagado ? ` · pagó ${fmt(pago.pagado)}` : ''}. Falta agendar la instalación.</>,
+    <button onClick={onAgendar} style={{ ...boton, background: C.green, borderColor: C.green, color: 'white' }}>Agendar instalación</button>)
+  if (pago.saldo > 0) return caja(C.yellow, '#FFFBEB', <>Instalación agendada. Saldo por cobrar: <strong>{fmt(pago.saldo)}</strong>.</>,
+    <CopiarLink link={q.linkPago} texto="Copiar link para pagar" />)
+  return caja(C.green, C.green + '0F', <>Pagada y con la instalación agendada. Recuerda anotar las boletas.</>)
 }
 
 export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
@@ -39,6 +79,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [abriendo, setAbriendo]         = useState(null)
   const [probandoCorreo, setProbandoCorreo] = useState(false)
   const [agendandoId, setAgendandoId]   = useState(null)
+  const [masId, setMasId]               = useState(null)
   const [pdfEnCurso, setPdfEnCurso]     = useState(null)   // { cotNum, etapa }
   const [pdfNuevo, setPdfNuevo]         = useState({})     // cotNum -> 'sugerido' | { blobUrl } | { error }
   const actualizarLocal = (cotNum, cambios) => setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
@@ -54,6 +95,9 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Si hay transferencias por verificar, se parte ahi.
+  useEffect(() => { if (!loading && quotes.some(porVerificar) && tab === 'por confirmar' && !enfocar) setTab('verificar') }, [loading])
 
   // Desde el calendario: abrir la cotizacion de ese evento, en su pestaña.
   useEffect(() => {
@@ -148,25 +192,31 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     finally { setProbandoCorreo(false) }
   }
 
-  const TABS = [
-    { key: 'por confirmar', label: 'Por confirmar', color: C.yellow },
-    { key: 'confirmada',    label: 'Confirmadas',   color: C.green  },
-    { key: 'rechazada',     label: 'Rechazadas',    color: C.red    },
-  ]
+  function abrirAgendar(q) {
+    setAgendandoId(q.cotNum)
+    setTimeout(() => document.getElementById('instalacion-' + q.cotNum)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
 
   const counts = {
+    'verificar':     quotes.filter(porVerificar).length,
     'por confirmar': quotes.filter(q => q.status === 'por confirmar').length,
     'confirmada':    quotes.filter(q => q.status === 'confirmada').length,
     'rechazada':     quotes.filter(q => q.status === 'rechazada').length,
   }
+  const TABS = [
+    ...(counts.verificar ? [{ key: 'verificar', label: 'Transferencias por verificar', color: AMBAR }] : []),
+    { key: 'por confirmar', label: 'Por confirmar', color: C.yellow },
+    { key: 'confirmada',    label: 'Confirmadas',   color: C.green  },
+    { key: 'rechazada',     label: 'Rechazadas',    color: C.red    },
+  ]
+  const enTab = q => (tab === 'verificar' ? porVerificar(q) : q.status === tab)
+  useEffect(() => { if (tab === 'verificar' && !counts.verificar) setTab('por confirmar') }, [counts.verificar])
 
   const bq = buscar.trim().toLowerCase()
   const filtered = quotes
-    .filter(q => q.status === tab)
-    .filter(q => !bq || (q.nombre || '').toLowerCase().includes(bq))
+    .filter(enTab)
+    .filter(q => !bq || (q.nombre || '').toLowerCase().includes(bq) || String(q.cotNum).includes(bq))
     .sort(porCreacion)
-
-  const canEdit = tab === 'por confirmar' || tab === 'confirmada'
 
   return (
     <div>
@@ -176,8 +226,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
           <input
             value={buscar}
             onChange={e => setBuscar(e.target.value)}
-            placeholder="Buscar por nombre..."
-            style={{ ...styles.input, width: 190, padding: '7px 12px', fontSize: 13 }}
+            placeholder="Buscar por nombre o N°..."
+            style={{ ...styles.input, width: 200, padding: '7px 12px', fontSize: 13 }}
           />
           <button onClick={probarCorreo} disabled={probandoCorreo} style={styles.btnSecondary}>{probandoCorreo ? 'Probando...' : 'Probar correo'}</button>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
@@ -189,9 +239,10 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             ...styles.tab,
+            ...(t.key === 'verificar' && tab !== t.key ? { borderColor: AMBAR, color: AMBAR } : {}),
             ...(tab === t.key ? { background: t.color, borderColor: t.color, color: 'white', boxShadow: '0 2px 8px ' + t.color + '40' } : {}),
           }}>
-            {t.label}
+            {t.key === 'verificar' ? '💸 ' : ''}{t.label}
             <span style={{
               marginLeft: 7, padding: '1px 7px', borderRadius: 99, fontSize: 11, fontWeight: 700,
               background: tab === t.key ? 'rgba(255,255,255,.25)' : C.bg,
@@ -214,7 +265,9 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
           const isExp  = expanded === q.cotNum
           const isEdit = editingId === q.cotNum
           const isUpd  = updating === q.cotNum
-          const borderColor = QUOTE_STATUS_LABELS[q.status]?.color || C.border
+          const borderColor = porVerificar(q) ? AMBAR : QUOTE_STATUS_LABELS[q.status]?.color || C.border
+          const activa = q.status !== 'rechazada'
+          const descuento = porcentajeDescuento(q.adicionales)
 
           return (
             <div key={q.cotNum} id={'cot-' + q.cotNum} style={{ ...styles.card, borderLeft: '3px solid ' + borderColor, scrollMarginTop: 70 }}>
@@ -227,6 +280,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
                     <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{q.nombre}</span>
                     <Badge status={q.status} />
+                    {porVerificar(q) && <span style={styles.badge(AMBAR)}>Transferencia por verificar</span>}
+                    {q.reserva?.estado === 'esperando pago' && <span style={styles.badge(C.blue)}>Pagando con MP</span>}
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>
                     <span style={{ marginRight: 8, color: C.textMuted, fontWeight: 600 }}>N{q.cotNum}</span>
@@ -292,112 +347,123 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                 </div>
               )}
 
-              {/* Detalle expandido */}
+              {/* Detalle expandido: siguiente paso, luego todo ordenado por tema */}
               {isExp && !isEdit && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid ' + C.border }}>
-                  {/* Info del cliente */}
-                  <div style={{ ...styles.detailGrid, marginBottom: 14 }}>
-                    {q.email    && <><span style={styles.detailLabel}>Email</span><span style={{ fontSize: 13 }}>{q.email}</span></>}
-                    {q.telefono && <><span style={styles.detailLabel}>Tel</span><span style={{ fontSize: 13 }}>{q.telefono}</span></>}
-                    {q.fechaVisita && <><span style={styles.detailLabel}>Visita</span><span style={{ fontSize: 13 }}>{fmtDate(q.fechaVisita)}</span></>}
-                    {q.subtotal > 0 && <><span style={styles.detailLabel}>Subtotal</span><span style={{ fontSize: 13 }}>{fmt(q.subtotal)}</span></>}
-                    {q.iva      > 0 && <><span style={styles.detailLabel}>IVA</span><span style={{ fontSize: 13 }}>{fmt(q.iva)}</span></>}
-                    {q.total    > 0 && <><span style={styles.detailLabel}>Total</span><span style={{ fontSize: 13, fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span></>}
-                    {q.motivoRechazo && <><span style={styles.detailLabel}>Motivo</span><span style={{ fontSize: 13, color: C.red }}>{q.motivoRechazo}</span></>}
-                    {q.notas && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13, color: /Correo no enviado/.test(q.notas) ? C.red : C.textSub }}>{q.notas}</span></>}
-                  </div>
-
-                  {/* PDF */}
-                  {pdfNuevo[q.cotNum] === 'sugerido' && (
-                    <div style={{ ...styles.errorBox, background: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E', marginBottom: 10 }}>
-                      El total cambió con los servicios agregados: regenera el PDF para mandarle al cliente el valor actualizado.
+                  {porVerificar(q)
+                    ? <TransferenciaPorVerificar quote={q} onCambio={cambios => { actualizarLocal(q.cotNum, cambios); if (cambios.status) setTab(cambios.status) }} />
+                    : <SiguientePaso q={q} onAgendar={() => abrirAgendar(q)} />}
+                  {q.avisoConfirmacion && (
+                    <div style={{ ...styles.errorBox, background: C.green + '12', borderColor: C.green + '40', color: '#065F46' }}>
+                      ✓ Transferencia confirmada{q.instalacion ? ' e instalación agendada' : ''}. {q.avisoConfirmacion === 'enviado' ? 'Le enviamos el correo de confirmación y la invitación.' : q.avisoConfirmacion === 'falló' ? 'No se pudo enviar el correo de confirmación.' : 'No tiene correo: avísale por WhatsApp.'} {q.instalacion && 'Usa “Avisar por WhatsApp” para mandarle la confirmación.'}
                     </div>
                   )}
-                  {pdfNuevo[q.cotNum]?.error && <div style={{ ...styles.errorBox, marginBottom: 10 }}>No se pudo regenerar el PDF: {pdfNuevo[q.cotNum].error}</div>}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <button onClick={() => rehacerPdf(q)} disabled={Boolean(pdfEnCurso)}
-                      style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', opacity: pdfEnCurso ? .6 : 1 }}>
-                      {pdfEnCurso?.cotNum === q.cotNum ? pdfEnCurso.etapa + '…' : 'Regenerar PDF'}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 14 }}>
+                    <Seccion titulo="Cliente y montos">
+                      <div style={styles.detailGrid}>
+                        {q.email    && <><span style={styles.detailLabel}>Email</span><span style={{ fontSize: 13, wordBreak: 'break-all' }}>{q.email}</span></>}
+                        {q.telefono && <><span style={styles.detailLabel}>Tel</span><span style={{ fontSize: 13 }}>{q.telefono}</span></>}
+                        {q.direccion && <><span style={styles.detailLabel}>Dirección</span><span style={{ fontSize: 13 }}>{q.direccion}</span></>}
+                        {q.fechaVisita && <><span style={styles.detailLabel}>Visita</span><span style={{ fontSize: 13 }}>{fmtDate(q.fechaVisita)}</span></>}
+                        {q.subtotal > 0 && <><span style={styles.detailLabel}>Neto</span><span style={{ fontSize: 13 }}>{fmt(q.subtotal)}{descuento ? <span style={{ color: C.green, fontWeight: 700 }}> · {descuento}% dcto.</span> : ''}</span></>}
+                        {q.iva      > 0 && <><span style={styles.detailLabel}>IVA</span><span style={{ fontSize: 13 }}>{fmt(q.iva)}</span></>}
+                        {q.total    > 0 && <><span style={styles.detailLabel}>Total</span><span style={{ fontSize: 13, fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span></>}
+                        {q.motivoRechazo && <><span style={styles.detailLabel}>Motivo</span><span style={{ fontSize: 13, color: C.red }}>{q.motivoRechazo}</span></>}
+                        {q.notas && <><span style={styles.detailLabel}>Notas</span><span style={{ fontSize: 13, color: /Correo no enviado/.test(q.notas) ? C.red : C.textSub }}>{q.notas}</span></>}
+                      </div>
+                    </Seccion>
+
+                    <Seccion titulo="Documento" testid="seccion-documento">
+                      {pdfNuevo[q.cotNum] === 'sugerido' && (
+                        <div style={{ ...styles.errorBox, background: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E', marginBottom: 10, padding: '8px 12px' }}>
+                          El total cambió con los servicios agregados: regenera el PDF para mandarle el valor actualizado.
+                        </div>
+                      )}
+                      {pdfNuevo[q.cotNum]?.error && <div style={{ ...styles.errorBox, marginBottom: 10, padding: '8px 12px' }}>No se pudo regenerar el PDF: {pdfNuevo[q.cotNum].error}</div>}
+                      <div style={fila}>
+                        {q.pdfUrl && <a href={q.pdfUrl} target="_blank" rel="noreferrer" style={{ ...boton, ...styles.btnPrimary, fontSize: 12, padding: '6px 14px', textDecoration: 'none' }}>Ver PDF</a>}
+                        {q.pdfUrl && <a href={'https://drive.google.com/uc?export=download&id=' + driveFileId(q.pdfUrl)} style={boton}>Descargar</a>}
+                        <button onClick={() => rehacerPdf(q)} disabled={Boolean(pdfEnCurso)} style={{ ...boton, opacity: pdfEnCurso ? .6 : 1 }}>
+                          {pdfEnCurso?.cotNum === q.cotNum ? pdfEnCurso.etapa + '…' : 'Regenerar PDF'}
+                        </button>
+                        {pdfNuevo[q.cotNum]?.blobUrl && <a href={pdfNuevo[q.cotNum].blobUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: C.green }}>✓ PDF actualizado · ver</a>}
+                      </div>
+                      {activa && (
+                        <div style={{ ...fila, marginTop: 8 }}>
+                          {onAbrirEnCotizador && (
+                            <button onClick={() => abrirEnCotizador(q)} disabled={abriendo === q.cotNum} style={boton}
+                              title={q.tieneProyecto3d ? 'Abre la cotización con su modelo 3D para ajustarla y regenerar el PDF' : 'Abre la cotización en el cotizador para ajustarla y regenerar el PDF'}>
+                              {abriendo === q.cotNum ? 'Abriendo...' : 'Abrir en cotizador'}
+                            </button>
+                          )}
+                          <button onClick={() => startEditing(q)} style={boton}>Editar montos</button>
+                        </div>
+                      )}
+                    </Seccion>
+
+                    {activa && (
+                      <Seccion titulo="Enviar al cliente" testid="seccion-enviar">
+                        <div style={fila}>
+                          <EnviarCotizacion cotizacion={q} tamano={12} />
+                          <CopiarLink link={q.linkPago} />
+                        </div>
+                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>Con el link el cliente elige su día y paga (transferencia o Mercado Pago).</div>
+                      </Seccion>
+                    )}
+                  </div>
+
+                  {/* Instalacion */}
+                  {activa && (
+                    <div id={'instalacion-' + q.cotNum} style={{ scrollMarginTop: 90 }}>
+                      {q.instalacion && agendandoId !== q.cotNum && (
+                        <ResumenInstalacion quote={q} onReagendar={() => setAgendandoId(q.cotNum)}
+                          onInvitado={cambios => actualizarLocal(q.cotNum, cambios)} />
+                      )}
+                      {agendandoId === q.cotNum && (
+                        <AgendarInstalacion quote={q} onCancelar={() => setAgendandoId(null)}
+                          onListo={cambios => {
+                            if (Number(cambios.total) !== Number(q.total)) setPdfNuevo(p => ({ ...p, [q.cotNum]: 'sugerido' }))
+                            actualizarLocal(q.cotNum, cambios)
+                            setAgendandoId(null)
+                            // Queda en Confirmadas, abierta, con el resumen y el boton de WhatsApp a la vista.
+                            setTab('confirmada'); setExpanded(q.cotNum)
+                          }} />
+                      )}
+                    </div>
+                  )}
+
+                  {activa && <PagosCotizacion quote={q} onCambio={cambios => actualizarLocal(q.cotNum, cambios)} />}
+
+                  {/* Mas acciones: lo que se usa poco */}
+                  <div style={{ marginTop: 6, paddingTop: 12, borderTop: '1px solid ' + C.border }}>
+                    <button onClick={() => setMasId(masId === q.cotNum ? null : q.cotNum)} aria-expanded={masId === q.cotNum}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textSub, fontSize: 12, fontWeight: 700, padding: 0 }}>
+                      {masId === q.cotNum ? '▾' : '▸'} Más acciones
                     </button>
-                    {pdfNuevo[q.cotNum]?.blobUrl && <a href={pdfNuevo[q.cotNum].blobUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: C.green }}>✓ PDF actualizado · ver</a>}
-                  </div>
-                  {q.pdfUrl && (
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-                      <a href={q.pdfUrl} target="_blank" rel="noreferrer"
-                        style={{ ...styles.btnPrimary, fontSize: 12, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Ver PDF
-                      </a>
-                      <a href={'https://drive.google.com/uc?export=download&id=' + driveFileId(q.pdfUrl)}
-                        style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Descargar
-                      </a>
-                      <EnviarCotizacion cotizacion={q} tamano={12} />
-                    </div>
-                  )}
-
-                  {(q.status === 'confirmada' || q.pagos?.length > 0) && (
-                    <PagosCotizacion quote={q} onCambio={cambios => actualizarLocal(q.cotNum, cambios)} />
-                  )}
-
-                  {q.instalacion && agendandoId !== q.cotNum && (
-                    <ResumenInstalacion quote={q} onReagendar={() => setAgendandoId(q.cotNum)}
-                      onInvitado={cambios => actualizarLocal(q.cotNum, cambios)} />
-                  )}
-
-                  {/* Cambio de estado. Confirmar es agendar la instalacion: ahi se cierra la venta. */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: rechazandoId === q.cotNum ? 10 : 0 }}>
-                    <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Estado</span>
-                    {Object.entries(QUOTE_STATUS_LABELS).map(([key, val]) => key === 'confirmada' && !q.instalacion ? (
-                      <button key={key} onClick={() => setAgendandoId(agendandoId === q.cotNum ? null : q.cotNum)}
-                        style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                          border: '1.5px solid ' + C.green, background: agendandoId === q.cotNum ? C.green : C.green + '14', color: agendandoId === q.cotNum ? 'white' : C.green }}>
-                        Agendar instalación
-                      </button>
-                    ) : (
-                      <button key={key}
-                        onClick={() => {
-                          if (key === 'rechazada') { setRechazandoId(q.cotNum); setMotivoSelec('') }
-                          else updateStatus(q, key)
-                        }}
-                        disabled={isUpd || q.status === key}
-                        style={{
-                          padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                          cursor: q.status === key ? 'default' : 'pointer',
-                          border: '1.5px solid ' + (q.status === key ? val.color : C.border),
-                          background: q.status === key ? val.color + '18' : C.surface,
-                          color: q.status === key ? val.color : C.textSub,
-                          opacity: isUpd ? .5 : 1,
-                        }}>
-                        {val.label}
-                      </button>
-                    ))}
-                    {canEdit && (
-                      <button onClick={() => startEditing(q)}
-                        style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', marginLeft: 4 }}>
-                        Editar
-                      </button>
-                    )}
-                    {canEdit && onAbrirEnCotizador && (
-                      <button onClick={() => abrirEnCotizador(q)} disabled={abriendo === q.cotNum}
-                        title={q.tieneProyecto3d ? 'Abre la cotización con su modelo 3D para ajustarla y regenerar el PDF' : 'Abre la cotización en el cotizador para ajustarla y regenerar el PDF'}
-                        style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>
-                        {abriendo === q.cotNum ? 'Abriendo...' : 'Abrir en cotizador'}
-                      </button>
+                    {masId === q.cotNum && (
+                      <div style={{ ...fila, marginTop: 10 }}>
+                        {q.status !== 'por confirmar' && (
+                          <button onClick={() => updateStatus(q, 'por confirmar')} disabled={isUpd} style={boton}>Volver a "Por confirmar"</button>
+                        )}
+                        {q.status !== 'rechazada' && (
+                          <button onClick={() => { setRechazandoId(q.cotNum); setMotivoSelec('') }} disabled={isUpd} style={{ ...boton, color: C.red, borderColor: C.red + '55' }}>Marcar como rechazada</button>
+                        )}
+                        {confirmDel === q.cotNum ? (
+                          <>
+                            <span style={{ fontSize: 13, color: C.red, fontWeight: 600 }}>¿Eliminar para siempre?</span>
+                            <button onClick={() => handleDelete(q.cotNum)} disabled={deleting === q.cotNum}
+                              style={{ ...styles.btnPrimary, background: C.red, boxShadow: 'none', fontSize: 12, padding: '6px 14px' }}>
+                              {deleting === q.cotNum ? 'Borrando...' : 'Sí, eliminar'}
+                            </button>
+                            <button onClick={() => setConfirmDel(null)} style={boton}>Cancelar</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setConfirmDel(q.cotNum)} style={{ ...boton, color: C.red, borderColor: C.red + '55' }}>Eliminar cotización</button>
+                        )}
+                      </div>
                     )}
                   </div>
-
-                  {agendandoId === q.cotNum && (
-                    <AgendarInstalacion quote={q} onCancelar={() => setAgendandoId(null)}
-                      onListo={cambios => {
-                        if (Number(cambios.total) !== Number(q.total)) setPdfNuevo(p => ({ ...p, [q.cotNum]: 'sugerido' }))
-                        actualizarLocal(q.cotNum, cambios)
-                        setAgendandoId(null)
-                        // Queda en Confirmadas, abierta, con el resumen y el boton de WhatsApp a la vista.
-                        setTab('confirmada'); setExpanded(q.cotNum)
-                      }} />
-                  )}
 
                   {/* Motivo de rechazo */}
                   {rechazandoId === q.cotNum && (
@@ -423,27 +489,6 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                       </div>
                     </div>
                   )}
-
-                  {/* Eliminar */}
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid ' + C.border }}>
-                    {confirmDel === q.cotNum ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, color: C.red, fontWeight: 600 }}>Confirmar eliminacion?</span>
-                        <button onClick={() => handleDelete(q.cotNum)} disabled={deleting === q.cotNum}
-                          style={{ ...styles.btnPrimary, background: C.red, boxShadow: 'none', fontSize: 12, padding: '6px 14px' }}>
-                          {deleting === q.cotNum ? 'Borrando...' : 'Si, borrar'}
-                        </button>
-                        <button onClick={() => setConfirmDel(null)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setConfirmDel(q.cotNum)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 12, fontWeight: 600, padding: 0 }}>
-                        Eliminar cotizacion
-                      </button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>

@@ -72,19 +72,28 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 - **Regenerar PDF**: rehace el PDF con el 3D y el total actual, lo sube a Drive y actualiza el link. Se sugiere solo cuando al agendar cambia el total.
 - Lógica y pruebas: `lib/calendario.mjs`, `lib/pagos.mjs`, `lib/recordatorios.mjs`, `lib/mensajes.mjs`. Prueba E2E local: `node scripts/local-dev/verify-calendario.mjs`.
 
-## Pago en línea (Mercado Pago), descuentos y boletas
+## El cliente agenda y paga (link de la cotización), descuentos y boletas
 
-- Cada cotización tiene **su propio link de pago**: `https://<sitio>/pagar?c=<N°>&t=<firma>`.
-  - Va en el PDF ("Pagar cotización"), en el correo y la pantalla final de /cotiza, en el mensaje de "WhatsApp al cliente" y en **Pagos → Copiar link de pago**.
-  - La firma impide abrir cotizaciones ajenas cambiando el número.
-- Al abrirlo, el cliente elige **pagar el total** o **abonar el 50%** (si ya abonó, solo el saldo) y paga en Mercado Pago.
-  - Dentro de las **48 horas** de creada la cotización, el precio ya trae el **10% de la oferta**.
-- Cuando el pago se aprueba, Mercado Pago avisa a `mp-webhook`, que:
-  - registra el pago en la cotización ("Mercado Pago (en línea)");
-  - la deja **confirmada**, y con el 10% si pagó con la oferta;
-  - te manda un correo.
-  - Es idempotente: un aviso repetido no duplica el pago.
-- **Descuento**: campo "Descuento (%)" en Cotizar y al agendar la instalación, con el atajo "Oferta 48 h · 10%".
+- Cada cotización tiene **su propio link**: `https://<sitio>/reserva?c=<N°>&t=<firma>`.
+  - Va en el PDF ("Agendar y pagar"), en el correo y la pantalla final de /cotiza, en "WhatsApp al cliente" y en **Enviar al cliente → Copiar link**.
+  - La firma impide abrir cotizaciones ajenas cambiando el número. Los links antiguos `/pagar?...` llevan a la reserva.
+- En `/reserva` el cliente:
+  1. **elige el día**: lunes a viernes, bloques de **10:00 a 13:00** y **13:00 a 16:00**, desde mañana y por 4 semanas. Un bloque se ocupa si se cruza con una instalación del calendario o con otra reserva vigente;
+  2. **elige cómo paga**: **transferencia, con 10% de descuento**, o Mercado Pago; y si paga el **total** o **abona el 50%**.
+  Si ya tiene instalación agendada, solo paga el saldo.
+- **Transferencia**:
+  - ve los datos de la cuenta y el monto, y aprieta **"Ya hice la transferencia"**;
+  - el bloque queda reservado y te llega un correo "💸 Transferencia por verificar";
+  - en **Cotizaciones → Transferencias por verificar** confirmas cuando la veas en la cuenta. Eso registra el pago, aplica el 10%, agenda la instalación con invitación de Calendar y le manda al cliente el correo "¡Tu instalación está confirmada!";
+  - después, "Avisar por WhatsApp" le manda la confirmación (incluye el pago recibido);
+  - si no llegó, "No ha llegado" libera el bloque y el cliente puede reintentar.
+- **Mercado Pago**:
+  - el bloque queda reservado 30 minutos mientras paga;
+  - cuando se aprueba, `mp-webhook` registra el pago, agenda la instalación sola y le confirma por correo;
+  - te manda un correo "💰 Pago recibido". Es idempotente: un aviso repetido no duplica el pago.
+- Sin `MP_ACCESS_TOKEN`, el link funciona igual, pero solo con transferencia.
+- La reserva vive en la columna **T** (`Reserva (JSON)`) de `Cotizaciones`.
+- **Descuento**: campo "Descuento (%)" en Cotizar y al agendar la instalación, con el atajo "Transferencia · 10%".
   - Se guarda en `Adicionales (JSON)` como `descuento_pct` y aparece en el PDF, los totales y el dashboard ("Descuentos").
   - Si editas el nombre de un servicio en Cotizar, ese nombre sale en la tabla del PDF (`nombre_<servicio>`).
 - **Boletas** (se emiten a mano en el SII):
@@ -100,7 +109,11 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
    - copia la **clave secreta** a `MP_WEBHOOK_SECRET`.
 4. Haz el deploy. Desde ahí, los PDF nuevos llevan el link propio. Los PDF anteriores siguen con el link fijo, que funciona igual pero no registra el pago solo.
 
-Lógica y pruebas: `lib/mercadopago.mjs`, `lib/pagina-pago.mjs`, `lib/totales.mjs`. Prueba E2E local, con un Mercado Pago simulado: `node scripts/local-dev/verify-pagos.mjs`.
+Los bloques y semanas se cambian en `AGENDA_INSTALACIONES` (`lib/reservas.mjs`).
+
+Lógica y pruebas: `lib/reservas.mjs`, `lib/reserva-cliente.mjs`, `lib/mercadopago.mjs`, `lib/totales.mjs`. Pruebas E2E locales, con un Mercado Pago simulado: `node scripts/local-dev/verify-reserva.mjs` y `verify-pagos.mjs`.
+
+**Cotizaciones**: cada tarjeta parte con el **siguiente paso**: enviar, verificar la transferencia, agendar o cobrar el saldo. Debajo están **Cliente y montos**, **Documento**, **Enviar al cliente**, **Instalación** y **Pagos**. Cambiar el estado y eliminar quedan en "Más acciones".
 
 ## Dashboard de instalaciones
 
