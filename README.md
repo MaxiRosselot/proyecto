@@ -23,6 +23,9 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
      (por ejemplo `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
      Cambiar esta variable o la contraseña cierra todas las sesiones abiertas.
    - VITE_REPISAS_3D_URL: dirección del configurador 3D (Vercel).
+   - MP_ACCESS_TOKEN: Access Token **de producción** de Mercado Pago (ver "Pago en línea"). Sin él se sigue usando el link fijo.
+   - MP_WEBHOOK_SECRET (recomendada): la "clave secreta" de las notificaciones (webhooks) de Mercado Pago.
+   - SITE_URL (opcional): dirección pública del sitio para los links de pago. Si falta, se usa la que da Netlify.
 3. Sube `logo.png` y `og-cover.png` a `/public`.
 
 ## Cotizador para clientes (/cotiza)
@@ -68,6 +71,36 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
   - etiqueta "Abono %" o "Pagada" en la tarjeta.
 - **Regenerar PDF**: rehace el PDF con el 3D y el total actual, lo sube a Drive y actualiza el link. Se sugiere solo cuando al agendar cambia el total.
 - Lógica y pruebas: `lib/calendario.mjs`, `lib/pagos.mjs`, `lib/recordatorios.mjs`, `lib/mensajes.mjs`. Prueba E2E local: `node scripts/local-dev/verify-calendario.mjs`.
+
+## Pago en línea (Mercado Pago), descuentos y boletas
+
+- Cada cotización tiene **su propio link de pago**: `https://<sitio>/pagar?c=<N°>&t=<firma>`.
+  - Va en el PDF ("Pagar cotización"), en el correo y la pantalla final de /cotiza, en el mensaje de "WhatsApp al cliente" y en **Pagos → Copiar link de pago**.
+  - La firma impide abrir cotizaciones ajenas cambiando el número.
+- Al abrirlo, el cliente elige **pagar el total** o **abonar el 50%** (si ya abonó, solo el saldo) y paga en Mercado Pago.
+  - Dentro de las **48 horas** de creada la cotización, el precio ya trae el **10% de la oferta**.
+- Cuando el pago se aprueba, Mercado Pago avisa a `mp-webhook`, que:
+  - registra el pago en la cotización ("Mercado Pago (en línea)");
+  - la deja **confirmada**, y con el 10% si pagó con la oferta;
+  - te manda un correo.
+  - Es idempotente: un aviso repetido no duplica el pago.
+- **Descuento**: campo "Descuento (%)" en Cotizar y al agendar la instalación, con el atajo "Oferta 48 h · 10%".
+  - Se guarda en `Adicionales (JSON)` como `descuento_pct` y aparece en el PDF, los totales y el dashboard ("Descuentos").
+  - Si editas el nombre de un servicio en Cotizar, ese nombre sale en la tabla del PDF (`nombre_<servicio>`).
+- **Boletas** (se emiten a mano en el SII):
+  - cada pago tiene "Anotar boleta" para guardar su N°;
+  - Admin → Instalaciones muestra los **pagos sin boleta**, con su monto y fecha, para anotarlos ahí mismo.
+
+**Configurar Mercado Pago (una vez):**
+1. En https://www.mercadopago.cl/developers/panel crea una aplicación, del tipo **Checkout Pro** / pagos online.
+2. En **Credenciales de producción**, copia el **Access Token** (`APP_USR-...`) y ponlo en Netlify como `MP_ACCESS_TOKEN`. Nunca lo pegues en un chat ni en el código.
+3. En la aplicación, en **Webhooks**:
+   - URL de producción: `https://<sitio>/.netlify/functions/mp-webhook`;
+   - evento: **Pagos**;
+   - copia la **clave secreta** a `MP_WEBHOOK_SECRET`.
+4. Haz el deploy. Desde ahí, los PDF nuevos llevan el link propio. Los PDF anteriores siguen con el link fijo, que funciona igual pero no registra el pago solo.
+
+Lógica y pruebas: `lib/mercadopago.mjs`, `lib/pagina-pago.mjs`, `lib/totales.mjs`. Prueba E2E local, con un Mercado Pago simulado: `node scripts/local-dev/verify-pagos.mjs`.
 
 ## Dashboard de instalaciones
 

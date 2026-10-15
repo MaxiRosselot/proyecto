@@ -1,10 +1,11 @@
 // netlify/functions/pagos.mjs — admin
 //   POST { accion: 'registrar', cotNum, monto, medio, fecha, nota? }
 //   POST { accion: 'borrar', cotNum, id }
+//   POST { accion: 'boleta', cotNum, id, boleta }   (N° de la boleta emitida en el SII)
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { almacenSheets, respuestaDeError } from './lib/cotizaciones.mjs'
-import { borrarPago, registrarPago } from './lib/pagos.mjs'
+import { anotarBoleta, borrarPago, registrarPago } from './lib/pagos.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +27,7 @@ export async function handler(event) {
     const almacen = almacenSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID)
     if (datos.accion === 'registrar') return responder(200, { ok: true, ...(await registrarPago(almacen, datos)) })
     if (datos.accion === 'borrar') return responder(200, { ok: true, ...(await borrarPago(almacen, datos)) })
+    if (datos.accion === 'boleta') return responder(200, { ok: true, ...(await anotarBoleta(almacen, datos)) })
     return responder(400, { ok: false, error: 'Acción desconocida' })
   } catch (err) {
     return respuestaDeError(err, corsHeaders)

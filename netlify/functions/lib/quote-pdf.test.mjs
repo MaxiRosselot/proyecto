@@ -46,3 +46,11 @@ test('follows the handoff template: Lora/Poppins, metre format, fixed 48 h offer
   assert.ok(raw.includes('Poppins')&&raw.includes('Lora'),'fonts embedded');
   assert.ok(raw.includes('link.mercadopago.cl/repisasdonmaxi'),'payment link');
 });
+test('descuento, nombre editado del servicio y link de pago propio',async()=>{
+  const result=await generateQuotePdf({cot_num:1600,repisas:[{largo:2.4,prof:.48,alto:2,niveles:4,unidades:1,valor:200000}],qty_cajas:2,precio_cajas:15000,nombre_cajas:'Cajas 60 litros',descuento_pct:10,payment_url:'https://donmaxi.example/pagar?c=1600&t=abc'});
+  assert.equal(result.subtotal,207000);
+  assert.equal(result.total,246330);
+  const {text}=await pdf(result.bytes);
+  for(const t of ['Cajas 60 litros','Descuento 10%','-$23.000','246.330','Incluye 10% de descuento']) assert.ok(text.includes(t),t);
+  assert.ok(result.bytes.toString('latin1').includes('donmaxi.example/pagar?c=1600'),'link de pago');
+});

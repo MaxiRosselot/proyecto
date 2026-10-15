@@ -7,6 +7,23 @@ const fechaCorta = iso => { const [y, m, d] = iso.split('-'); return `${d}-${m}-
 const COLOR = { pagada: C.green, abono: C.yellow, 'sin pago': C.textMuted }
 export const ETIQUETA_PAGO = { pagada: 'Pagada', abono: 'Abono', 'sin pago': 'Sin pago' }
 
+// N° de la boleta del SII de un pago: se muestra, o se anota en el momento.
+export function Boleta({ pago, guardando, onGuardar }) {
+  const [editando, setEditando] = useState(false)
+  const [folio, setFolio] = useState(pago.boleta || '')
+  if (!editando) return pago.boleta
+    ? <button type="button" onClick={() => setEditando(true)} title="Cambiar N° de boleta" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: 'nowrap' }}>Boleta N° {pago.boleta}</button>
+    : <button type="button" onClick={() => setEditando(true)} style={{ ...styles.btnSecondary, fontSize: 11, padding: '3px 8px', borderColor: C.yellow, color: '#B45309', whiteSpace: 'nowrap' }}>Anotar boleta</button>
+  const guardar = async () => { if (await onGuardar(folio)) setEditando(false) }
+  return (
+    <span style={{ display: 'inline-flex', gap: 4 }}>
+      <input autoFocus aria-label="N° de boleta" placeholder="N° boleta" value={folio} onChange={e => setFolio(e.target.value)} onKeyDown={e => e.key === 'Enter' && guardar()}
+        style={{ ...styles.input, width: 92, padding: '4px 8px', fontSize: 12 }} />
+      <button type="button" onClick={guardar} disabled={guardando} style={{ ...styles.btnSecondary, fontSize: 11, padding: '3px 8px' }}>OK</button>
+    </span>
+  )
+}
+
 export function BadgePago({ quote }) {
   const r = resumenPagos(quote.total, quote.pagos)
   if (r.estado === 'sin pago') return null
@@ -38,6 +55,11 @@ export function PagosCotizacion({ quote, onCambio }) {
   async function registrar() {
     if (await llamar({ accion: 'registrar', monto: Number(monto), medio, fecha, nota })) { setAbierto(false); setMonto(''); setNota('') }
   }
+  const anotar = (pago, boleta) => llamar({ accion: 'boleta', id: pago.id, boleta })
+  const [copiado, setCopiado] = useState(false)
+  async function copiarLink() {
+    try { await navigator.clipboard.writeText(quote.linkPago); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { window.prompt('Copia el link de pago:', quote.linkPago) }
+  }
   async function borrar(pago) {
     if (window.confirm(`¿Borrar el pago de ${fmt(pago.monto)} del ${fechaCorta(pago.fecha)}?`)) await llamar({ accion: 'borrar', id: pago.id })
   }
@@ -62,15 +84,22 @@ export function PagosCotizacion({ quote, onCambio }) {
         <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, padding: '6px 0', borderTop: '1px solid ' + C.border }}>
           <span style={{ color: C.textMuted, minWidth: 78 }}>{fechaCorta(p.fecha)}</span>
           <strong style={{ minWidth: 86 }}>{fmt(p.monto)}</strong>
-          <span style={{ color: C.textSub, flex: 1 }}>{p.medio}{p.nota ? ' · ' + p.nota : ''}</span>
+          <span style={{ color: C.textSub, flex: 1, minWidth: 0 }}>{p.medio}{p.mpId ? ' (en línea)' : ''}{p.nota && !p.mpId ? ' · ' + p.nota : ''}</span>
+          <Boleta pago={p} guardando={guardando} onGuardar={folio => anotar(p, folio)} />
           <button onClick={() => borrar(p)} disabled={guardando} aria-label="Borrar pago"
             style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 13 }}>✕</button>
         </div>
       ))}
 
       {r.saldo > 0 && !abierto && (
-        <button onClick={() => { setAbierto(true); setMonto(String((quote.pagos || []).length ? r.saldo : mitad)) }}
-          style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px', marginTop: 6 }}>Registrar pago</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+          <button onClick={() => { setAbierto(true); setMonto(String((quote.pagos || []).length ? r.saldo : mitad)) }}
+            style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>Registrar pago</button>
+          {quote.linkPago && <>
+            <button onClick={copiarLink} style={{ ...styles.btnSecondary, fontSize: 12, padding: '6px 14px' }}>{copiado ? '✓ Link copiado' : 'Copiar link de pago'}</button>
+            <a href={quote.linkPago} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.textSub }}>ver</a>
+          </>}
+        </div>
       )}
       {abierto && (
         <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>

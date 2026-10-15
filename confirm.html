@@ -162,9 +162,9 @@
       <footer>© <span id="year"></span> Repisas Don Maxi — Todos los derechos reservados</footer>
     </div>
 
-    <script>
-      // Config
-      const WHATSAPP_NUMBER_E164 = '+56951020367';
+    <script type="module">
+      // Config: el numero vive en netlify/functions/lib/marca.mjs, igual que en el resto del sitio.
+      import { WHATSAPP as WHATSAPP_NUMBER_E164 } from './netlify/functions/lib/marca.mjs';
       const WHATSAPP_WA_ME = 'https://wa.me/';
 
       // Año

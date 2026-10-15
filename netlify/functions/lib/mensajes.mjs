@@ -71,12 +71,13 @@ export function mensajeRecordatorio({ tipo, cliente, fecha, inicio, fin, ubicaci
 const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 
 // Para mandar la cotizacion por WhatsApp: con el link al PDF si ya esta en Drive.
-export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl }) {
+export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl, linkPago }) {
   return [
     `${saludo(nombre)} Le envío su cotización N° ${cotNum} de Repisas Don Maxi 📄`,
     '',
     `Total: ${pesos(total)} con IVA incluido.`,
     ...(pdfUrl ? [`Puede verla aquí: ${pdfUrl}`] : []),
+    ...(linkPago ? [`Para reservar su instalación puede pagar en línea (total o abono del 50%): ${linkPago}`] : []),
     '',
     `Si la acepta dentro de las próximas ${OFERTA.horas} horas, tiene un ${OFERTA.descuento}% de descuento adicional.`,
     'Cualquier duda, respóndanos por aquí.',

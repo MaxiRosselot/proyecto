@@ -7,7 +7,7 @@
 // Calendar y la planilla se inyectan: en Netlify son Google; en local y en los tests, falsos.
 import { ErrorCotizacion, actualizarCotizacion, obtenerCotizacion } from './cotizaciones.mjs'
 import { SERVICIOS } from './marca.mjs'
-import { totalesCotizacion } from './totales.mjs'
+import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from './totales.mjs'
 
 export { totalesCotizacion }
 
@@ -28,7 +28,8 @@ export function duracionTexto(inicio, fin) {
   return [h ? `${h} h` : '', m ? `${m} min` : ''].filter(Boolean).join(' ')
 }
 
-// Cantidades y precios enteros y no negativos, solo de los servicios que existen.
+// Cantidades y precios enteros y no negativos, solo de los servicios que existen. Conserva los
+// nombres editados y el descuento, que viajan en el mismo objeto.
 export function limpiarAdicionales(adicionales = {}) {
   const limpio = {}
   for (const [clave, , lista] of SERVICIOS) {
@@ -38,7 +39,12 @@ export function limpiarAdicionales(adicionales = {}) {
     if (!Number.isInteger(precio) || precio < 0 || precio > 1e8) falla('Revisa el precio de los servicios adicionales')
     limpio[`qty_${clave}`] = qty
     limpio[`precio_${clave}`] = precio
+    const nombre = String(adicionales[`nombre_${clave}`] ?? '').trim().slice(0, 60)
+    if (nombre) limpio[`nombre_${clave}`] = nombre
   }
+  const descuento = Number(adicionales.descuento_pct ?? 0)
+  if (!Number.isInteger(descuento) || descuento < 0 || descuento > DESCUENTO_MAX) falla(`El descuento debe ser un porcentaje entre 0 y ${DESCUENTO_MAX}`)
+  if (descuento) limpio.descuento_pct = descuento
   return limpio
 }
 
@@ -53,7 +59,7 @@ const pesos = n => '$' + Math.round(n).toLocaleString('es-CL')
 export function eventoInstalacion({ cotizacion, fecha, inicio, fin, adicionales, totales, invitado, notas }) {
   const servicios = SERVICIOS
     .filter(([clave]) => adicionales[`qty_${clave}`] > 0)
-    .map(([clave, nombre]) => `• ${nombre} × ${adicionales[`qty_${clave}`]} (${pesos(adicionales[`precio_${clave}`])} c/u)`)
+    .map(([clave]) => `• ${nombreServicio(adicionales, clave)} × ${adicionales[`qty_${clave}`]} (${pesos(adicionales[`precio_${clave}`])} c/u)`)
   const description = [
     `Cliente: ${cotizacion.nombre}`,
     cotizacion.telefono && `Teléfono: ${cotizacion.telefono}`,
@@ -61,6 +67,7 @@ export function eventoInstalacion({ cotizacion, fecha, inicio, fin, adicionales,
     cotizacion.direccion && `Dirección: ${cotizacion.direccion}`,
     `Cotización N° ${cotizacion.cotNum} · Total ${pesos(totales.total)} con IVA`,
     servicios.length && `\nServicios adicionales:\n${servicios.join('\n')}`,
+    totales.descuento > 0 && `Descuento ${totales.descuentoPct}%: -${pesos(totales.descuento)} neto`,
     notas && `\nNotas:\n${notas}`,
   ].filter(Boolean).join('\n')
   return {

@@ -104,7 +104,9 @@ try {
   await expect(detalle).toContainText('Av. Grecia 1500')
   await expect(detalle).toContainText('Saldo $')
   await expect(detalle.getByRole('link', { name: 'Recordatorio por WhatsApp' })).toHaveAttribute('href', /wa\.me\/56977778888/)
-  await shot('05-detalle.png')
+  // Solo lo visible: la captura de pagina completa achica la ventana a 1x1 un instante, el panel
+  // pasa al diseño de celular y el detalle abierto se cierra.
+  await page.screenshot({ path: path.join(evidence, '05-detalle.png') })
   await detalle.getByRole('button', { name: 'Ver cotización y pagos' }).click()
   await expect(page.locator('#cot-' + marta.cotNum).getByTestId('pagos')).toBeVisible()
 

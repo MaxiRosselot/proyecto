@@ -81,7 +81,7 @@ const fechaHora = d => new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 
 const linkWhatsapp = texto => `https://wa.me/${WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(texto)}`
 
 // El cliente ya midio: el correo empuja a cerrar ahora (pago o WhatsApp), no a agendar una visita.
-export function correoCliente({ cliente, cotNum, total, modulos, ofertaHasta, avisoA }) {
+export function correoCliente({ cliente, cotNum, total, modulos, ofertaHasta, avisoA, linkPago = MARCA.linkPago }) {
   const nombre = cliente.nombre.split(' ')[0]
   const lineas = [
     `Hola ${nombre}:`,
@@ -91,7 +91,7 @@ export function correoCliente({ cliente, cotNum, total, modulos, ofertaHasta, av
     `Acéptala antes del ${fechaHora(ofertaHasta)} y obtén ${OFERTA.descuento}% de descuento adicional.`,
     '',
     'Para reservar tu instalación:',
-    `• Paga en línea (débito o crédito, hasta 3 cuotas sin interés): ${MARCA.linkPago}`,
+    `• Paga en línea (débito o crédito, hasta 3 cuotas sin interés): ${linkPago}`,
     `• O por transferencia: ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
     `• O confírmanos por WhatsApp: ${linkWhatsapp(`Hola, quiero aceptar la cotización N° ${cotNum}`)}`,
     '',
@@ -121,7 +121,8 @@ export function correoAviso({ cliente, cotNum, total, modulos, pdfUrl, avisoA })
 }
 
 export async function procesarCotizacionWeb(body, deps) {
-  const { tabla, almacen, generarPdf, subirPdf, enviarCorreo, avisoA, ahora = new Date() } = deps
+  // linkPago: el link de pago de cada cotizacion (lib/mercadopago.mjs); sin el, el link fijo.
+  const { tabla, almacen, generarPdf, subirPdf, enviarCorreo, avisoA, ahora = new Date(), linkPago: linkDe = () => MARCA.linkPago } = deps
   const ofertaHasta = new Date(ahora.getTime() + OFERTA.horas * 3600 * 1000)
   const { cliente, modulos, proyecto3d, vistas } = validarSolicitud(body)
   const repisas = filasConPrecio(modulos, tabla)
@@ -135,7 +136,7 @@ export async function procesarCotizacionWeb(body, deps) {
   let numero = await siguienteDisponible(almacen)
   let pdf
   for (let intento = 0; ; intento++) {
-    pdf = await generarPdf({ cot_num: numero, nombre: cliente.nombre, direccion: cliente.direccion, rut: '', telefono: cliente.telefono, email: cliente.email, repisas, grafica3d: vistas })
+    pdf = await generarPdf({ cot_num: numero, nombre: cliente.nombre, direccion: cliente.direccion, rut: '', telefono: cliente.telefono, email: cliente.email, repisas, grafica3d: vistas, payment_url: linkDe(numero) })
     const { estado, respuesta } = await crearCotizacion(almacen, {
       crear: true, cotNum: numero, ...cliente, fechaVisita: '',
       subtotal: pdf.subtotal, iva: pdf.iva, total: pdf.total,
@@ -154,7 +155,8 @@ export async function procesarCotizacionWeb(body, deps) {
   } catch (e) { console.error(`cotizacion-web: no se subió el PDF de la N° ${numero}:`, e) }
 
   const adjunto = { nombre: nombreArchivo, tipo: 'application/pdf', contenido: pdf.bytes }
-  const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, ofertaHasta, avisoA }
+  const linkPago = linkDe(numero)
+  const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, ofertaHasta, avisoA, linkPago }
   let correoEnviado = true
   try { await enviarCorreo({ ...correoCliente(datos), adjuntos: [adjunto] }) }
   catch (e) {
@@ -175,7 +177,7 @@ export async function procesarCotizacionWeb(body, deps) {
     // El PDF va en la respuesta para verlo en la pantalla final aunque el correo o Drive fallen.
     pdfBase64: Buffer.from(pdf.bytes).toString('base64'), pdfUrl,
     oferta: { hasta: ofertaHasta.toISOString(), descuento: OFERTA.descuento },
-    pago: { link: MARCA.linkPago, razonSocial: MARCA.razonSocial, rut: MARCA.rut, banco: MARCA.banco, tipoCuenta: MARCA.tipoCuenta, numeroCuenta: MARCA.numeroCuenta },
+    pago: { link: linkPago, razonSocial: MARCA.razonSocial, rut: MARCA.rut, banco: MARCA.banco, tipoCuenta: MARCA.tipoCuenta, numeroCuenta: MARCA.numeroCuenta },
     whatsapp: WHATSAPP,
   }
 }

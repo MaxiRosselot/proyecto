@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
-import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
-import { totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
+import { OFERTA, SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
+import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { duracion, fechaLarga, linkWhatsappInstalacion } from './whatsappInstalacion.js'
 
 const ENDPOINT = '/.netlify/functions/instalacion'
@@ -14,10 +14,14 @@ const etiqueta = { ...styles.detailLabel, display: 'block', marginBottom: 4 }
 // Formulario para agendar (o reagendar) la instalacion de una cotizacion.
 export function AgendarInstalacion({ quote, onListo, onCancelar }) {
   const previa = quote.instalacion
-  const [adicionales, setAdicionales] = useState(() => Object.fromEntries(SERVICIOS.flatMap(([clave, , lista]) => [
-    [`qty_${clave}`, Number(quote.adicionales?.[`qty_${clave}`]) || 0],
-    [`precio_${clave}`, Number(quote.adicionales?.[`precio_${clave}`] ?? lista) || 0],
-  ])))
+  // Parte de lo que ya tiene la cotizacion: cantidades, precios, nombres editados y descuento.
+  const [adicionales, setAdicionales] = useState(() => ({
+    ...quote.adicionales,
+    ...Object.fromEntries(SERVICIOS.flatMap(([clave, , lista]) => [
+      [`qty_${clave}`, Number(quote.adicionales?.[`qty_${clave}`]) || 0],
+      [`precio_${clave}`, Number(quote.adicionales?.[`precio_${clave}`] ?? lista) || 0],
+    ])),
+  }))
   const [fecha, setFecha] = useState(previa?.fecha || '')
   const [inicio, setInicio] = useState(previa?.inicio || '09:00')
   const [fin, setFin] = useState(previa?.fin || '13:00')
@@ -44,6 +48,10 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
   const choques = horarioOk ? delDia.filter(e => e.todoElDia || (e.minutoInicio < aMin(fin) && e.minutoFin > aMin(inicio))) : []
   const emailOk = !email.trim() || correoValido(email)
   const numero = (clave, valor) => setAdicionales(a => ({ ...a, [clave]: Math.max(0, Math.round(Number(valor) || 0)) }))
+  const descuento = valor => setAdicionales(({ descuento_pct: _, ...resto }) => {
+    const n = Math.min(DESCUENTO_MAX, Math.max(0, Math.round(Number(valor) || 0)))
+    return n ? { ...resto, descuento_pct: n } : resto
+  })
 
   async function agendar() {
     if (!horarioOk || !emailOk || guardando) return
@@ -66,7 +74,7 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
       <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .8, marginBottom: 6 }}>Servicios adicionales</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 64px 100px 84px', gap: '6px 8px', alignItems: 'center', fontSize: 13, marginBottom: 12 }}>
         {['Servicio', 'Cant.', 'Precio c/u', 'Total'].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', textAlign: h === 'Servicio' ? 'left' : 'center' }}>{h}</span>)}
-        {SERVICIOS.map(([clave, nombre]) => (
+        {SERVICIOS.map(([clave]) => [clave, nombreServicio(adicionales, clave)]).map(([clave, nombre]) => (
           <React.Fragment key={clave}>
             <span style={{ color: C.textSub }}>{nombre}</span>
             <input type="number" min="0" aria-label={`Cantidad de ${nombre}`} value={adicionales[`qty_${clave}`]} onChange={e => numero(`qty_${clave}`, e.target.value)} style={{ ...campo, textAlign: 'center', padding: '6px' }} />
@@ -75,9 +83,19 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
           </React.Fragment>
         ))}
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ ...etiqueta, marginBottom: 0 }}>Descuento</span>
+        <input type="number" min="0" max={DESCUENTO_MAX} aria-label="Descuento en porcentaje" value={totales.descuentoPct || ''} placeholder="0" onChange={e => descuento(e.target.value)} style={{ ...campo, width: 70, textAlign: 'center', padding: '6px' }} />
+        <span style={{ fontSize: 13, color: C.textSub }}>%</span>
+        <button type="button" onClick={() => descuento(totales.descuentoPct === OFERTA.descuento ? 0 : OFERTA.descuento)} aria-pressed={totales.descuentoPct === OFERTA.descuento}
+          style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 10px', ...(totales.descuentoPct === OFERTA.descuento ? { borderColor: C.green, color: C.green, background: C.green + '12' } : {}) }}>
+          Oferta {OFERTA.horas} h · {OFERTA.descuento}%
+        </button>
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 13, color: C.textSub, marginBottom: 14 }}>
         <span>Repisas {fmt(totales.repisas)}</span>
         <span>Adicionales {fmt(totales.adicionales)}</span>
+        {totales.descuento > 0 && <span style={{ color: C.green, fontWeight: 700 }}>Descuento {totales.descuentoPct}% -{fmt(totales.descuento)}</span>}
         <span>IVA {fmt(totales.iva)}</span>
         <strong style={{ color: C.orangeDark }} data-testid="total-instalacion">Total {fmt(totales.total)}</strong>
         {totales.total !== Number(quote.total) && <span style={{ color: C.textMuted }}>(antes {fmt(quote.total)})</span>}

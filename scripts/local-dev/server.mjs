@@ -20,9 +20,11 @@ import {
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
 import { eventoParaVista } from '../../netlify/functions/lib/calendario.mjs'
-import { borrarPago, registrarPago } from '../../netlify/functions/lib/pagos.mjs'
+import { anotarBoleta, borrarPago, registrarPago } from '../../netlify/functions/lib/pagos.mjs'
 import { armarCorreo } from '../../netlify/functions/lib/correo.mjs'
 import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
+import { configPago, conLinkPago, linkPagoCotizacion } from '../../netlify/functions/lib/mercadopago.mjs'
+import { atenderAvisoMercadoPago, atenderPagar } from '../../netlify/functions/lib/pagina-pago.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -37,6 +39,10 @@ process.env.LAMBDA_TASK_ROOT = process.env.LAMBDA_TASK_ROOT || path.join(here, '
 // ADMIN_SESSION_SECRET se configuran en Netlify y no tienen valor por defecto.
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'donmaxi-local-demo'
 process.env.ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || randomBytes(32).toString('hex')
+// Mercado Pago simulado (mpLocal, mas abajo): los links de pago se arman igual que en produccion.
+process.env.MP_ACCESS_TOKEN = 'local-simulado'
+process.env.PAGO_LINK_SECRET = 'solo-local-links-de-pago'
+process.env.SITE_URL = PUBLIC_URL
 
 function loadData() {
   if (fs.existsSync(DATA_FILE)) {
@@ -104,8 +110,32 @@ function eventosLocales() {
   return [...instalaciones, ...visitas]
 }
 
+// Mercado Pago falso: la preferencia lleva a un checkout local que "paga" y avisa al webhook,
+// igual que el real. Los pagos quedan en data.json (db.mpPagos).
+const mpLocal = {
+  async crearPreferencia(body) {
+    const id = 'pref-' + randomUUID().slice(0, 8)
+    db.mpPreferencias = { ...(db.mpPreferencias || {}), [id]: body }; saveData(db)
+    return { id, init_point: `${PUBLIC_URL}/.netlify/functions/mp-checkout-local?pref=${id}` }
+  },
+  async obtenerPago(id) {
+    const pago = db.mpPagos?.[id]
+    if (!pago) throw Object.assign(new Error('Pago no encontrado en MP'), { estado: 404 })
+    return pago
+  },
+}
+async function pagarLocal(prefId) {
+  const pref = db.mpPreferencias?.[prefId]
+  if (!pref) throw Object.assign(new Error('Preferencia no encontrada'), { status: 404 })
+  const id = String(Date.now())
+  db.mpPagos = { ...(db.mpPagos || {}), [id]: { id, status: 'approved', transaction_amount: pref.items[0].unit_price, external_reference: pref.external_reference, metadata: pref.metadata, date_approved: new Date().toISOString() } }
+  saveData(db)
+  await atenderAvisoMercadoPago({ body: { type: 'payment', data: { id } } }, { almacen: cotizaciones, mp: mpLocal })
+  return pref.back_urls.success
+}
+
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local'])
 
 // Los PDF y correos de las cotizaciones web quedan en disco: nada sale a Google ni a un correo real.
 function guardarPdfLocal(bytes) {
@@ -150,9 +180,10 @@ const routes = {
     if (params.get('siguiente')) return { ok: true, siguiente: await siguienteDisponible(cotizaciones) }
     if (params.get('cotNum')) {
       const quote = await obtenerCotizacion(cotizaciones, params.get('cotNum'))
-      return quote ? { ok: true, quote } : { status: 404, ok: false, error: 'Cotización no encontrada' }
+      return quote ? { ok: true, quote: conLinkPago(quote) } : { status: 404, ok: false, error: 'Cotización no encontrada' }
     }
-    return { ok: true, ...(await listarCotizaciones(cotizaciones)) }
+    const { quotes, siguiente } = await listarCotizaciones(cotizaciones)
+    return { ok: true, quotes: quotes.map(q => conLinkPago(q)), siguiente }
   },
   'get-installations': () => ({ ok: true, installations: db.installations }),
   'get-sales': () => ({ ok: true, installations: db.installations }),
@@ -166,7 +197,7 @@ const routes = {
   },
   'save-quote': async (body) => {
     const { estado, respuesta } = body.crear ? await crearCotizacion(cotizaciones, body) : await actualizarCotizacion(cotizaciones, body)
-    return { status: estado, ...respuesta }
+    return { status: estado, ...respuesta, ...(respuesta.ok ? { linkPago: linkPagoCotizacion(respuesta.cotNum ?? body.cotNum) } : {}) }
   },
   'delete-quote': async (body) => {
     const { estado, respuesta } = await borrarCotizacion(cotizaciones, body.cotNum)
@@ -180,6 +211,7 @@ const routes = {
       subirPdf: async ({ pdfBuffer }) => ({ viewUrl: guardarPdfLocal(pdfBuffer) }),
       enviarCorreo: async correo => guardarCorreoLocal(correo),
       avisoA: 'admin-local@example.com',
+      linkPago: cotNum => linkPagoCotizacion(cotNum),
     })
     return { ok: true, ...resultado }
   },
@@ -201,7 +233,7 @@ const routes = {
     return { ok: true, eventos }
   },
   // Mismo contrato que netlify/functions/pagos.mjs
-  'pagos': async (body) => ({ ok: true, ...(body.accion === 'borrar' ? await borrarPago(cotizaciones, body) : await registrarPago(cotizaciones, body)) }),
+  'pagos': async (body) => ({ ok: true, ...(body.accion === 'borrar' ? await borrarPago(cotizaciones, body) : body.accion === 'boleta' ? await anotarBoleta(cotizaciones, body) : await registrarPago(cotizaciones, body)) }),
   // Mismo contrato que netlify/functions/probar-correo.mjs (el correo queda como .eml)
   'probar-correo': async () => {
     guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })
@@ -258,6 +290,24 @@ const server = http.createServer(async (req, res) => {
     if (!fs.existsSync(file)) return send(res, 404, { error: 'PDF no encontrado' })
     res.writeHead(200, { 'Content-Type': 'application/pdf' })
     return res.end(fs.readFileSync(file))
+  }
+
+  // Pago en linea: /pagar (pagina publica) y el checkout simulado de Mercado Pago.
+  if (name === 'pagar' && req.method === 'GET') {
+    try {
+      const r = await atenderPagar(Object.fromEntries(url.searchParams), { almacen: cotizaciones, mp: mpLocal, config: configPago() })
+      res.writeHead(r.statusCode, r.headers); return res.end(r.body)
+    } catch (e) { console.error('[local-api] pagar failed:', e); return send(res, 500, { ok: false, error: e.message }) }
+  }
+  if (name === 'mp-checkout-local') {
+    const pref = db.mpPreferencias?.[url.searchParams.get('pref')]
+    if (!pref) return send(res, 404, { ok: false, error: 'Preferencia no encontrada' })
+    if (req.method === 'POST') {
+      try { res.writeHead(302, { Location: await pagarLocal(url.searchParams.get('pref')) }); return res.end() }
+      catch (e) { console.error('[local-api] checkout failed:', e); return send(res, 500, { ok: false, error: e.message }) }
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`<!doctype html><meta charset="utf-8"><title>Mercado Pago (simulado)</title><body style="font-family:system-ui;padding:32px"><h1>Mercado Pago · simulado</h1><p>${pref.items[0].title}</p><p style="font-size:28px;font-weight:800">$${pref.items[0].unit_price.toLocaleString('es-CL')}</p><form method="post"><button style="font-size:18px;padding:12px 24px">Pagar (simulado)</button></form></body>`)
   }
 
   const chunks = []

@@ -10,6 +10,11 @@ test('mensaje de la cotizacion: numero, total, link al PDF y la oferta', () => {
   assert.match(texto, /48 horas, tiene un 10% de descuento adicional/)
 })
 
+test('con link de pago el mensaje invita a pagar en linea', () => {
+  const texto = mensajeCotizacion({ nombre: 'Ana', cotNum: 3, total: 1000, linkPago: 'https://donmaxi.example/pagar?c=3&t=x' })
+  assert.match(texto, /pagar en línea \(total o abono del 50%\): https:\/\/donmaxi\.example\/pagar\?c=3&t=x/)
+})
+
 test('sin link de Drive el mensaje no promete el PDF', () => {
   assert.doesNotMatch(mensajeCotizacion({ nombre: '', cotNum: 1, total: 1000 }), /verla aquí/)
 })

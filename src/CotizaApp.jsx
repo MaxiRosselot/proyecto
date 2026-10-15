@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import './cotiza.css'
+import { WHATSAPP } from '../netlify/functions/lib/marca.mjs'
 
 // /cotiza — el cliente arma sus repisas y se lleva la cotizacion por correo.
 // El configurador va en un iframe (/embed?mode=cliente del sitio Repisas 3D). Esta pagina le pasa
@@ -9,7 +10,6 @@ const URL_3D = (import.meta.env.VITE_REPISAS_3D_URL || window.location.origin).r
 const ORIGEN_3D = new URL(URL_3D).origin
 const PROTOCOLO = '1'
 const ENDPOINT = '/.netlify/functions/cotizacion-web'
-const WHATSAPP = '+56951020367'
 
 const pesos = n => '$' + Math.round(n || 0).toLocaleString('es-CL')
 const soloDigitos = s => String(s).replace(/[^0-9]/g, '')

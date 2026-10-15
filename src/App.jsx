@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { WHATSAPP } from '../netlify/functions/lib/marca.mjs'
 
 const CONFIG = {
   timezone: 'America/Santiago',
-  business: { name: 'Repisas Don Maxi', notifyPhone: '+56951020367' },
+  business: { name: 'Repisas Don Maxi', notifyPhone: WHATSAPP },
   logoUrl: '/logo.png',
   endpoints: {
     horarios: '/.netlify/functions/horarios',

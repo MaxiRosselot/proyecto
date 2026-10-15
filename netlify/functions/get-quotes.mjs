@@ -5,6 +5,7 @@
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { NUMERO_INICIAL, almacenSheets, listarCotizaciones, obtenerCotizacion, respuestaDeError, siguienteDisponible } from './lib/cotizaciones.mjs'
+import { conLinkPago } from './lib/mercadopago.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,9 +32,10 @@ export async function handler(event) {
     if (params.siguiente) return responder(200, { ok: true, siguiente: await siguienteDisponible(almacen) })
     if (params.cotNum) {
       const quote = await obtenerCotizacion(almacen, params.cotNum)
-      return quote ? responder(200, { ok: true, quote }) : responder(404, { ok: false, error: 'Cotización no encontrada' })
+      return quote ? responder(200, { ok: true, quote: conLinkPago(quote) }) : responder(404, { ok: false, error: 'Cotización no encontrada' })
     }
-    return responder(200, { ok: true, ...(await listarCotizaciones(almacen)) })
+    const { quotes, siguiente } = await listarCotizaciones(almacen)
+    return responder(200, { ok: true, quotes: quotes.map(q => conLinkPago(q)), siguiente })
   } catch (err) {
     return respuestaDeError(err, corsHeaders)
   }

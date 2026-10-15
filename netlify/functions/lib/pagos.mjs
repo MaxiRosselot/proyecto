@@ -22,6 +22,22 @@ export async function registrarPago(almacen, { cotNum, monto, medio, fecha, nota
   return { pagos, resumen: resumenPagos(cotizacion.total, pagos) }
 }
 
+// La boleta se emite a mano en el SII: aca se anota su numero en el pago (vacio la quita).
+export async function anotarBoleta(almacen, { cotNum, id, boleta }) {
+  const cotizacion = await obtenerCotizacion(almacen, cotNum)
+  if (!cotizacion) falla(ErrorCotizacion, 'Cotización no encontrada', 404)
+  const folio = String(boleta ?? '').trim()
+  if (folio && !/^[0-9A-Za-z-]{1,20}$/.test(folio)) falla(ErrorCotizacion, 'El N° de boleta solo puede tener números y letras')
+  if (!(cotizacion.pagos || []).some(p => p.id === id)) falla(ErrorCotizacion, 'Pago no encontrado', 404)
+  const pagos = cotizacion.pagos.map(p => {
+    if (p.id !== id) return p
+    const { boleta: _, ...resto } = p
+    return folio ? { ...resto, boleta: folio } : resto
+  })
+  await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, pagos })
+  return { pagos, resumen: resumenPagos(cotizacion.total, pagos) }
+}
+
 export async function borrarPago(almacen, { cotNum, id }) {
   const cotizacion = await obtenerCotizacion(almacen, cotNum)
   if (!cotizacion) falla(ErrorCotizacion, 'Cotización no encontrada', 404)

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona } from '../../netlify/functions/lib/horarios.mjs'
-import { CONCEPTOS, TIPOS_TRABAJO, resumenMes, sumarMeses } from '../../netlify/functions/lib/resumen-instalaciones.mjs'
+import { CONCEPTOS, TIPOS_TRABAJO, pagosSinBoleta, resumenMes, sumarMeses } from '../../netlify/functions/lib/resumen-instalaciones.mjs'
+import { Boleta } from './PagosCotizacion.jsx'
 
 // Colores fijos por concepto y por tipo de trabajo: los mismos en barras, leyendas y tabla.
 const COLOR = {
-  repisas: C.orange, retiro_orden: '#0EA5E9', retiro_basura: '#8B5CF6', cajas: '#10B981', bici: '#EAB308', ajuste: '#9CA3AF',
+  repisas: C.orange, retiro_orden: '#0EA5E9', retiro_basura: '#8B5CF6', cajas: '#10B981', bici: '#EAB308', descuento: '#EF4444', ajuste: '#9CA3AF',
   solo_repisas: C.orange, con_retiro_orden: '#0EA5E9', con_otros: '#8B5CF6',
 }
 const NOMBRE_CONCEPTO = Object.fromEntries(CONCEPTOS)
@@ -14,6 +15,7 @@ const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 const tituloMes = mes => { const t = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(mes + '-15T12:00:00Z')); return t.charAt(0).toUpperCase() + t.slice(1) }
 const fechaCorta = iso => { const d = new Date(iso + 'T12:00:00Z'); return new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(d) }
 const pct = (a, b) => (b ? Math.round(a * 100 / b) : 0)
+const conSigno = n => (n < 0 ? '-' + fmt(-n) : fmt(n))
 
 function useEsMovil() {
   const [movil, setMovil] = useState(() => window.innerWidth < 768)
@@ -59,7 +61,7 @@ function Desglose({ resumen, agrupar, conIva }) {
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nombre}</span>
             </span>
             <span style={{ fontSize: 14, fontWeight: 800, color: C.text, textAlign: 'right' }}>
-              {fmt(f.valor)} <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>{pct(Math.max(0, f.valor), total)}%</span>
+              {conSigno(f.valor)} {f.valor >= 0 && <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>{pct(f.valor, total)}%</span>}
             </span>
             <div style={{ height: 6, borderRadius: 99, background: '#F1F2F4', overflow: 'hidden' }}>
               <div style={{ width: Math.max(0, f.valor * 100 / maximo) + '%', height: '100%', background: COLOR[f.clave], borderRadius: 99 }} />
@@ -90,8 +92,8 @@ function Columnas({ datos, marcado, onElegir, conIva }) {
 }
 
 function aCsv(instalaciones) {
-  const cab = ['Fecha', 'Cotización', 'Cliente', 'Tipo', ...CONCEPTOS.map(([, n]) => n + ' (neto)'), 'Ajuste (neto)', 'Neto', 'IVA', 'Total', 'Pagado', 'Saldo']
-  const filas = instalaciones.map(i => [i.fecha, i.cotNum, i.cliente, NOMBRE_TIPO[i.tipo], ...CONCEPTOS.map(([c]) => i.neto[c] || 0), i.neto.ajuste || 0, i.subtotal, i.iva, i.total, i.pagado, i.saldo])
+  const cab = ['Fecha', 'Cotización', 'Cliente', 'Tipo', ...CONCEPTOS.map(([, n]) => n + ' (neto)'), 'Descuento (neto)', 'Ajuste (neto)', 'Neto', 'IVA', 'Total', 'Pagado', 'Saldo']
+  const filas = instalaciones.map(i => [i.fecha, i.cotNum, i.cliente, NOMBRE_TIPO[i.tipo], ...CONCEPTOS.map(([c]) => i.neto[c] || 0), i.neto.descuento || 0, i.neto.ajuste || 0, i.subtotal, i.iva, i.total, i.pagado, i.saldo])
   return [cab, ...filas].map(f => f.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n')
 }
 
@@ -179,6 +181,19 @@ export default function InstalacionesSection({ onVerCotizacion }) {
   useEffect(() => { cargar() }, [cargar])
 
   const r = useMemo(() => resumenMes(cotizaciones, mes, hoy), [cotizaciones, mes, hoy])
+  const sinBoleta = useMemo(() => pagosSinBoleta(cotizaciones), [cotizaciones])
+  const [verBoletas, setVerBoletas] = useState(false)
+  const [anotando, setAnotando] = useState(false)
+  async function anotarBoleta(pago, boleta) {
+    setAnotando(true)
+    try {
+      const res = await apiFetch('/.netlify/functions/pagos', { method: 'POST', body: JSON.stringify({ accion: 'boleta', cotNum: pago.cotNum, id: pago.id, boleta }) })
+      if (!res.ok) throw new Error(res.error || 'No se pudo guardar la boleta')
+      setCotizaciones(cs => cs.map(c => (String(c.cotNum) === String(pago.cotNum) ? { ...c, pagos: res.pagos } : c)))
+      return true
+    } catch (e) { setError(e.message); return false }
+    finally { setAnotando(false) }
+  }
   const t = r.totales
   const v = (total, neto) => (conIva ? total : neto)
   const lista = r.instalaciones.filter(i => filtro === 'todas' || (filtro === 'por_cobrar' ? i.saldo > 0 : i.tipo === filtro))
@@ -214,6 +229,27 @@ export default function InstalacionesSection({ onVerCotizacion }) {
       </div>
 
       {error && <div style={styles.errorBox}>{error}</div>}
+
+      {sinBoleta.length > 0 && (
+        <div data-testid="boletas-pendientes" style={{ ...styles.card, padding: '12px 18px', marginBottom: 14, border: '1px solid #FCD34D', background: '#FFFBEB' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13.5, color: '#92400E' }}>🧾 <strong>{sinBoleta.length} {sinBoleta.length === 1 ? 'pago' : 'pagos'} sin boleta</strong> · {fmt(sinBoleta.reduce((s, p) => s + p.monto, 0))} por emitir en el SII</span>
+            <button onClick={() => setVerBoletas(v => !v)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 12px' }}>{verBoletas ? 'Ocultar' : 'Ver y anotar'}</button>
+          </div>
+          {verBoletas && (
+            <div style={{ marginTop: 10, display: 'grid', gap: 2 }}>
+              {sinBoleta.map(p => (
+                <div key={p.cotNum + p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, padding: '7px 0', borderTop: '1px solid #FDE68A' }}>
+                  <span style={{ color: C.textMuted, minWidth: 80 }}>{fechaCorta(p.fecha)}</span>
+                  <strong style={{ minWidth: 86 }}>{fmt(p.monto)}</strong>
+                  <span style={{ flex: 1, minWidth: 140, color: C.textSub }}>{p.cliente} · N° {p.cotNum} · {p.medio}</span>
+                  <Boleta pago={p} guardando={anotando} onGuardar={folio => anotarBoleta(p, folio)} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div data-testid="kpis" style={{ display: 'grid', gridTemplateColumns: movil ? '1fr 1fr' : 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 14 }}>
         <Kpi titulo={`Vendido ${iva}`} valor={fmt(v(t.total, t.neto))} color={C.text}

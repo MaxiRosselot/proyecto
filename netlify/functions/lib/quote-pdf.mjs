@@ -1,11 +1,12 @@
 import PDFDocument from 'pdfkit';
-import { CONDICIONES, MARCA, SERVICIOS } from './marca.mjs';
+import { CONDICIONES, MARCA, OFERTA, SERVICIOS } from './marca.mjs';
+import { nombreServicio, porcentajeDescuento } from './totales.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Geometry, texts and palette follow Maxi's handoff (cotizador.zip, 25-09-2026:
 // plantilla_cotizacion.html + datos_ejemplo.json), measured in points from his rendered PDF. Letter size.
-const C = { accent: '#5B3A29', ink: '#2E241C', body: '#4A3D2E', sub: '#6B5B47', muted: '#8A7A66', faint: '#9A8B76', card: '#F5F2EC', cardLine: '#ECE6DC', frame: '#E7E1D8', rowLine: '#EDE9E2', head: '#F0E6DA', amber: '#FBF0DC', amberLine: '#D9A441', amberInk: '#8A5A12' };
+const C = { accent: '#5B3A29', ink: '#2E241C', body: '#4A3D2E', sub: '#6B5B47', muted: '#8A7A66', faint: '#9A8B76', card: '#F5F2EC', cardLine: '#ECE6DC', frame: '#E7E1D8', rowLine: '#EDE9E2', head: '#F0E6DA', amber: '#FBF0DC', amberLine: '#D9A441', amberInk: '#8A5A12', green: '#1F7A4D' };
 const L = 42, R = 570, W = R - L, FOOT = 751.8;
 const F = { serif: 'Lora-Bold', sans: 'Poppins', bold: 'Poppins-Bold' };
 const money = value => '$' + Math.round(value).toLocaleString('es-CL');
@@ -40,10 +41,13 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   }));
   if (rows.length > 100) throw new Error('Máximo 100 repisas por cotización');
   if (rows.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.valor) || r.valor <= 0))) throw new Error('Cada rack requiere un precio neto entero positivo');
-  const extras = services.map(([key, title, price, description]) => ({ key, title, description, qty: numeric(data[`qty_${key}`]), price: numeric(data[`precio_${key}`], price) }));
+  // title: el de lista (pagina 2); name: el que se edito para esta cotizacion (fila de la tabla).
+  const extras = services.map(([key, title, price, description]) => ({ key, title, name: nombreServicio(data, key), description, qty: numeric(data[`qty_${key}`]), price: numeric(data[`precio_${key}`], price) }));
   const views = { isometric: imageData(data.grafica3d?.isometric, 'isometric'), top: imageData(data.grafica3d?.top, 'top') };
-  const subtotal = rows.reduce((s, r) => s + r.unidades * r.valor, 0) + extras.reduce((s, r) => s + r.qty * r.price, 0);
-  const iva = Math.round(subtotal * .19), total = subtotal + iva;
+  // Mismo calculo que lib/totales.mjs: bruto, descuento, neto e IVA.
+  const bruto = rows.reduce((s, r) => s + r.unidades * r.valor, 0) + extras.reduce((s, r) => s + r.qty * r.price, 0);
+  const descuentoPct = porcentajeDescuento(data), descuento = Math.round(bruto * descuentoPct / 100);
+  const subtotal = bruto - descuento, iva = Math.round(subtotal * .19), total = subtotal + iva;
   const asset = name => readFileSync(join(functionsDir, 'quote-assets', name));
   const logo = asset('logo.png');
 
@@ -171,28 +175,37 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     label('Servicios adicionales', col.largo, y + 5.2, 300, C.muted);
     y += SERVICES_BAND; rule(y, C.rowLine);
   }
-  for (const r of contracted) row([[r.title, col.largo, col.uds - col.largo - 12], [r.qty, col.uds]], r.price, r.qty);
+  for (const r of contracted) row([[r.name, col.largo, col.uds - col.largo - 12], [r.qty, col.uds]], r.price, r.qty);
 
   if (y > 540) { page(FOOTER_MATERIAL, 'Resumen de cotización'); y = 110; }
   y += 33.5;
   box(L, y, 357, 58.4, C.card, C.cardLine);
   label('Condiciones', 54.8, y + 10.9, 200, C.accent);
   text(CONDICIONES, 54.8, y + 24, 320, 8.25, C.body);
-  text('Subtotal', 412.5, y, 80, 8.62, C.sub); text(money(subtotal), 470, y, 100, 8.62, C.sub, F.sans, { align: 'right' });
+  // Con descuento, el detalle sube dos lineas: subtotal antes del descuento, descuento y neto.
+  if (descuento) {
+    text('Subtotal', 412.5, y - 30, 80, 8.62, C.sub); text(money(bruto), 470, y - 30, 100, 8.62, C.sub, F.sans, { align: 'right' });
+    text(`Descuento ${descuentoPct}%`, 412.5, y - 15, 80, 8.62, C.green); text('-' + money(descuento), 470, y - 15, 100, 8.62, C.green, F.bold, { align: 'right' });
+    text('Neto', 412.5, y, 80, 8.62, C.sub); text(money(subtotal), 470, y, 100, 8.62, C.sub, F.sans, { align: 'right' });
+  } else {
+    text('Subtotal', 412.5, y, 80, 8.62, C.sub); text(money(subtotal), 470, y, 100, 8.62, C.sub, F.sans, { align: 'right' });
+  }
   text('IVA', 412.5, y + 15, 80, 8.62, C.sub); text(money(iva), 470, y + 15, 100, 8.62, C.sub, F.sans, { align: 'right' });
   box(412.5, y + 31.6, R - 412.5, 26.8, C.accent, undefined, 6);
   text('TOTAL', 421.5, y + 41.8, 60, 7.5, '#FFFFFF');
   text(money(total), 450, y + 36.9, 111, 12.75, '#FFFFFF', F.serif, { align: 'right' });
   y += 66.7;
   box(L, y, W, 32.5, C.amber, C.amberLine);
-  withIcon('', clock, 'Acéptala dentro de las próximas 48 horas y obtén 10% de descuento adicional', L, y + 11, 9, C.amberInk, F.bold, 'center');
+  withIcon('', clock, descuento
+    ? `Incluye ${descuentoPct}% de descuento sobre el precio de lista`
+    : `Acéptala dentro de las próximas ${OFERTA.horas} horas y obtén ${OFERTA.descuento}% de descuento adicional`, L, y + 11, 9, C.amberInk, F.bold, 'center');
   y += 40.8;
   box(L, y, W, 77.3, C.card, C.cardLine);
   label('Transferencia', 56.2, y + 15.2);
   text(`${MARCA.razonSocial} · ${MARCA.rut}\n${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`, 56.2, y + 29.2, 240, 8.62, C.body, F.sans, { lineGap: 1.5 });
   doc.moveTo(306, y + 12).lineTo(306, y + 65).strokeColor(C.frame).lineWidth(.75).stroke();
-  // Maxi's Mercado Pago link unless the caller supplies another valid HTTPS URL.
-  const payUrl = typeof data.payment_url === 'string' && /^https:\/\//.test(data.payment_url) ? data.payment_url : MARCA.linkPago;
+  // El link de pago de esta cotizacion (lo arma el servidor); si no hay, el link fijo de Maxi.
+  const payUrl = typeof data.payment_url === 'string' && /^https?:\/\//.test(data.payment_url) ? data.payment_url : MARCA.linkPago;
   label('Link de pago', 319.9, y + 15.2);
   text('Hasta 3 cuotas sin interés.', 319.9, y + 28.8, 230, 8.62, C.body);
   withIcon('Pagar cotización', arrow, '', 319.9, y + 45.4, 9.38, C.accent, F.bold, 'left', 230);

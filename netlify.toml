@@ -15,6 +15,12 @@
   to = "/confirm.html"
   status = 200
 
+# Link de pago de cada cotizacion (Mercado Pago): https://<sitio>/pagar?c=<N°>&t=<firma>
+[[redirects]]
+  from = "/pagar"
+  to = "/.netlify/functions/pagar"
+  status = 200
+
 # Panel admin — todas las subrutas van al SPA (que detecta /admin)
 [[redirects]]
   from = "/admin/*"

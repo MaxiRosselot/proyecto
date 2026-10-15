@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    // confirm.html es una pagina aparte (confirmacion de visita): se compila para que importe
+    // el numero de WhatsApp de lib/marca.mjs en vez de tenerlo copiado.
+    rollupOptions: { input: { main: 'index.html', confirm: 'confirm.html' } },
     outDir: 'dist',
     sourcemap: false,
     emptyOutDir: true,
@@ -22,6 +25,12 @@ export default defineConfig({
         '/.netlify/functions': {
           target: process.env.VITE_NETLIFY_FUNCTIONS_PROXY,
           changeOrigin: true,
+        },
+        // Igual que el redirect de netlify.toml: /pagar es la funcion pagar.
+        '/pagar': {
+          target: process.env.VITE_NETLIFY_FUNCTIONS_PROXY,
+          changeOrigin: true,
+          rewrite: ruta => ruta.replace(/^\/pagar/, '/.netlify/functions/pagar'),
         },
       } : {}),
       ...(process.env.VITE_REPISAS_3D_PROXY ? {

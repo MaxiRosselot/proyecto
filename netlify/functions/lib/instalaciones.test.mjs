@@ -93,7 +93,7 @@ test('valida horario, correo y servicios', async () => {
 })
 
 test('totales y duracion como en el PDF', () => {
-  assert.deepEqual(totalesCotizacion([{ unidades: 2, valor: 100000 }], { qty_bici: 1 }), { repisas: 200000, adicionales: 20000, subtotal: 220000, iva: 41800, total: 261800 })
+  assert.deepEqual(totalesCotizacion([{ unidades: 2, valor: 100000 }], { qty_bici: 1 }), { repisas: 200000, adicionales: 20000, bruto: 220000, descuentoPct: 0, descuento: 0, subtotal: 220000, iva: 41800, total: 261800 })
   assert.equal(duracionTexto('10:00', '13:30'), '3 h 30 min')
   assert.equal(duracionTexto('10:00', '12:00'), '2 h')
   assert.equal(duracionTexto('10:00', '10:45'), '45 min')

@@ -5,6 +5,7 @@
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { actualizarCotizacion, almacenSheets, crearCotizacion, respuestaDeError } from './lib/cotizaciones.mjs'
+import { linkPagoCotizacion } from './lib/mercadopago.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,7 +33,9 @@ export async function handler(event) {
     const { estado, respuesta } = datos.crear
       ? await crearCotizacion(almacen, datos)
       : await actualizarCotizacion(almacen, datos)
-    return { statusCode: estado, headers: corsHeaders, body: JSON.stringify(respuesta) }
+    // El link de pago va firmado: el cotizador lo recibe aca para mandarlo por WhatsApp.
+    const conLink = respuesta.ok ? { ...respuesta, linkPago: linkPagoCotizacion(respuesta.cotNum ?? datos.cotNum) } : respuesta
+    return { statusCode: estado, headers: corsHeaders, body: JSON.stringify(conLink) }
   } catch (err) {
     return respuestaDeError(err, corsHeaders)
   }

@@ -2,6 +2,7 @@
 // Sin dependencias de Node: lo usan el panel admin y las pruebas.
 import { SERVICIOS } from './marca.mjs'
 import { resumenPagos } from './pagos-resumen.mjs'
+import { porcentajeDescuento } from './totales.mjs'
 
 export const CONCEPTOS = [['repisas', 'Repisas'], ...SERVICIOS.map(([clave, nombre]) => [clave, nombre])]
 export const TIPOS_TRABAJO = [
@@ -11,17 +12,18 @@ export const TIPOS_TRABAJO = [
 ]
 const IVA = 0.19
 
-// Neto de cada concepto de una cotizacion. Si el subtotal guardado no calza con la suma (precio
-// editado a mano), la diferencia queda como "ajuste" para que los totales siempre cuadren.
+// Neto de cada concepto de una cotizacion; el descuento va en negativo. Si el subtotal guardado no
+// calza con la suma (precio editado a mano), la diferencia queda como "ajuste" para que cuadre.
 export function desglose(cotizacion) {
   const adicionales = cotizacion.instalacion?.adicionales || cotizacion.adicionales || {}
   const neto = { repisas: (cotizacion.repisas || []).reduce((s, r) => s + (Number(r.unidades ?? 1) || 0) * (Number(r.valor) || 0), 0) }
   for (const [clave, , lista] of SERVICIOS) {
     neto[clave] = (Number(adicionales[`qty_${clave}`]) || 0) * (Number(adicionales[`precio_${clave}`] ?? lista) || 0)
   }
-  const suma = Object.values(neto).reduce((a, b) => a + b, 0)
-  const subtotal = Number(cotizacion.subtotal) || suma
-  neto.ajuste = subtotal - suma
+  const bruto = Object.values(neto).reduce((a, b) => a + b, 0)
+  neto.descuento = -Math.round(bruto * porcentajeDescuento(adicionales) / 100)
+  const subtotal = Number(cotizacion.subtotal) || bruto + neto.descuento
+  neto.ajuste = subtotal - bruto - neto.descuento
   return { neto, subtotal, total: Number(cotizacion.total) || Math.round(subtotal * (1 + IVA)) }
 }
 
@@ -79,12 +81,12 @@ export function resumenMes(cotizaciones, mes, hoy, { mesesTendencia = 6 } = {}) 
   totales.mesAnterior = totalAnterior
   totales.variacion = totalAnterior ? Math.round((totales.total - totalAnterior) * 100 / totalAnterior) : null
 
-  const conceptos = [...CONCEPTOS, ['ajuste', 'Ajustes de precio']]
+  const conceptos = [...CONCEPTOS, ['descuento', 'Descuentos'], ['ajuste', 'Ajustes de precio']]
     .map(([clave, nombre]) => {
       const neto = sumar(delMes, i => i.neto[clave] || 0)
       return { clave, nombre, neto, total: Math.round(neto * (1 + IVA)), cantidad: delMes.filter(i => i.neto[clave]).length }
     })
-    .filter(c => c.clave !== 'ajuste' || c.neto !== 0)
+    .filter(c => !['descuento', 'ajuste'].includes(c.clave) || c.neto !== 0)
   const tipos = TIPOS_TRABAJO.map(([clave, nombre]) => {
     const grupo = delMes.filter(i => i.tipo === clave)
     return { clave, nombre, cantidad: grupo.length, neto: sumar(grupo, 'subtotal'), total: sumar(grupo, 'total') }
@@ -103,4 +105,12 @@ export function resumenMes(cotizaciones, mes, hoy, { mesesTendencia = 6 } = {}) 
   })
 
   return { mes, totales, conceptos, tipos, semanas, tendencia, instalaciones: delMes }
+}
+
+// Pagos sin N° de boleta (las boletas se emiten a mano en el SII), los mas antiguos primero.
+export function pagosSinBoleta(cotizaciones) {
+  return cotizaciones
+    .filter(c => c.status !== 'rechazada')
+    .flatMap(c => (c.pagos || []).filter(p => !p.boleta).map(p => ({ ...p, cotNum: c.cotNum, cliente: c.nombre })))
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
 }

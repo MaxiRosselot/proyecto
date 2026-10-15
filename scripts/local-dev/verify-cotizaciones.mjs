@@ -69,7 +69,9 @@ try {
   // Recien generada se puede mandar por WhatsApp: mensaje con el numero y el link al PDF.
   const whatsapp = page.getByRole('link', { name: 'WhatsApp al cliente' })
   await expect(whatsapp).toHaveAttribute('href', /local-pdf/)
-  expect(decodeURIComponent(await whatsapp.getAttribute('href'))).toContain(`cotización N° ${a.numero} de Repisas Don Maxi`)
+  const mensaje = decodeURIComponent(await whatsapp.getAttribute('href'))
+  expect(mensaje).toContain(`cotización N° ${a.numero} de Repisas Don Maxi`)
+  expect(mensaje).toMatch(new RegExp(`pagar en línea .*?/pagar\\?c=${a.numero}&t=`))
   await shot('01-cotizacion-a-guardada.png')
   const b = await cotizar('Cliente Prueba B', BODEGA_B)
   expect(Number(a.numero)).toBe(siguienteInicial)

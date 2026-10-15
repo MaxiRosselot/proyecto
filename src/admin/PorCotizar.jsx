@@ -5,9 +5,10 @@ import './PorCotizar.css'
 import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
 import EnviarCotizacion from './EnviarCotizacion.jsx'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
+import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 
-// Nombres y precios de lista de los servicios: los mismos del PDF (lib/marca.mjs).
-const AD_NOMBRES_INICIALES = Object.fromEntries(SERVICIOS.map(([clave, nombre]) => [clave, nombre]))
+// Precios de lista de los servicios: los mismos del PDF (lib/marca.mjs). Un nombre editado
+// (nombre_<clave>) y el descuento (descuento_pct) viajan en el mismo objeto hasta el PDF.
 const ADICIONALES_INICIALES = Object.fromEntries(SERVICIOS.flatMap(([clave, , precio]) => [['qty_' + clave, 0], ['precio_' + clave, precio]]))
 
 function repisaPorDefecto(tabla) {
@@ -218,7 +219,6 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [actualizandoPrecio, setActualizandoPrecio] = useState(false)
   const [mensajePrecio, setMensajePrecio] = useState('')
   const [repisas, setRepisas]             = useState(saved?.repisas || [repisaPorDefecto(TABLA_PRECIOS)])
-  const [adNombres, setAdNombres]         = useState(saved?.adNombres || AD_NOMBRES_INICIALES)
   const [adicionales, setAdicionales]     = useState(saved?.adicionales || ADICIONALES_INICIALES)
   // Proyecto que se arma en el configurador 3D. Sus vistas van en la pagina 1 del PDF.
   // Mantener el plano junto al borrador evita perderlo al cambiar entre móvil y escritorio.
@@ -228,6 +228,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [pdfUrl, setPdfUrl]         = useState(null)
   const [pdfBlob, setPdfBlob]       = useState(null)
   const [pdfDrive, setPdfDrive]     = useState('')
+  const [linkPago, setLinkPago]     = useState('')
   const [totalInfo, setTotalInfo]   = useState(saved?.totalInfo || { subtotal: 0, iva: 0, total: 0 })
   const [autoSaved, setAutoSaved]   = useState(false)
   const [error, setError]           = useState('')
@@ -277,15 +278,14 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   }, [])
 
   useEffect(() => {
-    saveState({ mode, manualCliente, repisas, adNombres, adicionales, totalInfo, project3d, cotGuardada })
-  }, [mode, manualCliente, repisas, adNombres, adicionales, totalInfo, project3d, cotGuardada])
+    saveState({ mode, manualCliente, repisas, adicionales, totalInfo, project3d, cotGuardada })
+  }, [mode, manualCliente, repisas, adicionales, totalInfo, project3d, cotGuardada])
 
   function resetCotizador() {
     setMode('visita')
     setManualCliente({ nombre: '', email: '', celular: '', direccion: '' })
     setCotGuardada(null)
     setRepisas([repisaPorDefecto(tablaPrecios)])
-    setAdNombres(AD_NOMBRES_INICIALES)
     setAdicionales(ADICIONALES_INICIALES)
     setTotalInfo({ subtotal: 0, iva: 0, total: 0 })
     setProject3d(null)
@@ -293,13 +293,16 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setSelectedVisit(null); saveState({})
   }
 
+  // Mismo calculo que el PDF y el resto del panel (lib/totales.mjs), con el descuento si hay.
   function calcTotales() {
-    const totRep = repisas.reduce((s, r) => s + (r.u || 0) * (r.v || 0), 0)
-    const totAd  = ['retiro_orden','retiro_basura','cajas','bici']
-      .reduce((s, k) => s + (adicionales['qty_' + k] || 0) * (adicionales['precio_' + k] || 0), 0)
-    const subtotal = totRep + totAd
-    const iva = Math.round(subtotal * 0.19)
-    return { subtotal, iva, total: subtotal + iva }
+    return totalesCotizacion(repisas.map(r => ({ unidades: r.u || 0, valor: r.v || 0 })), adicionales)
+  }
+  function cambiarNombre(key, nombre) {
+    setAdicionales(prev => {
+      const { ['nombre_' + key]: _, ...resto } = prev
+      const lista = SERVICIOS.find(([c]) => c === key)[1]
+      return nombre.trim() && nombre.trim() !== lista ? { ...resto, ['nombre_' + key]: nombre } : resto
+    })
   }
 
   const totales = calcTotales()
@@ -437,7 +440,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       // servidor responde con otro y se rehace el PDF, porque el numero va impreso.
       // Guardada: se actualiza la misma, sin tocar su estado ni su fecha de creacion.
       let numero = cotGuardada ? cotGuardada.cotNum : await pedirSiguienteNumero()
-      let pdf
+      let pdf, link = ''
       for (let intento = 0; ; intento++) {
         pdf = await generarPdf(numero, grafica3d)
         const guardado = await apiFetch('/.netlify/functions/save-quote', {
@@ -446,7 +449,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
             ? { ...datos, ...pdf.totales, cotNum: numero }
             : { ...datos, ...pdf.totales, crear: true, cotNum: numero, status: 'por confirmar', notas: '' }),
         })
-        if (guardado.ok) break
+        if (guardado.ok) { link = guardado.linkPago || ''; break }
         if (!cotGuardada && guardado.siguiente && intento < 2) { numero = guardado.siguiente; continue }
         throw new Error(guardado.error || 'No se pudo guardar la cotización')
       }
@@ -454,7 +457,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       // Desde aqui la cotizacion existe: volver a generar la actualiza en vez de duplicarla.
       setCotGuardada({ cotNum: String(numero), fechaVisita: datos.fechaVisita })
       setTotalInfo(pdf.totales)
-      setPdfBlob(pdf.blob); setPdfUrl(URL.createObjectURL(pdf.blob))
+      setPdfBlob(pdf.blob); setPdfUrl(URL.createObjectURL(pdf.blob)); setLinkPago(link)
 
       // Subir PDF a Drive y dejar el link en la cotizacion
       let avisoPdf = ''
@@ -685,12 +688,12 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
               <React.Fragment key={key}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {isEditingThis
-                    ? <input value={adNombres[key]} autoFocus
-                        onChange={e => setAdNombres(prev => ({ ...prev, [key]: e.target.value }))}
+                    ? <input value={nombreServicio(adicionales, key)} autoFocus aria-label="Nombre del servicio"
+                        onChange={e => cambiarNombre(key, e.target.value)}
                         onBlur={() => setEditingNombre(null)}
                         onKeyDown={e => e.key === 'Enter' && setEditingNombre(null)}
                         style={{ ...styles.input, fontSize: 13, padding: '5px 8px' }} />
-                    : <span style={{ color: C.text, fontSize: 13 }}>{adNombres[key]}</span>
+                    : <span style={{ color: C.text, fontSize: 13 }}>{nombreServicio(adicionales, key)}</span>
                   }
                   {!isEditingThis && (
                     <button type="button" onClick={() => setEditingNombre(key)}
@@ -715,10 +718,16 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       {/* Totales */}
       <div style={{ ...styles.card, marginBottom: 20, background: C.orangeLight, border: '1px solid ' + C.orange + '30' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {[['Subtotal neto', totales.subtotal], ['IVA (19%)', totales.iva]].map(([label, val]) => (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, gap: 10 }}>
+            <label htmlFor="descuento-cotizar" style={{ color: C.textSub }}>Descuento (%)</label>
+            <input id="descuento-cotizar" type="number" min="0" max={DESCUENTO_MAX} step="1" value={totales.descuentoPct || ''} placeholder="0"
+              onChange={e => { const n = Math.min(DESCUENTO_MAX, Math.max(0, parseInt(e.target.value) || 0)); setAdicionales(({ descuento_pct: _, ...resto }) => n ? { ...resto, descuento_pct: n } : resto) }}
+              style={{ ...inputStyle, width: 80 }} />
+          </div>
+          {[...(totales.descuento ? [['Subtotal', totales.bruto], [`Descuento ${totales.descuentoPct}%`, -totales.descuento]] : []), ['Subtotal neto', totales.subtotal], ['IVA (19%)', totales.iva]].map(([label, val]) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
               <span style={{ color: C.textSub }}>{label}</span>
-              <span style={{ fontWeight: 600 }}>{fmt(val)}</span>
+              <span style={{ fontWeight: 600, color: val < 0 ? C.green : undefined }}>{val < 0 ? '-' + fmt(-val) : fmt(val)}</span>
             </div>
           ))}
           <div style={{ height: 1, background: C.orange + '40', margin: '8px 0' }} />
@@ -754,7 +763,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
                 style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
-              {autoSaved && <EnviarCotizacion pdfBlob={pdfBlob} cotizacion={{ nombre: cliente.nombre, telefono: cliente.celular || cliente.telefono, cotNum: cotGuardada?.cotNum, total: totalInfo.total, pdfUrl: pdfDrive }} />}
+              {autoSaved && <EnviarCotizacion pdfBlob={pdfBlob} cotizacion={{ nombre: cliente.nombre, telefono: cliente.celular || cliente.telefono, cotNum: cotGuardada?.cotNum, total: totalInfo.total, pdfUrl: pdfDrive, linkPago }} />}
             </div>
           </div>
         </div>

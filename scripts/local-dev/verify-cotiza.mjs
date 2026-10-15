@@ -121,7 +121,8 @@ try {
   })
   expect(pdfVisto).toBe('%PDF')
   await expect(page.getByText('10% de descuento adicional')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Pagar y reservar instalación' })).toHaveAttribute('href', 'https://link.mercadopago.cl/repisasdonmaxi')
+  // El link de pago es el de esta cotizacion (firmado), no el link fijo.
+  await expect(page.getByRole('link', { name: 'Pagar y reservar instalación' })).toHaveAttribute('href', new RegExp(`/pagar\\?c=${numero}&t=`))
   await expect(page.getByRole('link', { name: 'Aceptar por WhatsApp' })).toHaveAttribute('href', new RegExp(`wa\\.me/56951020367\\?text=.*${numero}`))
   await expect(page.getByText(/visita/i).filter({ visible: true })).toHaveCount(0)
   await page.getByText('Pagar por transferencia').click()
