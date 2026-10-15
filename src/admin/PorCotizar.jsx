@@ -327,15 +327,22 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     if (r.kind === 'rack') return
     const fila = filaPrecioRepisa({ largoM: r.l, profM: r.p, altoM: r.a }, tablaPrecios)
     if (!fila || preciosDeRespaldo || actualizandoPrecio) return
-    if (!Number.isSafeInteger(r.v) || r.v <= 0) { setMensajePrecio('Ingresa un precio entero positivo.'); return }
+    if (!Number.isSafeInteger(r.v) || r.v <= 0) { setMensajePrecio({ ok: false, texto: 'Ingresa un precio entero positivo.' }); return }
     if (!window.confirm(`Actualizar valor en tabla\nAlto ${fila.alto} cm · profundidad total ${fila.prof + 8} cm · largos ${fila.desde}–${fila.hasta} cm\n${fmt(fila.precio)} → ${fmt(r.v)} netos\nSe aplicará a futuras cotizaciones de este rango. Las cotizaciones guardadas no cambian.`)) return
     setActualizandoPrecio(true)
     try {
       const result = await apiFetch('/.netlify/functions/update-precio', { method: 'POST', body: JSON.stringify({ ...fila, precioAnterior: fila.precio, precio: r.v }) })
       if (!result.ok) throw new Error(result.error || 'No se pudo guardar')
-      setTablaPrecios(prev => prev.map(f => f.alto === fila.alto && f.prof === fila.prof && f.desde === fila.desde && f.hasta === fila.hasta ? { ...f, precio: r.v } : f))
-      setMensajePrecio(`Precio guardado y verificado: ${fmt(r.v)} para el rango ${fila.desde}–${fila.hasta} cm.`)
-    } catch (error) { setMensajePrecio(error.message) }
+      // Se relee la planilla: lo que se muestra es lo que quedo guardado, no lo que se mando.
+      const { tabla, respaldo } = await cargarTablaPrecios(apiFetch)
+      const guardada = !respaldo && filaPrecioRepisa({ largoM: r.l, profM: r.p, altoM: r.a }, tabla)
+      if (!guardada || guardada.precio !== r.v) throw new Error('El precio se envió, pero la planilla no lo muestra. Recarga la página y revisa la planilla de precios.')
+      setTablaPrecios(tabla)
+      // Las demas filas de esta cotizacion del mismo rango que tenian el precio anterior pasan al nuevo.
+      const mismoRango = x => x.kind !== 'rack' && filaPrecioRepisa({ largoM: x.l, profM: x.p, altoM: x.a }, tabla) === guardada
+      setRepisas(prev => prev.map(x => (x.id !== r.id && mismoRango(x) && x.v === fila.precio ? { ...x, v: r.v } : x)))
+      setMensajePrecio({ ok: true, texto: `✓ Precio guardado en la planilla: ${fmt(r.v)} para repisas de ${fila.alto} cm de alto, ${fila.prof + 8} cm de profundidad y ${fila.desde}–${fila.hasta} cm de largo. Se usa desde ya en todas las cotizaciones nuevas, también en /cotiza.` })
+    } catch (error) { setMensajePrecio({ ok: false, texto: error.message }) }
     finally { setActualizandoPrecio(false) }
   }
 
@@ -670,7 +677,12 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
         )}
       </div>
 
-      {mensajePrecio && <p role="status">{mensajePrecio}</p>}
+      {mensajePrecio && (
+        <div role="status" style={{ margin: '-6px 0 14px', padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+          background: mensajePrecio.ok ? '#ECFDF5' : '#FEF2F2', border: '1px solid ' + (mensajePrecio.ok ? '#A7F3D0' : '#FECACA'), color: mensajePrecio.ok ? '#065F46' : '#B91C1C' }}>
+          {mensajePrecio.texto}
+        </div>
+      )}
       <Grafica3D project={project3d} onProject={setProject3d} onModulos={filasDesde3d} frameRef={frame3dRef} />
 
       {/* Adicionales */}

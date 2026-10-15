@@ -31,8 +31,8 @@ export async function handler(event) {
 
     if (event.httpMethod === 'GET') {
       const tabla = await leerTablaPrecios(sheets, process.env.PRECIOS_SHEET_ID)
-      // Unos minutos de cache bastan: la planilla cambia poco y cada visita no necesita leerla.
-      return responder(200, { ok: true, tabla }, { 'Cache-Control': 'public, max-age=300' })
+      // Sin cache: un precio que se cambia en el panel tiene que verse altiro en /cotiza.
+      return responder(200, { ok: true, tabla }, { 'Cache-Control': 'no-store' })
     }
     if (event.httpMethod !== 'POST') return responder(405, { ok: false, error: 'Método no permitido' })
     if (!process.env.GOOGLE_SHEET_ID) return responder(500, { ok: false, error: 'Cotizaciones no configuradas' })
