@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
+import { textoVisitas } from './listaVisitas.js'
 
 function Badge({ status }) {
   const s = VISIT_STATUS_LABELS[status] || VISIT_STATUS_LABELS.agendada
@@ -34,6 +35,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [expanded, setExpanded] = useState(null)
   const [cancelNote, setCancelNote] = useState({})
   const [buscar, setBuscar]     = useState('')
+  const [copiado, setCopiado]   = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -102,6 +104,13 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const q    = buscar.trim().toLowerCase()
   const list = (listMap[tab] || []).filter(v => !q || (v.nombre || '').toLowerCase().includes(q))
 
+  // Copia la lista que se ve (pestana y busqueda) para mandarsela a quien hace las visitas.
+  async function copiarLista() {
+    try { await navigator.clipboard.writeText(textoVisitas(list)); setCopiado('ok') }
+    catch { setCopiado('error') }
+    setTimeout(() => setCopiado(''), 2500)
+  }
+
   // Agrupado por fecha, con horas ordenadas asc dentro de cada grupo
   const grouped = groupByDate(list)
 
@@ -129,9 +138,13 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={styles.sectionTitle}>Visitas</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
             style={{ ...styles.input, width: 180, padding: '7px 12px', fontSize: 13 }} />
+          <button onClick={copiarLista} disabled={!list.length} title="Copia las visitas de esta pestaña, por día y en orden, para pegarlas en WhatsApp"
+            style={{ ...styles.btnPrimary, padding: '8px 14px', fontSize: 13, opacity: list.length ? 1 : .5, cursor: list.length ? 'pointer' : 'default' }}>
+            {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? 'No se pudo copiar' : `📋 Copiar lista (${list.length})`}
+          </button>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
