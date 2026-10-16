@@ -43,6 +43,12 @@ try {
   const planilla = page.getByTestId('planilla')
   await expect(planilla.getByTestId('fila-planilla')).toHaveCount(7) // 6 importadas + 1 de ejemplo del entorno local
   const fila = nombre => planilla.locator('tr', { has: page.getByRole('button', { name: nombre, exact: true }) })
+  // Un encabezado por cada dia que tiene instalaciones (no los 7 dias de la semana).
+  const dias = await planilla.locator('tr[data-dia]').evaluateAll(trs => trs.map(t => t.dataset.dia))
+  expect(dias.length).toBeGreaterThan(1)
+  expect(new Set(dias).size).toBe(dias.length)
+  await expect(planilla.locator('tr[data-dia]').first()).toContainText(/(Lunes|Martes|Miércoles|Jueves|Viernes|Sábado|Domingo) \d+ de \w+|Sin fecha/)
+  await expect(planilla.locator('tr[data-dia]').first()).toContainText(/\d+ instalaci/)
   await expect(fila('Camila Ejemplo')).toContainText('$238.000')
   await expect(fila('Ignacia Demo').getByLabel('Nota de Ignacia Demo')).toHaveValue('CAJAS PENDIENTES')
   await expect(fila('Ignacia Demo').getByLabel('Instalada: Ignacia Demo')).toBeChecked()
@@ -162,6 +168,7 @@ try {
   await movil.getByRole('navigation').getByRole('button', { name: 'Instal.' }).click()
   await movil.getByRole('tab', { name: 'Todo' }).click()
   await expect(movil.getByTestId('fila-planilla').first()).toBeVisible()
+  await expect(movil.getByTestId('encabezado-dia').first()).toBeVisible()
   expect(await movil.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await movil.screenshot({ path: path.join(evidence, '04-celular.png') })
 

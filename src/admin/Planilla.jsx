@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { C, adminFetch, apiFetch, fmt, styles } from './utils.js'
+import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
@@ -21,6 +21,35 @@ const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'o
 const fechaCorta = f => (f ? `${DIAS_CORTOS[diaSemana(f)]} ${Number(f.slice(8, 10))} ${MESES[Number(f.slice(5, 7)) - 1]}` : 'Sin fecha')
 const tituloMes = m => { const t = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(m + '-15T12:00:00Z')); return t.charAt(0).toUpperCase() + t.slice(1) }
 const lunes = f => sumarDias(f, -((diaSemana(f) + 6) % 7))
+const DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const tituloDia = f => (f ? `${DIAS_LARGOS[diaSemana(f)]} ${Number(f.slice(8, 10))} de ${MESES_LARGOS[Number(f.slice(5, 7)) - 1]}` : 'Sin fecha')
+
+// Las filas agrupadas por dia, en orden: solo los dias que tienen instalaciones.
+function porDia(filas) {
+  const dias = []
+  for (const f of filas) {
+    if (dias.at(-1)?.fecha !== f.fecha) dias.push({ fecha: f.fecha, filas: [] })
+    dias.at(-1).filas.push(f)
+  }
+  return dias
+}
+
+// Encabezado de cada dia: nombre, cuantas instalaciones y lo que suman.
+function EncabezadoDia({ dia, hoy }) {
+  const neto = dia.filas.reduce((s, f) => s + (f.montos.neto || 0), 0), bruto = dia.filas.reduce((s, f) => s + (f.montos.bruto || 0), 0)
+  const n = dia.filas.length
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+      <span>
+        <strong style={{ fontSize: 13, color: dia.fecha === hoy ? C.orangeDark : C.text }}>{tituloDia(dia.fecha)}</strong>
+        {dia.fecha === hoy && <span style={{ ...styles.badge(C.orange), marginLeft: 8, padding: '1px 8px', fontSize: 10 }}>Hoy</span>}
+        <span style={{ marginLeft: 8, fontSize: 12, color: C.textMuted }}>{n} {n === 1 ? 'instalación' : 'instalaciones'}</span>
+      </span>
+      {bruto > 0 && <span style={{ fontSize: 12, color: C.textSub }}>Neto {fmt(neto)} · <strong style={{ color: C.orangeDark }}>{fmt(bruto)}</strong></span>}
+    </div>
+  )
+}
 
 // Montos de una venta por columna, como en el Excel.
 function columnas(q) {
@@ -280,105 +309,6 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
   )
 }
 
-// ── Pasar el periodo al calendario ───────────────────────────────────────────
-// Primero muestra que va a hacer con cada instalacion (ya esta, se enlaza a un evento con su nombre,
-// se mueve a su hora o se crea) y al confirmar lo hace fila por fila, con avance.
-const ACCIONES = {
-  ok: ['Ya están en el calendario', C.green],
-  mover: ['Se corrige la hora de su evento', C.blue],
-  enlazar: ['Se enlazan con el evento que ya tienen', '#0EA5E9'],
-  crear: ['Se crea su evento', C.orange],
-  sinhora: ['Sin horas: no se pueden agendar', C.textMuted],
-}
-function PasarAlCalendario({ filas, rango, titulo, onCerrar, onListo }) {
-  const [plan, setPlan] = useState(null)
-  const [error, setError] = useState('')
-  const [hechas, setHechas] = useState(null) // null: revisando | numero: avanzando
-  const [fallas, setFallas] = useState([])
-  const [pausa, setPausa] = useState(0)
-  useEffect(() => {
-    apiFetch(`/.netlify/functions/calendario?desde=${rango[0]}&hasta=${rango[1]}`).then(r => {
-      if (!r.ok) throw new Error(r.error || 'No se pudo leer el calendario')
-      const eventos = r.eventos.filter(e => e.tipo !== 'visita')
-      setPlan(filas.filter(f => f.fecha).map(f => {
-        const { inicio, fin, eventId } = f.inst
-        if (!inicio || !fin) return { f, accion: 'sinhora' }
-        if (eventId) {
-          const ev = eventos.find(e => e.id === eventId)
-          return { f, accion: ev && ev.fecha === f.fecha && ev.inicio === inicio && ev.fin === fin ? 'ok' : 'mover' }
-        }
-        const ev = eventos.find(e => e.fecha === f.fecha && (String(e.cotNum || '') === String(f.q.cotNum) || mismoNombre(f.q.nombre, sinPrefijo(e.cliente || e.titulo))))
-        return ev ? { f, accion: 'enlazar', evento: ev.titulo } : { f, accion: 'crear' }
-      }))
-    }).catch(e => setError(e.message))
-  }, [])
-  const pendientes = (plan || []).filter(p => ['mover', 'enlazar', 'crear'].includes(p.accion))
-  // Por bloques de 6: una lectura de la planilla por bloque. Si Google pide una pausa (limite de
-  // lecturas por minuto), se espera lo que dice y se reintenta el mismo bloque.
-  async function hacer() {
-    setHechas(0)
-    const errores = []
-    for (let i = 0; i < pendientes.length; i += 6) {
-      const bloque = pendientes.slice(i, i + 6)
-      for (let intento = 0; ; intento++) {
-        let res, r
-        try {
-          res = await adminFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'sincronizar', cotNums: bloque.map(p => p.f.q.cotNum) }) })
-          r = await res.json().catch(() => ({}))
-        } catch (e) { r = { error: e.message } }
-        if (res?.status === 429 && intento < 5) {
-          for (let s = r.reintentarEn || 30; s > 0; s--) { setPausa(s); await new Promise(ok => setTimeout(ok, 1000)) }
-          setPausa(0)
-          continue
-        }
-        if (r.ok) errores.push(...(r.errores || []))
-        else errores.push(...bloque.map(p => `${p.f.q.nombre}: ${r.error || 'No se pudo'}`))
-        break
-      }
-      setHechas(n => n + bloque.length)
-    }
-    setFallas(errores)
-    if (!errores.length) onListo()
-  }
-  const terminado = hechas !== null && hechas >= pendientes.length
-  return (
-    <div role="dialog" aria-modal="true" aria-label="Pasar al calendario" onClick={e => e.target === e.currentTarget && hechas === null && onCerrar()}
-      style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'rgba(17,24,39,.4)', display: 'grid', placeItems: 'center', padding: 16 }}>
-      <div data-testid="pasar-calendario" style={{ ...styles.card, width: 'min(620px, 100%)', maxHeight: '88vh', overflowY: 'auto' }}>
-        <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>Pasar {titulo.toLowerCase()} al calendario</h3>
-        <p style={{ fontSize: 13, color: C.textSub, marginTop: 0 }}>Cada instalación queda con su evento en el calendario del negocio, a la hora de la planilla. Los eventos que ya existen con el nombre del cliente se enlazan: no se duplican.</p>
-        {error && <div style={styles.errorBox}>{error}</div>}
-        {!plan && !error && <div style={styles.empty}>Revisando el calendario…</div>}
-        {plan && Object.entries(ACCIONES).map(([accion, [texto, color]]) => {
-          const grupo = plan.filter(p => p.accion === accion)
-          if (!grupo.length) return null
-          return (
-            <details key={accion} open={accion === 'enlazar' || accion === 'crear'} style={{ marginBottom: 8 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color }}>{texto} · {grupo.length}</summary>
-              <div style={{ fontSize: 12.5, color: C.textSub, padding: '4px 0 0 14px', display: 'grid', gap: 2 }}>
-                {grupo.map(p => <div key={p.f.q.cotNum}>{fechaCorta(p.f.fecha)} {p.f.inst.inicio ? `${p.f.inst.inicio}–${p.f.inst.fin}` : ''} · <strong>{p.f.q.nombre}</strong>{p.evento ? <span style={{ color: C.textMuted }}> → “{p.evento}”</span> : ''}</div>)}
-              </div>
-            </details>
-          )
-        })}
-        {hechas !== null && (
-          <div style={{ margin: '10px 0' }}>
-            <div style={{ height: 8, borderRadius: 99, background: C.border, overflow: 'hidden' }}><div style={{ width: `${pendientes.length ? hechas * 100 / pendientes.length : 100}%`, height: '100%', background: C.green, transition: 'width .2s' }} /></div>
-            <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 4 }}>{terminado ? `✓ Listo: ${hechas - fallas.length} de ${pendientes.length}` : pausa ? `Google pidió una pausa: sigo en ${pausa} s…` : `Agendando ${hechas} de ${pendientes.length}…`}</div>
-          </div>
-        )}
-        {fallas.length > 0 && <div style={styles.errorBox}>No se pudieron agendar:<br />{fallas.join(' · ')}</div>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-          {hechas === null
-            ? <><button onClick={onCerrar} style={styles.btnSecondary}>Cancelar</button>
-              <button onClick={hacer} disabled={!plan || !pendientes.length} style={{ ...styles.btnPrimary, opacity: plan && pendientes.length ? 1 : .5 }}>{plan && !pendientes.length ? 'Todo está al día' : `Hacer ${pendientes.length} cambios`}</button></>
-            : terminado && <button onClick={onListo} style={styles.btnPrimary}>Cerrar</button>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Nueva instalacion ────────────────────────────────────────────────────────
 
 function NuevaInstalacion({ onCrear, onCancelar }) {
@@ -434,8 +364,8 @@ function moverConTeclado(e) {
   const filas = Array.from(cuerpo.rows)
   let f = filas.indexOf(tr), c = Array.from(tr.cells).indexOf(td), destino = null
   if (df) {
-    // Misma columna en la fila de arriba o abajo.
-    f += df
+    // Misma columna en la fila de arriba o abajo, saltando los encabezados de cada dia.
+    do { f += df } while (filas[f]?.hasAttribute('data-dia'))
     destino = filas[f] && editableDe(filas[f].cells[c])
   } else {
     // La siguiente celda editable de la misma fila.
@@ -471,7 +401,6 @@ export default function PlanillaSection({ onVerCotizacion }) {
   const [detalle, setDetalle] = useState(null)
   const [nueva, setNueva] = useState(false)
   const [importar, setImportar] = useState(false)
-  const [pasar, setPasar] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -555,7 +484,6 @@ export default function PlanillaSection({ onVerCotizacion }) {
             {[['semana', 'Semana'], ['mes', 'Mes'], ['todo', 'Todo']].map(([k, n]) => <button key={k} role="tab" aria-selected={periodo === k} onClick={() => setPeriodo(k)} style={segmento(periodo === k)}>{n}</button>)}
           </div>
           <button onClick={() => setNueva(v => !v)} style={{ ...styles.btnPrimary, fontSize: 12.5, padding: '8px 14px' }}>+ Nueva instalación</button>
-          {periodo !== 'todo' && <button onClick={() => setPasar(true)} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>Pasar al calendario</button>}
           <button onClick={() => setImportar(true)} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>Importar Excel</button>
         </div>
       </div>
@@ -580,7 +508,10 @@ export default function PlanillaSection({ onVerCotizacion }) {
 
       {visibles.length > 0 && (movil ? (
         <div style={{ display: 'grid', gap: 8 }}>
-          {visibles.map(f => (
+          {porDia(visibles).map(dia => (
+            <React.Fragment key={'dia' + dia.fecha}>
+            <div data-testid="encabezado-dia" style={{ padding: '10px 4px 0' }}><EncabezadoDia dia={dia} hoy={hoy} /></div>
+            {dia.filas.map(f => (
             <div key={f.q.cotNum} data-testid="fila-planilla" onClick={() => setDetalle(f.q.cotNum)}
               style={{ ...styles.card, padding: 12, cursor: 'pointer', borderLeft: '4px solid ' + (f.instalada ? C.green : f.atrasada ? C.yellow : C.border), background: f.instalada ? '#F6F7F9' : 'white' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
@@ -597,6 +528,8 @@ export default function PlanillaSection({ onVerCotizacion }) {
               {f.inst.nota && <div style={{ fontSize: 12, color: '#92400E', marginTop: 4 }}>📝 {f.inst.nota}</div>}
               {f.porCobrar && <a onClick={e => e.stopPropagation()} href={linkCobro(f.q)} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700, color: '#128C7E' }}>💬 Cobrar {fmt(f.pago.saldo)}</a>}
             </div>
+            ))}
+            </React.Fragment>
           ))}
         </div>
       ) : (
@@ -612,9 +545,13 @@ export default function PlanillaSection({ onVerCotizacion }) {
               </tr>
             </thead>
             <tbody>
-              {visibles.map((f, i) => {
-                const q = f.q, nuevaSemana = i > 0 && f.fecha && visibles[i - 1].fecha && lunes(f.fecha) !== lunes(visibles[i - 1].fecha)
-                const td = { padding: '2px 4px', borderTop: (nuevaSemana ? '2px solid ' : '1px solid ') + (nuevaSemana ? C.orange + '55' : C.border), verticalAlign: 'middle' }
+              {porDia(visibles).map(dia => [
+                <tr key={'dia' + dia.fecha} data-dia={dia.fecha || 'sin-fecha'} data-testid="encabezado-dia">
+                  <td colSpan={13 + SERV.length} style={{ padding: '9px 10px 6px', background: '#F8F9FB', borderTop: '2px solid ' + C.border }}><EncabezadoDia dia={dia} hoy={hoy} /></td>
+                </tr>,
+                ...dia.filas.map(f => {
+                const q = f.q
+                const td = { padding: '2px 4px', borderTop: '1px solid ' + C.border, verticalAlign: 'middle' }
                 return (
                   <tr key={q.cotNum} data-testid="fila-planilla" data-cot={q.cotNum}>
                     <td style={{ ...td, width: 170 }}><Celda valor={f.inst.nota} etiqueta={`Nota de ${q.nombre}`} placeholder="" alGuardar={v => actualizar(q.cotNum, { nota: v })} estilo={{ color: '#92400E', fontWeight: 600 }} /></td>
@@ -645,7 +582,8 @@ export default function PlanillaSection({ onVerCotizacion }) {
                     </td>
                   </tr>
                 )
-              })}
+                }),
+              ])}
             </tbody>
             <tfoot>
               <tr style={{ background: '#F4F5F7', fontWeight: 800 }}>
@@ -659,7 +597,6 @@ export default function PlanillaSection({ onVerCotizacion }) {
       ))}
 
       {abierta && <Detalle q={abierta} onCerrar={() => setDetalle(null)} onActualizar={c => actualizar(abierta.cotNum, c)} onCambioLocal={c => reemplazar({ cotNum: abierta.cotNum, ...c })} onVerCotizacion={onVerCotizacion} />}
-      {pasar && rango && <PasarAlCalendario titulo={titulo} rango={rango} filas={filas.filter(f => f.fecha >= rango[0] && f.fecha <= rango[1])} onCerrar={() => setPasar(false)} onListo={() => { setPasar(false); cargar() }} />}
       {importar && <ImportarExcel onCerrar={() => setImportar(false)} onListo={() => { setImportar(false); setPeriodo('todo'); cargar() }} />}
     </div>
   )

@@ -5,7 +5,7 @@
 // Lo propio de la fila vive dentro de "instalacion" (columna R): fecha, horas, instalada, nota
 // interna (columna A del Excel), codigo de documento (B, B*, M...) y el evento de Calendar.
 // Calendar y la planilla se inyectan: en Netlify son Google; en local y en los tests, falsos.
-import { ErrorCotizacion, actualizarCotizacion, actualizarVariasCotizaciones, crearCotizacion, listarCotizaciones, obtenerCotizacion } from './cotizaciones.mjs'
+import { ErrorCotizacion, actualizarCotizacion, crearCotizacion, obtenerCotizacion } from './cotizaciones.mjs'
 import { normalizarDocumento } from './documentos.mjs'
 import { MARCA_EVENTO, eventoInstalacion, limpiarAdicionales, limpiarRepisas, validarHorario } from './instalaciones.mjs'
 import { mismoNombre } from './leer-ventas.mjs'
@@ -123,42 +123,6 @@ export async function enlazarEvento(almacen, calendar, calendarId, { cotNum, eve
     : { ...inst, link: (await calendar.events.patch({ calendarId, eventId: inst.eventId, sendUpdates: 'none', requestBody: { extendedProperties: { shared: { created_by: MARCA_EVENTO, cliente: cotizacion.nombre, cot_num: String(cotizacion.cotNum) } } } })).data.htmlLink || '' }
   await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, instalacion })
   return { cotizacion: { ...cotizacion, instalacion } }
-}
-
-// Deja la fila en el calendario: mueve su evento a la hora de la fila, enlaza el que ya exista ese
-// dia con su nombre o, si no hay, lo crea. Lo usa "Pasar al calendario" de la planilla, fila por fila.
-export async function sincronizarFila(almacen, calendar, calendarId, { cotNum }, { leerEventos } = {}) {
-  const cotizacion = await obtenerCotizacion(almacen, cotNum)
-  if (!cotizacion) falla('Venta no encontrada', 404)
-  const inst = cotizacion.instalacion || {}
-  if (!inst.fecha || !inst.inicio || !inst.fin) falla(`${cotizacion.nombre}: le falta la fecha o las horas`)
-  const instalacion = await sincronizarEvento(calendar, calendarId, cotizacion, inst, { leerEventos })
-  await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, instalacion })
-  return { cotizacion: { ...cotizacion, instalacion } }
-}
-
-// Lo mismo para un bloque de filas: una lectura y una escritura de la planilla para todo el bloque
-// (Google limita las lecturas por minuto) y los eventos de cada dia se leen una vez.
-export async function sincronizarVarias(almacen, calendar, calendarId, { cotNums = [] }, { leerEventos } = {}) {
-  if (!Array.isArray(cotNums) || !cotNums.length || cotNums.length > 12) falla('Manda entre 1 y 12 ventas por vez')
-  const { quotes } = await listarCotizaciones(almacen)
-  const porDia = new Map()
-  const eventosDelDia = leerEventos && ((desde, hasta) => {
-    const clave = desde + '|' + hasta
-    if (!porDia.has(clave)) porDia.set(clave, leerEventos(desde, hasta))
-    return porDia.get(clave)
-  })
-  const cambios = [], errores = []
-  for (const cotNum of cotNums) {
-    const q = quotes.find(x => String(x.cotNum) === String(cotNum))
-    const inst = q?.instalacion || {}
-    if (!q) { errores.push(`N° ${cotNum}: no existe`); continue }
-    if (!inst.fecha || !inst.inicio || !inst.fin) { errores.push(`${q.nombre}: le falta la fecha o las horas`); continue }
-    try { cambios.push({ cotNum: q.cotNum, instalacion: await sincronizarEvento(calendar, calendarId, q, inst, { leerEventos: eventosDelDia }) }) }
-    catch (e) { errores.push(`${q.nombre}: ${e.message}`) }
-  }
-  await actualizarVariasCotizaciones(almacen, cambios)
-  return { hechas: cambios.length, errores }
 }
 
 // El cliente cancelo: sale de la planilla (queda como rechazada, motivo "Canceló") y se borra el evento.

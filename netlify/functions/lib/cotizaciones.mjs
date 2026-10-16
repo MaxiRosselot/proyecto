@@ -218,21 +218,6 @@ export async function actualizarCotizacion(almacen, datos) {
   return { estado: 200, respuesta: { ok: true, cotNum: String(cotNum) } }
 }
 
-// Varias a la vez ("Pasar al calendario"): una lectura y una escritura para todas, en vez de
-// tres lecturas por cotizacion. Google limita las lecturas de la planilla por minuto.
-export async function actualizarVariasCotizaciones(almacen, lista) {
-  const filas = await almacen.leerFilas()
-  if (lista.some(d => d.instalacion || d.pagos || d.reserva)) await almacen.asegurarEncabezado()
-  const escrituras = lista.map(datos => {
-    const cotNum = numeroValido(datos.cotNum)
-    const encontrada = cotNum && buscar(filas, cotNum)
-    if (!encontrada) throw new ErrorCotizacion(404, `La cotización N° ${datos.cotNum} no existe`)
-    const actual = filaACotizacion(encontrada.valores, { conProyecto: true })
-    return { fila: encontrada.fila, valores: cotizacionAFila({ ...actual, ...pick(datos, EDITABLES), cotNum, creado: actual.creado }) }
-  })
-  if (escrituras.length) await almacen.actualizarVarias(escrituras)
-}
-
 export async function borrarCotizacion(almacen, cotNum) {
   const encontrada = buscar(await almacen.leerFilas(), cotNum)
   if (!encontrada) throw new ErrorCotizacion(404, 'Cotización no encontrada')
@@ -294,10 +279,6 @@ export function almacenSheets(sheets, spreadsheetId, hoja = HOJA) {
       escribio()
       await sheets.spreadsheets.values.update({ spreadsheetId, range: fila(n), valueInputOption: 'RAW', requestBody: { values: [valores] } })
     },
-    async actualizarVarias(lista) {
-      escribio()
-      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data: lista.map(e => ({ range: fila(e.fila), values: [e.valores] })) } })
-    },
     async borrar(n) {
       escribio()
       const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' })
@@ -324,7 +305,6 @@ export function almacenEnMemoria(filasIniciales = [], alCambiar = () => {}) {
     async agregar(valores) { filas.push([...valores]); guardar(); return filas.length + 1 },
     async agregarVarias(lista) { lista.forEach(v => filas.push([...v])); guardar() },
     async actualizar(n, valores) { filas[n - 2] = [...valores]; guardar() },
-    async actualizarVarias(lista) { lista.forEach(e => { filas[e.fila - 2] = [...e.valores] }); guardar() },
     async borrar(n) { filas.splice(n - 2, 1); guardar() },
   }
 }
