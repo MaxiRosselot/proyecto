@@ -145,6 +145,25 @@ export function correoReservaConfirmada({ nombre, email, cotNum, direccion }, in
   }
 }
 
+// Cobro de una instalacion ya hecha: detalle de lo instalado, lo pagado y el saldo.
+// lineas: [{ nombre, monto }] en neto; totales: { subtotal, iva, total }; pago: { pagado, saldo }.
+export function mensajeCobro({ nombre, fecha }, lineas, totales, pago, linkPago) {
+  return [
+    `${saludo(nombre)} Le escribimos de Repisas Don Maxi por el pago de su instalación${fecha ? ` del ${fechaLarga(fecha).toLowerCase()}` : ''} 🙌`,
+    '',
+    'Detalle (neto):',
+    ...lineas.map(l => `• ${l.nombre}: ${pesos(l.monto)}`),
+    `Neto ${pesos(totales.subtotal)} + IVA ${pesos(totales.iva)} = *${pesos(totales.total)}*`,
+    ...(pago.pagado ? [`Pagado: ${pesos(pago.pagado)}`] : []),
+    `*Saldo a pagar: ${pesos(pago.saldo)}*`,
+    '',
+    `Puede transferir a ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
+    ...(linkPago ? [`o pagar en línea aquí: ${linkPago}`] : []),
+    '',
+    '¡Muchas gracias!',
+  ].join('\n')
+}
+
 // Sin telefono, WhatsApp pide elegir el contacto.
 export const linkWhatsapp = (telefono, texto) => `https://wa.me/${telefonoWhatsapp(telefono)}?text=${encodeURIComponent(texto)}`
 

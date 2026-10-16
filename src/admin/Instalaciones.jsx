@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona } from '../../netlify/functions/lib/horarios.mjs'
-import { CONCEPTOS, TIPOS_TRABAJO, pagosSinBoleta, resumenMes, sumarMeses } from '../../netlify/functions/lib/resumen-instalaciones.mjs'
-import { Boleta } from './PagosCotizacion.jsx'
+import { CONCEPTOS, TIPOS_TRABAJO, documentosPorEmitir, resumenMes, sumarMeses } from '../../netlify/functions/lib/resumen-instalaciones.mjs'
 
 // Colores fijos por concepto y por tipo de trabajo: los mismos en barras, leyendas y tabla.
 const COLOR = {
@@ -181,19 +180,9 @@ export default function InstalacionesSection({ onVerCotizacion }) {
   useEffect(() => { cargar() }, [cargar])
 
   const r = useMemo(() => resumenMes(cotizaciones, mes, hoy), [cotizaciones, mes, hoy])
-  const sinBoleta = useMemo(() => pagosSinBoleta(cotizaciones), [cotizaciones])
-  const [verBoletas, setVerBoletas] = useState(false)
-  const [anotando, setAnotando] = useState(false)
-  async function anotarBoleta(pago, boleta) {
-    setAnotando(true)
-    try {
-      const res = await apiFetch('/.netlify/functions/pagos', { method: 'POST', body: JSON.stringify({ accion: 'boleta', cotNum: pago.cotNum, id: pago.id, boleta }) })
-      if (!res.ok) throw new Error(res.error || 'No se pudo guardar la boleta')
-      setCotizaciones(cs => cs.map(c => (String(c.cotNum) === String(pago.cotNum) ? { ...c, pagos: res.pagos } : c)))
-      return true
-    } catch (e) { setError(e.message); return false }
-    finally { setAnotando(false) }
-  }
+  // Documentos por emitir (B*, F*...): se marcan como emitidos en la planilla de Instalaciones.
+  const porEmitir = useMemo(() => documentosPorEmitir(cotizaciones), [cotizaciones])
+  const [verDocumentos, setVerDocumentos] = useState(false)
   const t = r.totales
   const v = (total, neto) => (conIva ? total : neto)
   const lista = r.instalaciones.filter(i => filtro === 'todas' || (filtro === 'por_cobrar' ? i.saldo > 0 : i.tipo === filtro))
@@ -230,20 +219,20 @@ export default function InstalacionesSection({ onVerCotizacion }) {
 
       {error && <div style={styles.errorBox}>{error}</div>}
 
-      {sinBoleta.length > 0 && (
-        <div data-testid="boletas-pendientes" style={{ ...styles.card, padding: '12px 18px', marginBottom: 14, border: '1px solid #FCD34D', background: '#FFFBEB' }}>
+      {porEmitir.length > 0 && (
+        <div data-testid="documentos-por-emitir" style={{ ...styles.card, padding: '12px 18px', marginBottom: 14, border: '1px solid #FCD34D', background: '#FFFBEB' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13.5, color: '#92400E' }}>🧾 <strong>{sinBoleta.length} {sinBoleta.length === 1 ? 'pago' : 'pagos'} sin boleta</strong> · {fmt(sinBoleta.reduce((s, p) => s + p.monto, 0))} por emitir en el SII</span>
-            <button onClick={() => setVerBoletas(v => !v)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 12px' }}>{verBoletas ? 'Ocultar' : 'Ver y anotar'}</button>
+            <span style={{ fontSize: 13.5, color: '#92400E' }}>🧾 <strong>{porEmitir.length} {porEmitir.length === 1 ? 'documento' : 'documentos'} por emitir</strong> · {fmt(porEmitir.reduce((s, p) => s + p.total, 0))} con IVA. Márcalos como emitidos en Instalaciones.</span>
+            <button onClick={() => setVerDocumentos(v => !v)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 12px' }}>{verDocumentos ? 'Ocultar' : 'Ver'}</button>
           </div>
-          {verBoletas && (
+          {verDocumentos && (
             <div style={{ marginTop: 10, display: 'grid', gap: 2 }}>
-              {sinBoleta.map(p => (
-                <div key={p.cotNum + p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, padding: '7px 0', borderTop: '1px solid #FDE68A' }}>
-                  <span style={{ color: C.textMuted, minWidth: 80 }}>{fechaCorta(p.fecha)}</span>
-                  <strong style={{ minWidth: 86 }}>{fmt(p.monto)}</strong>
-                  <span style={{ flex: 1, minWidth: 140, color: C.textSub }}>{p.cliente} · N° {p.cotNum} · {p.medio}</span>
-                  <Boleta pago={p} guardando={anotando} onGuardar={folio => anotarBoleta(p, folio)} />
+              {porEmitir.map(p => (
+                <div key={p.cotNum} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, padding: '7px 0', borderTop: '1px solid #FDE68A' }}>
+                  <span style={{ color: C.textMuted, minWidth: 80 }}>{p.fecha ? fechaCorta(p.fecha) : 'Sin fecha'}</span>
+                  <strong style={{ minWidth: 40, color: C.red }}>{p.documento}</strong>
+                  <strong style={{ minWidth: 86 }}>{fmt(p.total)}</strong>
+                  <span style={{ flex: 1, minWidth: 140, color: C.textSub }}>{p.cliente} · N° {p.cotNum}</span>
                 </div>
               ))}
             </div>

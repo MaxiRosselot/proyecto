@@ -5,7 +5,12 @@ import { limpiarAdicionales } from './instalaciones.mjs'
 
 test('el descuento se aplica al neto antes del IVA', () => {
   const t = totalesCotizacion([{ unidades: 1, valor: 200000 }], { qty_retiro_orden: 1, precio_retiro_orden: 40000, descuento_pct: 10 })
-  assert.deepEqual(t, { repisas: 200000, adicionales: 40000, bruto: 240000, descuentoPct: 10, descuento: 24000, subtotal: 216000, iva: 41040, total: 257040 })
+  assert.deepEqual(t, { repisas: 200000, adicionales: 40000, despacho: 0, bruto: 240000, descuentoPct: 10, descuento: 24000, subtotal: 216000, iva: 41040, total: 257040 })
+})
+
+test('el despacho se suma al neto, antes del descuento y el IVA', () => {
+  const t = totalesCotizacion([{ unidades: 1, valor: 100000 }], { despacho: 50000, descuento_pct: 10 })
+  assert.deepEqual([t.despacho, t.bruto, t.subtotal, t.total], [50000, 150000, 135000, 160650])
 })
 
 test('el descuento queda entre 0 y 50%', () => {

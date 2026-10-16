@@ -258,6 +258,12 @@ export function almacenSheets(sheets, spreadsheetId, hoja = HOJA) {
       if (!Number.isSafeInteger(n)) throw new Error('La planilla no informó en qué fila quedó la cotización')
       return n
     },
+    // Muchas filas de una vez (importar el historial): una sola llamada por bloque, no una por fila.
+    async agregarVarias(lista) {
+      for (let i = 0; i < lista.length; i += 500) {
+        await sheets.spreadsheets.values.append({ spreadsheetId, range: rango('A1'), valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values: lista.slice(i, i + 500) } })
+      }
+    },
     async actualizar(n, valores) {
       await sheets.spreadsheets.values.update({ spreadsheetId, range: fila(n), valueInputOption: 'RAW', requestBody: { values: [valores] } })
     },
@@ -284,6 +290,7 @@ export function almacenEnMemoria(filasIniciales = [], alCambiar = () => {}) {
     async leerFila(n) { return filas[n - 2] ? [...filas[n - 2]] : null },
     async asegurarEncabezado() {},
     async agregar(valores) { filas.push([...valores]); guardar(); return filas.length + 1 },
+    async agregarVarias(lista) { lista.forEach(v => filas.push([...v])); guardar() },
     async actualizar(n, valores) { filas[n - 2] = [...valores]; guardar() },
     async borrar(n) { filas.splice(n - 2, 1); guardar() },
   }

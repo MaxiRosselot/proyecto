@@ -45,7 +45,7 @@ export async function atenderReservaGet(params, deps) {
     ok: true, estado,
     cotizacion: {
       cotNum, nombre: primerNombre(cotizacion.nombre), direccion: cotizacion.direccion || '', total, pagado, saldo,
-      instalacion: cotizacion.instalacion ? { fecha: cotizacion.instalacion.fecha, inicio: cotizacion.instalacion.inicio, fin: cotizacion.instalacion.fin } : null,
+      instalacion: cotizacion.instalacion?.fecha ? { fecha: cotizacion.instalacion.fecha, inicio: cotizacion.instalacion.inicio, fin: cotizacion.instalacion.fin } : null,
       reserva: vistaReserva(cotizacion.reserva),
     },
     pagos: {

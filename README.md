@@ -96,9 +96,7 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
 - **Descuento**: campo "Descuento (%)" en Cotizar y al agendar la instalación, con el atajo "Transferencia · 10%".
   - Se guarda en `Adicionales (JSON)` como `descuento_pct` y aparece en el PDF, los totales y el dashboard ("Descuentos").
   - Si editas el nombre de un servicio en Cotizar, ese nombre sale en la tabla del PDF (`nombre_<servicio>`).
-- **Boletas** (se emiten a mano en el SII):
-  - cada pago tiene "Anotar boleta" para guardar su N°;
-  - Admin → Instalaciones muestra los **pagos sin boleta**, con su monto y fecha, para anotarlos ahí mismo.
+- **Boletas y facturas** (se emiten a mano en el SII): se llevan con el código de documento de cada venta (B, B\*, F, F\*, M…) en la planilla de **Instalaciones**. Estadísticas avisa los que están por emitir.
 
 **Configurar Mercado Pago (una vez):**
 1. En https://www.mercadopago.cl/developers/panel crea una aplicación, del tipo **Checkout Pro** / pagos online.
@@ -126,18 +124,47 @@ El panel se instala como app, sin App Store:
 - Los íconos (`public/app/`) se generan desde `public/logo.png` con `node scripts/generar-iconos.mjs`.
 - Prueba local: `node scripts/local-dev/verify-app.mjs`.
 
-## Dashboard de instalaciones
+## Instalaciones: la planilla de ventas (central)
 
-- **Admin → Instalaciones**: cuánto entra por mes según la fecha de cada instalación agendada (no cuenta las rechazadas).
+**Admin → Instalaciones** es la planilla de siempre (el Excel de ventas) dentro del panel. Hay una fila por venta, ordenada por fecha, con las mismas columnas:
+
+| Columna | En el panel |
+|---|---|
+| Nota | Nota interna (pendientes, fabricar con anticipación…). Se escribe en la celda. |
+| ✕ | El cliente canceló: la venta pasa a rechazada ("Canceló") y se borra su evento. |
+| Cliente | Casilla **Instalada** (la fila se pinta). Al hacer clic en el nombre se abre el detalle. |
+| Fecha, inicio, fin | Editables. **El evento del calendario se mueve solo** (o se crea, si no tenía). |
+| Doc. | B, B\*, F, F\*, M, M/B, M/B\*, M/F, M/F\*. Los \* son documentos por emitir. Si está vacío, se sugiere según cómo pagó ("B\*?"). Las ventas de 2025 pueden traer W (Webpay). |
+| Pagado | Sí / 50% / No. Al tocarlo: "Pagó el 50%" / "Pagó el total" con el medio, o ver los pagos. |
+| Repisas, retiro y orden, retiro de basura, cajas, soporte, despacho | Montos netos editables en la celda. Si son varias líneas (dos repisas, 3 cajas), se editan en el detalle. El **despacho** es un extra de la instalación: no está en el catálogo. |
+| Neto, bruto | Calculados. Cambiar montos actualiza el total; el PDF ya enviado no se regenera solo. |
+
+- Arriba: período (**Semana / Mes / Todo**), **+ Nueva instalación** (nombre, día y horas; los montos se completan después) e **Importar Excel**.
+- Filtros: **Por cobrar** (instaladas con saldo, con 💬 para cobrar por WhatsApp con el detalle), **Documentos por emitir**, **Con notas**, **Por instalar** y **Sin fecha**. Estos cuatro primeros miran todo el historial.
+- Abajo van los totales de lo que se ve, como la suma del Excel. En el celular cada fila es una tarjeta.
+- La fila vive en la columna R (`Instalación (JSON)`): `instalada`, `nota`, `documento`, el evento y, si vino del Excel, `origen: 'excel'` y su huella.
+
+**Importar el Excel** (Instalaciones → Importar Excel):
+- Lee el .xlsx en el navegador (SheetJS, un par de segundos) y muestra antes qué va a pasar: cuántas ventas son nuevas, cuántas ya estaban, cuántas no tienen fecha y el neto.
+- **Encuentra las columnas por su nombre** (NOMBRE, FECHA, HORA INICIO, B/F/W, PAGADO, REPISAS, RETIRO, SOPORTE, ESCOMBROS, DESPACHO, RACKS, NETO TOTAL, MONTO BRUTO…), así que da lo mismo si cambian de lugar entre meses. Las hojas sin esas columnas, como las del banco, se ignoran.
+- Nombre pintado = instalada. La columna DÍA trae notas (los días de la semana se descartan). "SI" en PAGADO registra el pago completo.
+- Las ventas importadas reciben **números bajo el 1421**, así que no cambian la numeración de las cotizaciones nuevas. **Importar de nuevo no duplica**: cada venta guarda su huella del Excel, y a las que ya estaban en el panel se les completa el documento, la nota o la marca de instalada.
+- Las próximas instalaciones se **enlazan con su evento del calendario** (el que creaba el script de la planilla), si lo encuentra por nombre y día. No se crean eventos al importar, para no duplicar.
+- Lógica y pruebas: `lib/leer-ventas.mjs`, `lib/importar-ventas.mjs`, `lib/planilla.mjs`, `lib/documentos.mjs`. Prueba E2E local con un Excel de ejemplo (`scripts/local-dev/fixtures/ventas-ejemplo.xlsx`): `node scripts/local-dev/verify-planilla.mjs`.
+
+## Estadísticas
+
+- **Admin → Estadísticas**: cuánto entra por mes según la fecha de cada instalación agendada (no cuenta las rechazadas). Las instaladas son las marcadas en la planilla.
   - vendido, cobrado y por cobrar, con el saldo de trabajos ya hechos en rojo;
   - realizado vs agendado, ticket promedio y la variación contra el mes anterior.
 - **¿De dónde viene la plata?** tiene dos vistas:
-  - **por servicio**: repisas, retiro y orden, retiro de basura, cajas y soportes;
+  - **por servicio**: repisas, retiro y orden, retiro de basura, cajas, soportes y despacho;
   - **por tipo de trabajo**: solo repisas, con retiro y orden, o con otros servicios.
 - Gráficos de los últimos 6 meses (cada barra abre ese mes) y de las semanas del mes.
 - Tabla con filtros: tipo de trabajo y "con saldo".
   - Al hacer clic en una fila se abre la cotización.
   - Se puede descargar en CSV para Excel.
+- Arriba avisa los **documentos por emitir** (B\*, F\*…).
 - Todo se puede ver **con IVA o neto**. Si un subtotal se editó a mano, la diferencia aparece como "Ajustes de precio" para que todo cuadre.
 - Lógica y pruebas: `lib/resumen-instalaciones.mjs`. Prueba E2E local: `node scripts/local-dev/verify-instalaciones.mjs`.
 

@@ -7,7 +7,7 @@
 // Calendar y la planilla se inyectan: en Netlify son Google; en local y en los tests, falsos.
 import { ErrorCotizacion, actualizarCotizacion, obtenerCotizacion } from './cotizaciones.mjs'
 import { SERVICIOS } from './marca.mjs'
-import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from './totales.mjs'
+import { DESCUENTO_MAX, montoDespacho, nombreServicio, totalesCotizacion } from './totales.mjs'
 
 export { totalesCotizacion }
 
@@ -45,6 +45,9 @@ export function limpiarAdicionales(adicionales = {}) {
   const descuento = Number(adicionales.descuento_pct ?? 0)
   if (!Number.isInteger(descuento) || descuento < 0 || descuento > DESCUENTO_MAX) falla(`El descuento debe ser un porcentaje entre 0 y ${DESCUENTO_MAX}`)
   if (descuento) limpio.descuento_pct = descuento
+  const despacho = Number(adicionales.despacho ?? 0)
+  if (!Number.isInteger(despacho) || despacho < 0 || despacho > 1e8) falla('Revisa el monto del despacho')
+  if (despacho) limpio.despacho = montoDespacho({ despacho })
   return limpio
 }
 
@@ -82,6 +85,7 @@ export function eventoInstalacion({ cotizacion, fecha, inicio, fin, adicionales,
     cotizacion.direccion && `Dirección: ${cotizacion.direccion}`,
     `Cotización N° ${cotizacion.cotNum} · Total ${pesos(totales.total)} con IVA`,
     servicios.length && `\nServicios adicionales:\n${servicios.join('\n')}`,
+    totales.despacho > 0 && `Despacho: ${pesos(totales.despacho)} neto`,
     totales.descuento > 0 && `Descuento ${totales.descuentoPct}%: -${pesos(totales.descuento)} neto`,
     notas && `\nNotas:\n${notas}`,
   ].filter(Boolean).join('\n')
@@ -119,7 +123,9 @@ export async function agendarInstalacion(almacen, calendar, calendarId, datos) {
     ? await calendar.events.patch({ calendarId, eventId: previo, sendUpdates: invitado ? 'all' : 'none', requestBody: cuerpo })
     : await calendar.events.insert({ calendarId, sendUpdates: invitado ? 'all' : 'none', requestBody: cuerpo })
 
+  // Conserva lo propio de la planilla (instalada, nota, documento) al reagendar.
   const instalacion = {
+    ...cotizacion.instalacion,
     eventId: respuesta.data.id, link: respuesta.data.htmlLink || '',
     fecha, inicio, fin, invitado, notas, agendadaEn: new Date().toISOString(),
   }

@@ -31,14 +31,16 @@ export const QUOTE_STATUS_LABELS = {
   'rechazada':     { label: 'Rechazada',     color: '#EF4444' },
 }
 
+// Instalaciones es la central (la planilla de ventas); Estadisticas, los graficos y resumenes.
 export const SECTIONS = [
-  { id: 'inicio',       label: 'Inicio',       icon: 'home'  },
-  { id: 'calendario',   label: 'Calendario',   icon: 'agenda' },
-  { id: 'visitas',      label: 'Visitas',      icon: 'calendar' },
-  { id: 'cotizador',    label: 'Cotizar',      icon: 'doc'   },
-  { id: 'cotizaciones', label: 'Cotizaciones', icon: 'files', corto: 'Cotiz.' },
-  { id: 'instalaciones', label: 'Instalaciones', icon: 'chart', corto: 'Instal.' },
-  { id: 'horarios',     label: 'Horarios',     icon: 'clock' },
+  { id: 'inicio',        label: 'Inicio',        icon: 'home'  },
+  { id: 'instalaciones', label: 'Instalaciones', icon: 'table', corto: 'Instal.' },
+  { id: 'calendario',    label: 'Calendario',    icon: 'agenda', corto: 'Agenda' },
+  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files', corto: 'Cotiz.' },
+  { id: 'cotizador',     label: 'Cotizar',       icon: 'doc'   },
+  { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
+  { id: 'estadisticas',  label: 'Estadísticas',  icon: 'chart', corto: 'Stats' },
+  { id: 'horarios',      label: 'Horarios',      icon: 'clock' },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }

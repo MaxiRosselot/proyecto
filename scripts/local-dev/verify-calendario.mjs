@@ -115,7 +115,7 @@ try {
   await movil.goto(base + '/admin')
   await movil.locator('input[type=password]').fill(PASSWORD)
   await movil.getByRole('button', { name: 'Ingresar' }).click()
-  await movil.getByRole('navigation').getByRole('button', { name: 'Calendario', exact: true }).click()
+  await movil.getByRole('navigation').getByRole('button', { name: 'Agenda', exact: true }).click()
   await expect(movil.getByRole('tab', { name: 'Agenda' })).toHaveAttribute('aria-selected', 'true')
   await expect(movil.getByRole('button', { name: /Marta Díaz Fuentes/ }).first()).toBeVisible()
   await movil.screenshot({ path: path.join(evidence, '06-agenda-movil.png'), fullPage: true })

@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { CONDICIONES, MARCA, SERVICIOS, TEXTO_OFERTA } from './marca.mjs';
-import { nombreServicio, porcentajeDescuento } from './totales.mjs';
+import { montoDespacho, nombreServicio, porcentajeDescuento } from './totales.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -47,7 +47,8 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   const extras = services.map(([key, title, price, description]) => ({ key, title, name: nombreServicio(data, key), description, qty: numeric(data[`qty_${key}`]), price: numeric(data[`precio_${key}`], price) }));
   const views = { isometric: imageData(data.grafica3d?.isometric, 'isometric'), top: imageData(data.grafica3d?.top, 'top') };
   // Mismo calculo que lib/totales.mjs: bruto, descuento, neto e IVA.
-  const bruto = rows.reduce((s, r) => s + r.unidades * r.valor, 0) + extras.reduce((s, r) => s + r.qty * r.price, 0);
+  const despacho = montoDespacho(data);
+  const bruto = rows.reduce((s, r) => s + r.unidades * r.valor, 0) + extras.reduce((s, r) => s + r.qty * r.price, 0) + despacho;
   const descuentoPct = porcentajeDescuento(data), descuento = Math.round(bruto * descuentoPct / 100);
   const subtotal = bruto - descuento, iva = Math.round(subtotal * .19), total = subtotal + iva;
   const asset = name => readFileSync(join(functionsDir, 'quote-assets', name));
@@ -114,7 +115,8 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   // Drawings give up to 125 pt of height so a quote of about six rows still ends on page 1.
   // Una fila con titulo (rack o repisa con colgador) ocupa 13 pt mas.
   const heading = r => r.kind === 'rack' ? `${r.label} · cajas incluidas` : r.colgador ? 'Repisa con colgador' : undefined;
-  const contracted = extras.filter(r => r.qty > 0);
+  // El despacho no es parte del catalogo: si se cobra, va como una fila mas de servicios.
+  const contracted = [...extras.filter(r => r.qty > 0), ...(despacho ? [{ key: 'despacho', name: 'Despacho', qty: 1, price: despacho }] : [])];
   const tableHeight = rows.reduce((h, r) => h + 23.85 + (heading(r) ? 13 : 0), 0) + contracted.length * 23.85 + (contracted.length ? SERVICES_BAND : 0);
   const shrink = Math.min(125, Math.max(0, tableHeight - 47.7));
   // Maxi's frames: 227 x 283 pt isometric and 160 x 283 pt plan, centred. The plan frame follows the

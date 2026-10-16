@@ -9,6 +9,8 @@ export default defineConfig({
     // el numero de WhatsApp de lib/marca.mjs en vez de tenerlo copiado.
     rollupOptions: { input: { main: 'index.html', confirm: 'confirm.html' } },
     outDir: 'dist',
+    // exceljs (~930 kB) va en su propio archivo y solo se descarga al importar un Excel.
+    chunkSizeWarningLimit: 1000,
     sourcemap: false,
     emptyOutDir: true,
   },

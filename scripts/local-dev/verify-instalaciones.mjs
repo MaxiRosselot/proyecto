@@ -48,7 +48,7 @@ try {
   const netoMes = 200000 + 370000 + 210000
   const totalMes = [200000, 370000, 210000].reduce((s, n) => s + Math.round(n * 1.19), 0)
 
-  await page.getByRole('navigation').getByRole('button', { name: 'Instalaciones', exact: true }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Estadísticas', exact: true }).click()
   const kpis = page.getByTestId('kpis')
   await expect(kpis).toContainText(pesos(totalMes))
   await expect(kpis).toContainText('Instalaciones3')
@@ -73,7 +73,7 @@ try {
   await expect(page.locator('#cot-' + casos[1].cotNum)).toBeVisible()
 
   // Mes anterior: solo Diego, y el actual compara contra el.
-  await page.getByRole('navigation').getByRole('button', { name: 'Instalaciones', exact: true }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'Estadísticas', exact: true }).click()
   await page.getByRole('button', { name: 'Mes anterior' }).click()
   await expect(page.getByTestId('fila-instalacion')).toHaveCount(1)
   await expect(page.getByTestId('fila-instalacion')).toContainText('Diego Lagos')
@@ -82,7 +82,7 @@ try {
   await movil.goto(base + '/admin')
   await movil.locator('input[type=password]').fill(PASSWORD)
   await movil.getByRole('button', { name: 'Ingresar' }).click()
-  await movil.getByRole('navigation').getByRole('button', { name: 'Instal.' }).click()
+  await movil.getByRole('navigation').getByRole('button', { name: 'Stats' }).click()
   await expect(movil.getByTestId('kpis')).toContainText(pesos(totalMes))
   expect(await movil.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await movil.screenshot({ path: path.join(evidence, '03-movil.png'), fullPage: true })

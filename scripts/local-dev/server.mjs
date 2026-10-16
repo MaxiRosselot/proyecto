@@ -26,6 +26,8 @@ import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
 import { configPago, conLinkPago, linkPagoCotizacion } from '../../netlify/functions/lib/mercadopago.mjs'
 import { atenderAvisoMercadoPago, atenderReservaGet, atenderReservaPost } from '../../netlify/functions/lib/reserva-cliente.mjs'
 import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netlify/functions/lib/reservas-admin.mjs'
+import { actualizarFila, cancelarInstalacion, crearInstalacion } from '../../netlify/functions/lib/planilla.mjs'
+import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -90,6 +92,10 @@ const calendarLocal = {
     async patch({ eventId, requestBody }) {
       db.eventos = { ...(db.eventos || {}), [eventId]: { ...(db.eventos?.[eventId] || {}), ...requestBody } }; saveData(db)
       return { data: { id: eventId, htmlLink: `${PUBLIC_URL}/#evento-${eventId}` } }
+    },
+    async delete({ eventId }) {
+      if (!db.eventos?.[eventId]) throw Object.assign(new Error('Evento no encontrado'), { code: 410 })
+      delete db.eventos[eventId]; saveData(db)
     },
   },
 }
@@ -234,6 +240,15 @@ const routes = {
     return { ok: true, ...r }
   },
   'eventos-local': () => ({ ok: true, eventos: db.eventos || {} }),
+  // Mismo contrato que netlify/functions/planilla.mjs
+  'planilla': async (body) => {
+    const { almacen, calendar, calendarId, leerEventos } = depsReserva()
+    if (body.accion === 'actualizar') return { ok: true, ...(await actualizarFila(almacen, calendar, calendarId, body.cotNum, body.cambios)) }
+    if (body.accion === 'crear') return { ok: true, ...(await crearInstalacion(almacen, calendar, calendarId, body)) }
+    if (body.accion === 'cancelar') return { ok: true, ...(await cancelarInstalacion(almacen, calendar, calendarId, body)) }
+    if (body.accion === 'importar') return { ok: true, reporte: await importarVentas(almacen, body.ventas || [], { simular: body.simular === true, hoy: ahoraEnZona().fecha, calendar, calendarId, leerEventos }) }
+    return { status: 400, ok: false, error: 'Acción desconocida' }
+  },
   // Mismo contrato que netlify/functions/calendario.mjs
   'calendario': async (_body, params) => {
     const desde = params.get('desde'), hasta = params.get('hasta')

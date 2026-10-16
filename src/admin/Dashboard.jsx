@@ -87,7 +87,7 @@ export default function DashboardSection({ navigateTo }) {
 
       // Cotizaciones
       const porConfirmar = quotes.filter(q => q.status === 'por confirmar')
-      const confirmadas  = quotes.filter(q => q.status === 'confirmada')
+      const confirmadas  = quotes.filter(q => q.status === 'confirmada' && q.instalacion?.origen !== 'excel')
       const porVerificar = quotes.filter(q => q.reserva?.estado === 'por verificar')
 
       // Cotizaciones sin respuesta hace 3+ dias

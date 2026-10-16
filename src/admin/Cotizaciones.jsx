@@ -53,7 +53,7 @@ function SiguientePaso({ q, onAgendar }) {
     <>Mándale la cotización con su link: ahí elige su día y paga. Si ya aceptó por otro lado, agenda tú.</>,
     <><EnviarCotizacion cotizacion={q} tamano={12} soloWhatsapp /><CopiarLink link={q.linkPago} texto="Copiar link" />
       <button onClick={onAgendar} style={{ ...boton, color: C.green, borderColor: C.green }}>Agendar instalación</button></>)
-  if (!q.instalacion) return caja(C.green, C.green + '0F', <>Aceptada{pago.pagado ? ` · pagó ${fmt(pago.pagado)}` : ''}. Falta agendar la instalación.</>,
+  if (!q.instalacion?.fecha) return caja(C.green, C.green + '0F', <>Aceptada{pago.pagado ? ` · pagó ${fmt(pago.pagado)}` : ''}. Falta agendar la instalación.</>,
     <button onClick={onAgendar} style={{ ...boton, background: C.green, borderColor: C.green, color: 'white' }}>Agendar instalación</button>)
   if (pago.saldo > 0) return caja(C.yellow, '#FFFBEB', <>Instalación agendada. Saldo por cobrar: <strong>{fmt(pago.saldo)}</strong>.</>,
     <CopiarLink link={q.linkPago} texto="Copiar link para pagar" />)
@@ -88,7 +88,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     setLoading(true); setError('')
     try {
       const quotesData = await apiFetch('/.netlify/functions/get-quotes')
-      if (quotesData.ok) setQuotes(quotesData.quotes)
+      // Las ventas importadas del Excel viven en Instalaciones: aca solo las cotizaciones del panel.
+      if (quotesData.ok) setQuotes(quotesData.quotes.filter(q => q.instalacion?.origen !== 'excel'))
       else setError(quotesData.error || 'Error')
     } catch { setError('No se pudo conectar') }
     finally { setLoading(false) }
@@ -290,7 +291,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                     {q.creado && <span style={{ marginLeft: 10, color: C.textMuted }}>Creada {String(q.creado).split(/[ ,]/)[0]}</span>}
                     {q.tieneProyecto3d && <span style={{ ...styles.badge(C.purple), marginLeft: 10 }}>Modelo 3D</span>}
                     <BadgePago quote={q} />
-                    {q.instalacion && <span style={{ ...styles.badge(C.green), marginLeft: 10 }}>Instalación {fechaLarga(q.instalacion.fecha).split(',')[1]?.trim()} · {q.instalacion.inicio}</span>}
+                    {q.instalacion?.fecha && <span style={{ ...styles.badge(C.green), marginLeft: 10 }}>Instalación {fechaLarga(q.instalacion.fecha).split(',')[1]?.trim()} · {q.instalacion.inicio}</span>}
                   </div>
                 </div>
                 {!isEdit && (
@@ -416,7 +417,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                   {/* Instalacion */}
                   {activa && (
                     <div id={'instalacion-' + q.cotNum} style={{ scrollMarginTop: 90 }}>
-                      {q.instalacion && agendandoId !== q.cotNum && (
+                      {q.instalacion?.fecha && agendandoId !== q.cotNum && (
                         <ResumenInstalacion quote={q} onReagendar={() => setAgendandoId(q.cotNum)}
                           onInvitado={cambios => actualizarLocal(q.cotNum, cambios)} />
                       )}

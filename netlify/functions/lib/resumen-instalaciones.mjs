@@ -2,9 +2,10 @@
 // Sin dependencias de Node: lo usan el panel admin y las pruebas.
 import { SERVICIOS } from './marca.mjs'
 import { resumenPagos } from './pagos-resumen.mjs'
-import { porcentajeDescuento } from './totales.mjs'
+import { montoDespacho, porcentajeDescuento } from './totales.mjs'
+import { porEmitir } from './documentos.mjs'
 
-export const CONCEPTOS = [['repisas', 'Repisas'], ...SERVICIOS.map(([clave, nombre]) => [clave, nombre])]
+export const CONCEPTOS = [['repisas', 'Repisas'], ...SERVICIOS.map(([clave, nombre]) => [clave, nombre]), ['despacho', 'Despacho']]
 export const TIPOS_TRABAJO = [
   ['solo_repisas', 'Solo repisas'],
   ['con_retiro_orden', 'Repisas + retiro y orden'],
@@ -20,6 +21,7 @@ export function desglose(cotizacion) {
   for (const [clave, , lista] of SERVICIOS) {
     neto[clave] = (Number(adicionales[`qty_${clave}`]) || 0) * (Number(adicionales[`precio_${clave}`] ?? lista) || 0)
   }
+  neto.despacho = montoDespacho(adicionales)
   const bruto = Object.values(neto).reduce((a, b) => a + b, 0)
   neto.descuento = -Math.round(bruto * porcentajeDescuento(adicionales) / 100)
   const subtotal = Number(cotizacion.subtotal) || bruto + neto.descuento
@@ -49,7 +51,8 @@ export function instalacionesDe(cotizaciones, hoy) {
       return {
         cotNum: c.cotNum, cliente: c.nombre, direccion: c.direccion, telefono: c.telefono,
         fecha: c.instalacion.fecha, inicio: c.instalacion.inicio, fin: c.instalacion.fin,
-        realizada: c.instalacion.fecha < hoy, neto, subtotal, iva: total - subtotal, total,
+        // Instalada la marca Maxi en la planilla; las de antes de la marca, por la fecha.
+        realizada: c.instalacion.instalada ?? c.instalacion.fecha < hoy, neto, subtotal, iva: total - subtotal, total,
         tipo: tipoTrabajo(neto), pagado: pago.pagado, saldo: pago.saldo, estadoPago: pago.estado,
       }
     })
@@ -107,10 +110,10 @@ export function resumenMes(cotizaciones, mes, hoy, { mesesTendencia = 6 } = {}) 
   return { mes, totales, conceptos, tipos, semanas, tendencia, instalaciones: delMes }
 }
 
-// Pagos sin N° de boleta (las boletas se emiten a mano en el SII), los mas antiguos primero.
-export function pagosSinBoleta(cotizaciones) {
+// Ventas con el documento por emitir (B*, F*, M/B*...), las mas antiguas primero.
+export function documentosPorEmitir(cotizaciones) {
   return cotizaciones
-    .filter(c => c.status !== 'rechazada')
-    .flatMap(c => (c.pagos || []).filter(p => !p.boleta).map(p => ({ ...p, cotNum: c.cotNum, cliente: c.nombre })))
-    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
+    .filter(c => c.status !== 'rechazada' && porEmitir(c.instalacion?.documento))
+    .map(c => ({ cotNum: c.cotNum, cliente: c.nombre, fecha: c.instalacion.fecha || '', documento: c.instalacion.documento, total: Number(c.total) || 0 }))
+    .sort((a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999'))
 }

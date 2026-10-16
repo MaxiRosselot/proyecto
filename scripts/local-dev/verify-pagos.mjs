@@ -1,5 +1,6 @@
 // Prueba E2E del pago en linea: link de la cotizacion → /pagar → Mercado Pago (simulado en el
-// backend local) → aviso → pago registrado con la oferta, boleta anotada y dashboard al dia.
+// backend local) → aviso → pago registrado e instalacion agendada; documento en la planilla y
+// en Estadisticas.
 // Contra el entorno local (start-native.mjs), con datos limpios.
 //   node scripts/local-dev/verify-pagos.mjs
 import { chromium, expect } from '@playwright/test'
@@ -59,7 +60,7 @@ try {
   expect(Number(pagada.total)).toBe(238000)
   expect(pagada.pagos.map(p => [p.monto, p.medio])).toEqual([[119000, 'Mercado Pago']])
 
-  // ── En el panel: el pago en linea, la boleta y el link para cobrar el saldo ──
+  // ── En el panel: el pago en linea y el link para cobrar el saldo ──
   await admin.getByRole('navigation').getByRole('button', { name: 'Cotizaciones', exact: true }).click()
   await admin.getByRole('button', { name: /^Confirmadas/ }).click()
   await admin.getByText('Rocío Fuentes').click()
@@ -69,10 +70,6 @@ try {
   await expect(pagos).toContainText('saldo ' + pesos(119000))
   await expect(tarjeta.getByTestId('siguiente-paso').getByRole('button', { name: 'Copiar link para pagar' })).toBeVisible()
   await expect(tarjeta.getByTestId('instalacion-agendada')).toBeVisible()
-  await pagos.getByRole('button', { name: 'Anotar boleta' }).click()
-  await pagos.getByLabel('N° de boleta').fill('4521')
-  await pagos.getByRole('button', { name: 'OK' }).click()
-  await expect(pagos.getByRole('button', { name: 'Boleta N° 4521' })).toBeVisible()
   // Al reagendar se puede aplicar el descuento por transferencia: el total baja.
   await tarjeta.getByRole('button', { name: 'Reagendar' }).click()
   await expect(tarjeta.getByTestId('total-instalacion')).toHaveText(pesos(238000))
@@ -81,20 +78,26 @@ try {
   await admin.screenshot({ path: path.join(evidence, '03-panel-pagos.png'), fullPage: true })
   await tarjeta.getByRole('button', { name: 'Cancelar' }).click()
 
-  // ── Dashboard: un pago por transferencia sin boleta aparece pendiente, y se anota ahi ──
+  // ── Documento: pago mixto (Mercado Pago + transferencia) con la boleta por emitir ──
   await api('pagos', { accion: 'registrar', cotNum: creada.cotNum, monto: 50000, medio: 'Transferencia', fecha: '2026-10-15' })
   await admin.getByRole('navigation').getByRole('button', { name: 'Instalaciones', exact: true }).click()
-  const pendientes = admin.getByTestId('boletas-pendientes')
-  await expect(pendientes).toContainText(`1 pago sin boleta · ${pesos(50000)}`)
-  await pendientes.getByRole('button', { name: 'Ver y anotar' }).click()
-  await expect(pendientes).toContainText('Rocío Fuentes')
-  await admin.screenshot({ path: path.join(evidence, '04-boletas-pendientes.png'), fullPage: true })
-  const fila = pendientes.locator('div', { hasText: 'Rocío Fuentes' }).filter({ hasText: pesos(50000) }).last()
-  await fila.getByRole('button', { name: 'Anotar boleta' }).click()
-  await fila.getByLabel('N° de boleta').fill('4522')
-  await fila.getByRole('button', { name: 'OK' }).click()
-  await expect.poll(async () => (await api('get-quotes?cotNum=' + creada.cotNum)).quote.pagos.map(p => p.boleta)).toEqual(['4521', '4522'])
-  await expect(pendientes.getByText('Rocío Fuentes')).toHaveCount(0)
+  await admin.getByRole('tab', { name: 'Todo' }).click()
+  const doc = admin.getByLabel('Documento de Rocío Fuentes')
+  await expect(doc.locator('option').first()).toHaveText('M/B*?') // lo sugiere segun como pago
+  await doc.selectOption('M/B*')
+  await admin.getByRole('navigation').getByRole('button', { name: 'Estadísticas', exact: true }).click()
+  const porEmitir = admin.getByTestId('documentos-por-emitir')
+  await expect(porEmitir).toContainText('1 documento por emitir')
+  await porEmitir.getByRole('button', { name: 'Ver' }).click()
+  await expect(porEmitir).toContainText('Rocío Fuentes')
+  await admin.screenshot({ path: path.join(evidence, '04-documentos-por-emitir.png'), fullPage: true })
+  // Emitida la boleta: se marca en la planilla y deja de estar pendiente.
+  await admin.getByRole('navigation').getByRole('button', { name: 'Instalaciones', exact: true }).click()
+  await admin.getByRole('tab', { name: 'Todo' }).click()
+  await admin.getByLabel('Documento de Rocío Fuentes').selectOption('M/B')
+  await expect.poll(async () => (await api('get-quotes?cotNum=' + creada.cotNum)).quote.instalacion.documento).toBe('M/B')
+  await admin.getByRole('navigation').getByRole('button', { name: 'Estadísticas', exact: true }).click()
+  await expect(admin.getByTestId('documentos-por-emitir')).toHaveCount(0)
 
   expect(errors).toEqual([])
   console.log(JSON.stringify({ ok: true, cotNum: creada.cotNum, evidence }))

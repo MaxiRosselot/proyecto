@@ -73,7 +73,7 @@ export function estadoCliente(cotizacion, ahora = Date.now()) {
   if (r?.estado === 'por verificar') return 'verificando'
   // Volvio de Mercado Pago y el aviso aun no llega. Si lo abandono, a los 30 minutos puede reintentar.
   if (r?.estado === 'esperando pago' && Date.parse(r.expira) > ahora) return 'esperando-pago'
-  if (cotizacion.instalacion) return saldo > 0 ? 'agendada' : 'lista'
+  if (cotizacion.instalacion?.fecha) return saldo > 0 ? 'agendada' : 'lista'
   return saldo > 0 ? 'por-agendar' : 'pagada-sin-fecha'
 }
 
@@ -88,7 +88,7 @@ export async function solicitarReserva(almacen, { cotNum, fecha, inicio, medio, 
   if (!elegida) falla(info.opciones.length ? 'Elige cuánto vas a pagar' : 'Esta cotización ya está pagada', info.opciones.length ? 400 : 409)
 
   let bloque = {}
-  if (!cotizacion.instalacion) {
+  if (!cotizacion.instalacion?.fecha) {
     const b = disponibilidad(hoyChile(ahora), tomados).find(d => d.fecha === fecha)?.bloques.find(x => x.inicio === inicio)
     if (!b) falla('Elige un día y horario de la lista')
     if (!b.libre) falla('Ese horario se acaba de ocupar. Elige otro, por favor.', 409)
@@ -124,7 +124,7 @@ export async function confirmarTransferencia(almacen, calendar, calendarId, { co
   }
   await registrarPago(almacen, { cotNum: cotizacion.cotNum, monto: r.monto, medio: 'Transferencia', fecha: hoyChile(ahora), nota: 'Transferencia avisada por el cliente y verificada' }, new Date(ahora))
   let instalacion = null
-  if (r.fecha && !cotizacion.instalacion) instalacion = await agendarDesdeReserva(almacen, calendar, calendarId, cotizacion.cotNum, r)
+  if (r.fecha && !cotizacion.instalacion?.fecha) instalacion = await agendarDesdeReserva(almacen, calendar, calendarId, cotizacion.cotNum, r)
   await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, reserva: null, ...(instalacion || cotizacion.status !== 'por confirmar' ? {} : { status: 'confirmada' }) })
   return { cotizacion: await obtenerCotizacion(almacen, cotizacion.cotNum), instalacion }
 }
@@ -144,7 +144,7 @@ export async function completarReservaMercadoPago(almacen, calendar, calendarId,
   const cotizacion = await obtenerCotizacion(almacen, cotNum)
   const r = cotizacion?.reserva
   if (!r || r.medio !== 'mercadopago') return { instalacion: null }
-  const instalacion = r.fecha && !cotizacion.instalacion ? await agendarDesdeReserva(almacen, calendar, calendarId, cotizacion.cotNum, r) : null
+  const instalacion = r.fecha && !cotizacion.instalacion?.fecha ? await agendarDesdeReserva(almacen, calendar, calendarId, cotizacion.cotNum, r) : null
   await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, reserva: null })
   return { instalacion }
 }
