@@ -18,6 +18,7 @@ export function authHeaders() {
 
 export const VISIT_STATUS_LABELS = {
   agendada:           { label: 'Agendada',              color: '#3B82F6' },
+  confirmada:         { label: 'Confirmada',            color: '#0D9488' },
   pendiente:          { label: 'Pendiente de declarar', color: '#F59E0B' },
   realizada:          { label: 'Realizada',             color: '#10B981' },
   realizada_cotizada: { label: 'Realizada y cotizada',  color: '#8B5CF6' },

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
-import { textoVisitas } from './listaVisitas.js'
+import { VISITA_VIGENTE, mensajeConfirmarVisita, textoVisitas } from './listaVisitas.js'
+import { linkWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 
 function Badge({ status }) {
   const s = VISIT_STATUS_LABELS[status] || VISIT_STATUS_LABELS.agendada
@@ -75,12 +76,12 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
   const agendadas = visits.filter(v => {
     const s = getStatus(v)
-    return (s === 'agendada' || s === 'reagendar') && new Date(v.start) >= now
+    return VISITA_VIGENTE.includes(s) && new Date(v.start) >= now
   }).sort((a, b) => new Date(a.start) - new Date(b.start))
 
   const pendientes = visits.filter(v => {
     const s = getStatus(v)
-    return (s === 'agendada' || s === 'reagendar') && new Date(v.start) < now
+    return VISITA_VIGENTE.includes(s) && new Date(v.start) < now
   }).sort((a, b) => new Date(b.start) - new Date(a.start))
 
   const realizadas = visits.filter(v => getStatus(v) === 'realizada')
@@ -104,10 +105,10 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const q    = buscar.trim().toLowerCase()
   const list = (listMap[tab] || []).filter(v => !q || (v.nombre || '').toLowerCase().includes(q))
 
-  // Copia la lista que se ve (pestana y busqueda) para mandarsela a quien hace las visitas.
-  async function copiarLista() {
-    try { await navigator.clipboard.writeText(textoVisitas(list)); setCopiado('ok') }
-    catch { setCopiado('error') }
+  // Copia las visitas confirmadas de un dia para mandarselas a quien hace las visitas.
+  async function copiarDia(group, confirmadas) {
+    try { await navigator.clipboard.writeText(textoVisitas(confirmadas)); setCopiado(group.label) }
+    catch { setCopiado('error:' + group.label) }
     setTimeout(() => setCopiado(''), 2500)
   }
 
@@ -141,10 +142,6 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
             style={{ ...styles.input, width: 180, padding: '7px 12px', fontSize: 13 }} />
-          <button onClick={copiarLista} disabled={!list.length} title="Copia las visitas de esta pestaña, por día y en orden, para pegarlas en WhatsApp"
-            style={{ ...styles.btnPrimary, padding: '8px 14px', fontSize: 13, opacity: list.length ? 1 : .5, cursor: list.length ? 'pointer' : 'default' }}>
-            {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? 'No se pudo copiar' : `📋 Copiar lista (${list.length})`}
-          </button>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
@@ -187,8 +184,10 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
       {/* Lista agrupada por domingo */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-        {grouped.map(group => (
-          <div key={group.label}>
+        {grouped.map(group => {
+          const confirmadas = group.visits.filter(v => getStatus(v) === 'confirmada')
+          return (
+          <div key={group.label} data-testid="dia-visitas">
             {/* Encabezado del domingo */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: C.orange, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
@@ -198,6 +197,13 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
               <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: 'nowrap' }}>
                 {group.visits.length} {group.visits.length === 1 ? 'visita' : 'visitas'}
               </span>
+              {tab === 'agendadas' && (
+                <button onClick={() => copiarDia(group, confirmadas)} disabled={!confirmadas.length}
+                  title="Copia las visitas confirmadas de este día, en orden y con todos sus datos, para mandarlas por WhatsApp"
+                  style={{ ...styles.btnPrimary, padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', opacity: confirmadas.length ? 1 : .45, cursor: confirmadas.length ? 'pointer' : 'default' }}>
+                  {copiado === group.label ? '✓ Copiado' : copiado === 'error:' + group.label ? 'No se pudo copiar' : `📋 Copiar confirmadas (${confirmadas.length}/${group.visits.length})`}
+                </button>
+              )}
             </div>
 
             {/* Tarjetas del grupo */}
@@ -231,6 +237,28 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                       </div>
                     </div>
+
+                    {/* Confirmar con el cliente (el dia anterior) */}
+                    {tab === 'agendadas' && (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+                        {status === 'confirmada' ? (
+                          <>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: VISIT_STATUS_LABELS.confirmada.color }}>✓ El cliente confirmó</span>
+                            <button onClick={() => handleStatus(visit, 'agendada')} disabled={isUpdating}
+                              style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: C.textMuted, textDecoration: 'underline', cursor: 'pointer' }}>Deshacer</button>
+                          </>
+                        ) : (
+                          <>
+                            {visit.celular
+                              ? <a href={linkWhatsapp(visit.celular, mensajeConfirmarVisita(visit))} target="_blank" rel="noreferrer"
+                                  style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: '#25D366', color: 'white', textDecoration: 'none' }}>💬 Pedir confirmación</a>
+                              : <span style={{ fontSize: 12, color: C.textMuted }}>Sin celular para WhatsApp</span>}
+                            <button onClick={() => handleStatus(visit, 'confirmada')} disabled={isUpdating}
+                              style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1.5px solid ' + VISIT_STATUS_LABELS.confirmada.color, background: C.surface, color: VISIT_STATUS_LABELS.confirmada.color, opacity: isUpdating ? .5 : 1 }}>✓ Confirmó</button>
+                          </>
+                        )}
+                      </div>
+                    )}
 
                     {/* Detalle expandido */}
                     {isExpanded && (
@@ -287,7 +315,8 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
               })}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

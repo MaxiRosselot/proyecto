@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { C, apiFetch, fmt, fmtDate, fmtTime, styles, VISIT_STATUS_LABELS } from './utils.js'
+import { VISITA_VIGENTE } from './listaVisitas.js'
 
 function KpiCard({ label, value, sub, color, onClick, alert }) {
   return (
@@ -73,13 +74,13 @@ export default function DashboardSection({ navigateTo }) {
       // Visitas proximas (agendadas, fecha futura)
       const visitasProximas = visits.filter(v => {
         const s = v.status || 'agendada'
-        return (s === 'agendada' || s === 'reagendar') && new Date(v.start) >= hoy && new Date(v.start) < en7
+        return VISITA_VIGENTE.includes(s) && new Date(v.start) >= hoy && new Date(v.start) < en7
       })
 
       // Pendientes de declarar (fecha pasada, sin estado claro)
       const pendientes = visits.filter(v => {
         const s = v.status || 'agendada'
-        return (s === 'agendada' || s === 'reagendar') && new Date(v.start) < now
+        return VISITA_VIGENTE.includes(s) && new Date(v.start) < now
       })
 
       // Realizadas sin cotizar
@@ -101,7 +102,7 @@ export default function DashboardSection({ navigateTo }) {
       const manana = new Date(hoy); manana.setDate(hoy.getDate() + 1)
       const visitasHoy = visits.filter(v => {
         const d = new Date(v.start)
-        return d >= hoy && d < manana && (v.status === 'agendada' || v.status === 'reagendar')
+        return d >= hoy && d < manana && VISITA_VIGENTE.includes(v.status)
       })
 
       setData({ visitasProximas, pendientes, realizadasSinCotizar, porConfirmar, confirmadas, sinRespuesta, visitasHoy, porVerificar })

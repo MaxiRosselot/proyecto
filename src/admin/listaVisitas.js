@@ -26,3 +26,20 @@ export function textoVisitas(visitas) {
     return lineas.join('\n')
   }).join('\n\n———\n\n')
 }
+
+// Visitas que siguen en pie (todavia no se declara que paso con ellas).
+export const VISITA_VIGENTE = ['agendada', 'reagendar', 'confirmada']
+
+// Mensaje del dia anterior para que el cliente confirme la visita.
+export function mensajeConfirmarVisita(visita, ahora = new Date()) {
+  const nombre = (visita.nombre || '').trim().split(/\s+/)[0]
+  const manana = diaDe(new Date(ahora.getTime() + 864e5).toISOString()) === diaDe(visita.start)
+  const cuando = `${manana ? 'de mañana ' : 'del '}${fechaLarga(visita.start).replace(',', '')} a las ${hora(visita.start)}`
+  return [
+    `Hola${nombre ? ' ' + nombre : ''}! 👋 Te escribimos de Repisas Don Maxi para confirmar la visita ${cuando}${visita.direccion ? ` en ${visita.direccion.trim()}` : ''}.`,
+    '',
+    'Por favor considera 1 hora de flexibilidad por un eventual atraso o adelanto.',
+    '',
+    '¿Nos confirmas si estamos ok? Y si no puedes, avísanos también para reorganizarnos e intentar ser lo más puntuales posible 🙏',
+  ].join('\n')
+}
