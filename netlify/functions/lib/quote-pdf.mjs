@@ -40,6 +40,8 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     largo: numeric(r.largo), prof: numeric(r.prof), alto: numeric(r.alto), niveles: numeric(r.niveles), unidades: numeric(r.unidades), valor: numeric(r.valor),
   }));
   if (rows.length > 100) throw new Error('Máximo 100 repisas por cotización');
+  // Una repisa en 0 unidades (se saco al agendar) no se cobra ni se muestra.
+  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].unidades === 0 && rows.length > 1) rows.splice(i, 1);
   if (rows.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.valor) || r.valor <= 0))) throw new Error('Cada rack requiere un precio neto entero positivo');
   // title: el de lista (pagina 2); name: el que se edito para esta cotizacion (fila de la tabla).
   const extras = services.map(([key, title, price, description]) => ({ key, title, name: nombreServicio(data, key), description, qty: numeric(data[`qty_${key}`]), price: numeric(data[`precio_${key}`], price) }));

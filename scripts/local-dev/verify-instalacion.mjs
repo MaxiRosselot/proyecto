@@ -38,7 +38,7 @@ try {
   await page.getByLabel('Cantidad de Cajas organizadoras').fill('2')
   await page.getByLabel('Precio de Cajas organizadoras').fill('12000')
   // 140.000 de repisas + 24.000 de cajas, mas IVA.
-  await expect(page.getByTestId('total-instalacion')).toHaveText('Total $195.160')
+  await expect(page.getByTestId('total-instalacion')).toHaveText('$195.160')
   await page.getByLabel('Día de la instalación').fill(fecha)
   await page.getByLabel('Hora de inicio').fill('10:00')
   await page.getByLabel('Hora de término').fill('13:30')

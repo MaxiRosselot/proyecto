@@ -10,6 +10,22 @@ const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago
 
 const campo = { ...styles.input, padding: '8px 10px', fontSize: 13 }
 const etiqueta = { ...styles.detailLabel, display: 'block', marginBottom: 4 }
+const titulo = { fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .8, marginBottom: 6 }
+const encabezado = h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', textAlign: ['Servicio', 'Repisa'].includes(h) ? 'left' : 'center' }}>{h}</span>
+const metros = n => (Number.isInteger(Number(n)) ? String(n) : Number(n).toFixed(2))
+
+// Numero entero sin ceros adelante ("020" se leia como 20). Al tocarlo se selecciona todo,
+// asi lo que se escribe reemplaza el valor en vez de sumarse a el.
+function Numero({ valor, onCambio, etiqueta: aria, ancho }) {
+  return (
+    <input type="text" inputMode="numeric" aria-label={aria} value={String(valor ?? 0)}
+      onFocus={e => e.target.select()}
+      onChange={e => onCambio(Math.min(1e8, Number(e.target.value.replace(/\D/g, '')) || 0))}
+      style={{ ...campo, textAlign: 'center', padding: '6px', ...(ancho ? { width: ancho } : {}) }} />
+  )
+}
+
+const nombreRepisa = r => `${r.kind === 'rack' ? r.label || 'Rack' : r.colgador ? 'Repisa con colgador' : 'Repisa'} · ${metros(r.largo)} × ${metros(r.prof)} × ${metros(r.alto)} m${r.niveles ? ` · ${r.niveles} niveles` : ''}`
 
 // Formulario para agendar (o reagendar) la instalacion de una cotizacion.
 export function AgendarInstalacion({ quote, onListo, onCancelar }) {
@@ -22,6 +38,8 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
       [`precio_${clave}`, Number(quote.adicionales?.[`precio_${clave}`] ?? lista) || 0],
     ])),
   }))
+  // Cada repisa de la cotizacion, con su cantidad y precio editables (0 = no va).
+  const [repisas, setRepisas] = useState(() => (quote.repisas || []).map(r => ({ ...r, unidades: Number(r.unidades ?? 1) || 0, valor: Number(r.valor) || 0 })))
   const [fecha, setFecha] = useState(previa?.fecha || '')
   const [inicio, setInicio] = useState(previa?.inicio || '09:00')
   const [fin, setFin] = useState(previa?.fin || '13:00')
@@ -31,7 +49,9 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
-  const totales = useMemo(() => totalesCotizacion(quote.repisas || [], adicionales), [quote.repisas, adicionales])
+  const totales = useMemo(() => totalesCotizacion(repisas, adicionales), [repisas, adicionales])
+  const repisasCambiadas = repisas.some((r, i) => r.unidades !== (Number(quote.repisas[i].unidades ?? 1) || 0) || r.valor !== (Number(quote.repisas[i].valor) || 0))
+  const cambiarRepisa = (i, campo, valor) => setRepisas(prev => prev.map((r, j) => (j === i ? { ...r, [campo]: valor } : r)))
 
   // Lo que ya hay ese dia en el calendario, para no topar horarios.
   const [delDia, setDelDia] = useState([])
@@ -48,21 +68,23 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
   const choques = horarioOk ? delDia.filter(e => e.todoElDia || (e.minutoInicio < aMin(fin) && e.minutoFin > aMin(inicio))) : []
   const emailOk = !email.trim() || correoValido(email)
   const numero = (clave, valor) => setAdicionales(a => ({ ...a, [clave]: Math.max(0, Math.round(Number(valor) || 0)) }))
+  const montoOk = totales.bruto > 0
   const descuento = valor => setAdicionales(({ descuento_pct: _, ...resto }) => {
     const n = Math.min(DESCUENTO_MAX, Math.max(0, Math.round(Number(valor) || 0)))
     return n ? { ...resto, descuento_pct: n } : resto
   })
 
   async function agendar() {
-    if (!horarioOk || !emailOk || guardando) return
+    if (!horarioOk || !emailOk || !montoOk || guardando) return
     setGuardando(true); setError('')
     try {
       const r = await apiFetch(ENDPOINT, {
         method: 'POST',
-        body: JSON.stringify({ accion: 'agendar', cotNum: quote.cotNum, fecha, inicio, fin, adicionales, email: email.trim(), invitar, notas }),
+        body: JSON.stringify({ accion: 'agendar', cotNum: quote.cotNum, fecha, inicio, fin, adicionales, email: email.trim(), invitar, notas,
+          ...(repisasCambiadas ? { repisas: repisas.map(r => ({ unidades: r.unidades, valor: r.valor })) } : {}) }),
       })
       if (!r.ok) throw new Error(r.error || 'No se pudo agendar')
-      onListo({ status: 'confirmada', motivoRechazo: '', adicionales, subtotal: r.totales.subtotal, iva: r.totales.iva, total: r.totales.total, instalacion: r.instalacion, email: r.email || quote.email })
+      onListo({ status: 'confirmada', motivoRechazo: '', adicionales, ...(repisasCambiadas ? { repisas: r.repisas } : {}), subtotal: r.totales.subtotal, iva: r.totales.iva, total: r.totales.total, instalacion: r.instalacion, email: r.email || quote.email })
     } catch (e) { setError(e.message) }
     finally { setGuardando(false) }
   }
@@ -71,34 +93,52 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
     <div style={{ marginTop: 14, padding: 16, borderRadius: 12, border: '1.5px solid ' + C.green + '55', background: C.green + '08' }}>
       <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 12 }}>{previa ? 'Reagendar instalación' : 'Agendar instalación'}</div>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .8, marginBottom: 6 }}>Servicios adicionales</div>
+      <div style={titulo}>Repisas</div>
+      <div data-testid="repisas-agendar" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 64px 100px 84px', gap: '6px 8px', alignItems: 'center', fontSize: 13, marginBottom: 6 }}>
+        {['Repisa', 'Cant.', 'Precio c/u', 'Total'].map(encabezado)}
+        {repisas.map((r, i) => (
+          <React.Fragment key={i}>
+            <span style={{ color: r.unidades ? C.textSub : C.textMuted, textDecoration: r.unidades ? 'none' : 'line-through' }}>{nombreRepisa(r)}</span>
+            <Numero etiqueta={`Cantidad de la repisa ${i + 1}`} valor={r.unidades} onCambio={v => cambiarRepisa(i, 'unidades', Math.min(999, v))} />
+            <Numero etiqueta={`Precio de la repisa ${i + 1}`} valor={r.valor} onCambio={v => cambiarRepisa(i, 'valor', v)} />
+            <span style={{ textAlign: 'center', fontWeight: 700, color: r.unidades ? C.orangeDark : C.textMuted }}>{r.unidades ? fmt(r.unidades * r.valor) : 'no va'}</span>
+          </React.Fragment>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12 }}>Pon 0 en las repisas que el cliente no va a llevar.{repisasCambiadas ? ' Al agendar se guardan estos valores en la cotización.' : ''}</div>
+
+      <div style={titulo}>Servicios adicionales</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 64px 100px 84px', gap: '6px 8px', alignItems: 'center', fontSize: 13, marginBottom: 12 }}>
-        {['Servicio', 'Cant.', 'Precio c/u', 'Total'].map(h => <span key={h} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', textAlign: h === 'Servicio' ? 'left' : 'center' }}>{h}</span>)}
+        {['Servicio', 'Cant.', 'Precio c/u', 'Total'].map(encabezado)}
         {SERVICIOS.map(([clave]) => [clave, nombreServicio(adicionales, clave)]).map(([clave, nombre]) => (
           <React.Fragment key={clave}>
             <span style={{ color: C.textSub }}>{nombre}</span>
-            <input type="number" min="0" aria-label={`Cantidad de ${nombre}`} value={adicionales[`qty_${clave}`]} onChange={e => numero(`qty_${clave}`, e.target.value)} style={{ ...campo, textAlign: 'center', padding: '6px' }} />
-            <input type="number" min="0" step="1000" aria-label={`Precio de ${nombre}`} value={adicionales[`precio_${clave}`]} onChange={e => numero(`precio_${clave}`, e.target.value)} style={{ ...campo, textAlign: 'center', padding: '6px' }} />
+            <Numero etiqueta={`Cantidad de ${nombre}`} valor={adicionales[`qty_${clave}`]} onCambio={v => numero(`qty_${clave}`, Math.min(999, v))} />
+            <Numero etiqueta={`Precio de ${nombre}`} valor={adicionales[`precio_${clave}`]} onCambio={v => numero(`precio_${clave}`, v)} />
             <span style={{ textAlign: 'center', fontWeight: adicionales[`qty_${clave}`] ? 700 : 400, color: adicionales[`qty_${clave}`] ? C.orangeDark : C.textMuted }}>{fmt(adicionales[`qty_${clave}`] * adicionales[`precio_${clave}`])}</span>
           </React.Fragment>
         ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{ ...etiqueta, marginBottom: 0 }}>Descuento</span>
-        <input type="number" min="0" max={DESCUENTO_MAX} aria-label="Descuento en porcentaje" value={totales.descuentoPct || ''} placeholder="0" onChange={e => descuento(e.target.value)} style={{ ...campo, width: 70, textAlign: 'center', padding: '6px' }} />
+        <Numero etiqueta="Descuento en porcentaje" valor={totales.descuentoPct} onCambio={descuento} ancho={70} />
         <span style={{ fontSize: 13, color: C.textSub }}>%</span>
         <button type="button" onClick={() => descuento(totales.descuentoPct === OFERTA.descuento ? 0 : OFERTA.descuento)} aria-pressed={totales.descuentoPct === OFERTA.descuento}
           style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 10px', ...(totales.descuentoPct === OFERTA.descuento ? { borderColor: C.green, color: C.green, background: C.green + '12' } : {}) }}>
           Transferencia · {OFERTA.descuento}%
         </button>
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 13, color: C.textSub, marginBottom: 14 }}>
-        <span>Repisas {fmt(totales.repisas)}</span>
-        <span>Adicionales {fmt(totales.adicionales)}</span>
-        {totales.descuento > 0 && <span style={{ color: C.green, fontWeight: 700 }}>Descuento {totales.descuentoPct}% -{fmt(totales.descuento)}</span>}
-        <span>IVA {fmt(totales.iva)}</span>
-        <strong style={{ color: C.orangeDark }} data-testid="total-instalacion">Total {fmt(totales.total)}</strong>
-        {totales.total !== Number(quote.total) && <span style={{ color: C.textMuted }}>(antes {fmt(quote.total)})</span>}
+      {/* La cuenta completa, en columna: de las repisas al total con IVA. */}
+      <div data-testid="resumen-montos" style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '3px 24px', width: 'fit-content', minWidth: 260, marginLeft: 'auto', fontSize: 13, color: C.textSub, padding: '10px 14px', borderRadius: 10, background: 'white', border: '1px solid ' + C.border, marginBottom: 14 }}>
+        <span>Repisas</span><span style={{ textAlign: 'right' }}>{fmt(totales.repisas)}</span>
+        <span>Servicios adicionales</span><span style={{ textAlign: 'right' }}>{fmt(totales.adicionales)}</span>
+        {totales.descuento > 0 && <><span style={{ color: C.green }}>Descuento {totales.descuentoPct}%</span><span style={{ textAlign: 'right', color: C.green, fontWeight: 700 }}>-{fmt(totales.descuento)}</span></>}
+        <span>Neto</span><span style={{ textAlign: 'right' }}>{fmt(totales.subtotal)}</span>
+        <span>IVA (19%)</span><span style={{ textAlign: 'right' }}>{fmt(totales.iva)}</span>
+        <strong style={{ color: C.text, borderTop: '1px solid ' + C.border, paddingTop: 4 }}>Total</strong>
+        <strong style={{ color: C.orangeDark, textAlign: 'right', borderTop: '1px solid ' + C.border, paddingTop: 4 }} data-testid="total-instalacion">{fmt(totales.total)}</strong>
+        {totales.total !== Number(quote.total) && <span style={{ gridColumn: '1 / -1', textAlign: 'right', color: C.textMuted, fontSize: 12 }}>Antes: {fmt(quote.total)}</span>}
+        {!montoOk && <span style={{ gridColumn: '1 / -1', textAlign: 'right', color: C.red, fontSize: 12 }}>Deja al menos una repisa o un servicio.</span>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10, marginBottom: 6 }}>
@@ -132,8 +172,8 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
 
       {error && <div style={{ ...styles.errorBox, marginBottom: 10 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={agendar} disabled={!horarioOk || !emailOk || guardando}
-          style={{ ...styles.btnPrimary, background: C.green, boxShadow: 'none', opacity: !horarioOk || !emailOk || guardando ? .55 : 1 }}>
+        <button onClick={agendar} disabled={!horarioOk || !emailOk || !montoOk || guardando}
+          style={{ ...styles.btnPrimary, background: C.green, boxShadow: 'none', opacity: !horarioOk || !emailOk || !montoOk || guardando ? .55 : 1 }}>
           {guardando ? 'Agendando...' : previa ? 'Guardar nuevo horario' : 'Agendar instalación'}
         </button>
         <button onClick={onCancelar} style={styles.btnSecondary}>Cancelar</button>

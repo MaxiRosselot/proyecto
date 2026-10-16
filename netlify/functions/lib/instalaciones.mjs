@@ -48,6 +48,21 @@ export function limpiarAdicionales(adicionales = {}) {
   return limpio
 }
 
+// Al agendar se puede ajustar cada repisa de la cotizacion: cuantas van y a que precio (por ejemplo,
+// el cliente se queda con una sola de las que eligio). Se cambian solo unidades y valor de las filas
+// que ya existen; una fila en 0 queda guardada (para poder volver a sumarla) y el PDF no la muestra.
+export function limpiarRepisas(originales = [], editadas) {
+  if (editadas === undefined) return originales
+  if (!Array.isArray(editadas) || editadas.length !== originales.length) falla('Las repisas cambiaron: recarga la cotización')
+  return originales.map((fila, i) => {
+    const unidades = Number(editadas[i]?.unidades)
+    const valor = Number(editadas[i]?.valor)
+    if (!Number.isInteger(unidades) || unidades < 0 || unidades > 999) falla('Revisa la cantidad de las repisas')
+    if (!Number.isInteger(valor) || valor < 0 || valor > 1e8) falla('Revisa el precio de las repisas')
+    return { ...fila, unidades, valor }
+  })
+}
+
 export function validarHorario({ fecha, inicio, fin }) {
   if (!ISO.test(fecha || '') || Number.isNaN(Date.parse(fecha))) falla('Elige la fecha de la instalación')
   if (!HHMM.test(inicio || '') || !HHMM.test(fin || '')) falla('Indica la hora de inicio y de término')
@@ -93,7 +108,9 @@ export async function agendarInstalacion(almacen, calendar, calendarId, datos) {
   if (correoNuevo && !correoValido(correoNuevo)) falla('El correo del cliente no es válido')
   const email = correoNuevo || cotizacion.email || ''
   const invitado = datos.invitar !== false && correoValido(email) ? email : ''
-  const totales = totalesCotizacion(cotizacion.repisas, adicionales)
+  const repisas = limpiarRepisas(cotizacion.repisas || [], datos.repisas)
+  const totales = totalesCotizacion(repisas, adicionales)
+  if (totales.bruto <= 0) falla('La venta quedó en $0: deja al menos una repisa o un servicio')
   const notas = String(datos.notas || '').trim().slice(0, 1000)
 
   const cuerpo = eventoInstalacion({ cotizacion, fecha, inicio, fin, adicionales, totales, invitado, notas })
@@ -109,9 +126,10 @@ export async function agendarInstalacion(almacen, calendar, calendarId, datos) {
   await actualizarCotizacion(almacen, {
     cotNum: cotizacion.cotNum, status: 'confirmada', motivoRechazo: '',
     adicionales, subtotal: totales.subtotal, iva: totales.iva, total: totales.total,
+    ...(datos.repisas !== undefined ? { repisas } : {}),
     instalacion, ...(email && email !== cotizacion.email ? { email } : {}),
   })
-  return { instalacion, totales, email }
+  return { instalacion, totales, email, repisas }
 }
 
 // Invita al cliente a una instalacion ya agendada, para cuando el correo se consigue despues.

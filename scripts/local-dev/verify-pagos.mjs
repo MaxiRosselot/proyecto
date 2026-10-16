@@ -75,9 +75,9 @@ try {
   await expect(pagos.getByRole('button', { name: 'Boleta N° 4521' })).toBeVisible()
   // Al reagendar se puede aplicar el descuento por transferencia: el total baja.
   await tarjeta.getByRole('button', { name: 'Reagendar' }).click()
-  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText('Total ' + pesos(238000))
+  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText(pesos(238000))
   await tarjeta.getByRole('button', { name: /Transferencia · 10%/ }).click()
-  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText('Total ' + pesos(214200))
+  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText(pesos(214200))
   await admin.screenshot({ path: path.join(evidence, '03-panel-pagos.png'), fullPage: true })
   await tarjeta.getByRole('button', { name: 'Cancelar' }).click()
 
