@@ -54,6 +54,28 @@ try {
   await page.getByRole('button', { name: /^Todas/ }).click()
   await page.screenshot({ path: path.join(evidence, '02-planilla.png') })
 
+  // ── Teclado, como en Excel: flechas para moverse, Enter guarda y baja ──
+  const enFoco = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+  await fila('Tomas Prueba').getByLabel('Nota de Tomas Prueba').click()
+  await page.keyboard.press('ArrowDown')
+  expect(await enFoco()).toBe('Nota de Camila Ejemplo')
+  await page.keyboard.press('ArrowRight') // salta la ✕ de cancelar
+  expect(await enFoco()).toBe('Instalada: Camila Ejemplo')
+  await page.keyboard.press('ArrowRight')
+  expect(await enFoco()).toBe('Fecha de Camila Ejemplo')
+  await page.keyboard.press('ArrowUp')
+  expect(await enFoco()).toBe('Fecha de Tomas Prueba')
+  // Una nota se escribe y con Enter se guarda y baja a la fila siguiente.
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft')
+  expect(await enFoco()).toBe('Nota de Camila Ejemplo')
+  await page.keyboard.type('Llamar antes')
+  await page.keyboard.press('ArrowLeft') // dentro del texto: mueve el cursor, no cambia de celda
+  expect(await enFoco()).toBe('Nota de Camila Ejemplo')
+  await page.keyboard.press('Enter')
+  expect(await enFoco()).toBe('Nota de Ignacia Demo')
+  await expect.poll(async () => (await venta('Camila Ejemplo')).instalacion.nota).toBe('Llamar antes')
+
   // ── Editar en la celda ──
   // Documento: la boleta de Ignacia ya se emitio.
   await fila('Ignacia Demo').getByLabel('Documento de Ignacia Demo').selectOption('B')

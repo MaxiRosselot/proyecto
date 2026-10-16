@@ -253,6 +253,46 @@ function NuevaInstalacion({ onCrear, onCancelar }) {
   )
 }
 
+// ── Moverse con el teclado, como en Excel ────────────────────────────────────
+// ↑ ↓ cambian de fila y ← → de columna. En un texto, ← → recorren el texto y recien en el borde
+// (o con todo seleccionado) saltan de celda. Enter guarda y baja (Shift+Enter sube). Las celdas sin
+// nada editable (neto, bruto) y la ✕ de cancelar se saltan.
+const EDITABLE = 'input, select, button'
+const editableDe = td => (td && !td.hasAttribute('data-sin-teclado') ? td.querySelector(EDITABLE) : null)
+
+function moverConTeclado(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey) return
+  const el = e.target, td = el.closest?.('td'), tr = td?.parentElement
+  const cuerpo = tr?.parentElement
+  if (!td || cuerpo?.tagName !== 'TBODY' || el.closest('[role=menu]')) return
+  const texto = el.tagName === 'INPUT' && el.type === 'text'
+  let df = 0, dc = 0
+  if (e.key === 'ArrowUp') df = -1
+  else if (e.key === 'ArrowDown') df = 1
+  else if (e.key === 'Enter' && el.tagName === 'INPUT' && el.type !== 'checkbox') df = e.shiftKey ? -1 : 1
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const todo = texto && el.selectionStart === 0 && el.selectionEnd === el.value.length
+    const enBorde = e.key === 'ArrowLeft' ? el.selectionStart === 0 && el.selectionEnd === 0 : el.selectionEnd === el.value.length
+    if (texto && !todo && !enBorde) return
+    dc = e.key === 'ArrowLeft' ? -1 : 1
+  } else return
+
+  const filas = Array.from(cuerpo.rows)
+  let f = filas.indexOf(tr), c = Array.from(tr.cells).indexOf(td), destino = null
+  if (df) {
+    // Misma columna en la fila de arriba o abajo.
+    f += df
+    destino = filas[f] && editableDe(filas[f].cells[c])
+  } else {
+    // La siguiente celda editable de la misma fila.
+    for (c += dc; c >= 0 && c < tr.cells.length && !destino; c += dc) destino = editableDe(tr.cells[c])
+  }
+  e.preventDefault()
+  if (!destino) return
+  destino.focus()
+  if (destino.tagName === 'INPUT' && destino.type === 'text') destino.select()
+}
+
 // ── La planilla ──────────────────────────────────────────────────────────────
 
 const FILTROS = [
@@ -373,7 +413,8 @@ export default function PlanillaSection({ onVerCotizacion }) {
             {n} · {conteo[k]}
           </button>
         ))}
-        <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar cliente o nota…" aria-label="Buscar" style={{ ...styles.input, width: 200, padding: '6px 10px', fontSize: 12.5, marginLeft: 'auto' }} />
+        {!movil && <span style={{ fontSize: 11.5, color: C.textMuted, marginLeft: 'auto' }}>Flechas para moverte · Enter guarda y baja</span>}
+        <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar cliente o nota…" aria-label="Buscar" style={{ ...styles.input, width: 200, padding: '6px 10px', fontSize: 12.5, marginLeft: movil ? 'auto' : 0 }} />
       </div>
 
       {error && <div style={styles.errorBox}>{error}</div>}
@@ -404,7 +445,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
         </div>
       ) : (
         <div style={{ ...styles.card, padding: 0, overflowX: 'auto' }}>
-          <table data-testid="planilla" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1280 }}>
+          <table data-testid="planilla" onKeyDown={moverConTeclado} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1280 }}>
             <thead>
               <tr style={{ background: '#F4F5F7' }}>
                 {['Nota', '', 'Cliente', 'Fecha', 'Inicio', 'Fin', 'Doc.', 'Pagado', 'Repisas', ...SERV.map(s => CORTO[s.clave] || s.nombre), 'Despacho', 'Neto', 'Bruto', ''].map((h, i) => (
@@ -419,7 +460,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
                 return (
                   <tr key={q.cotNum} data-testid="fila-planilla" data-cot={q.cotNum}>
                     <td style={{ ...td, width: 170 }}><Celda valor={f.inst.nota} etiqueta={`Nota de ${q.nombre}`} placeholder="" alGuardar={v => actualizar(q.cotNum, { nota: v })} estilo={{ color: '#92400E', fontWeight: 600 }} /></td>
-                    <td style={{ ...td, width: 26, textAlign: 'center' }}><button onClick={() => cancelar(q)} aria-label={`Cancelar ${q.nombre}`} title="Canceló: sacar de la planilla" style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 13 }}>✕</button></td>
+                    <td data-sin-teclado style={{ ...td, width: 26, textAlign: 'center' }}><button onClick={() => cancelar(q)} aria-label={`Cancelar ${q.nombre}`} title="Canceló: sacar de la planilla" style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 13 }}>✕</button></td>
                     <td style={{ ...td, minWidth: 190, background: f.instalada ? '#ECEEF1' : f.atrasada ? '#FFFBEB' : 'transparent' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <input type="checkbox" checked={f.instalada} title={f.instalada ? 'Instalada' : f.atrasada ? 'La fecha ya pasó: ¿se instaló?' : 'Marcar como instalada'} aria-label={`Instalada: ${q.nombre}`}
