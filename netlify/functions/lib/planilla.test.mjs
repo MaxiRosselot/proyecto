@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { almacenEnMemoria, crearCotizacion, listarCotizaciones, obtenerCotizacion } from './cotizaciones.mjs'
-import { actualizarFila, cancelarInstalacion, crearInstalacion } from './planilla.mjs'
+import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from './planilla.mjs'
 import { cotizacionDesdeVenta, encontrarEncabezado, importarVentas, mismoNombre, ventasDesdeHojas } from './importar-ventas.mjs'
 import { normalizarDocumento, sugerirDocumento } from './documentos.mjs'
 import { totalesCotizacion } from './totales.mjs'
@@ -148,6 +148,28 @@ test('editar una fila: nota, documento, instalada, montos y el evento se mueve c
   await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { nota: 'otra' })
   assert.equal(calendar.llamadas.length, 2)
   await assert.rejects(actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { inicio: '18:00', fin: '16:00' }), /término debe ser después/)
+})
+
+test('una fila del Excel sin evento enlazado: al cambiarle la hora mueve el evento del script, no crea otro', async () => {
+  const almacen = almacenEnMemoria(), calendar = calendarFalso()
+  await crearCotizacion(almacen, { crear: true, cotNum: 7, nombre: 'Carlos Belmar', status: 'confirmada', instalacion: { fecha: '2026-10-17', inicio: '10:00', fin: '13:00', origen: 'excel' } })
+  calendar.eventos.set('script9', { summary: 'CARLOS BELMAR repisas bodega' })
+  const leerEventos = async desde => (desde === '2026-10-17' ? [{ id: 'script9', tipo: 'otro', fecha: '2026-10-17', titulo: 'CARLOS BELMAR repisas bodega' }] : [])
+  const r = await actualizarFila(almacen, calendar, 'cal', 7, { fin: '11:00' }, { leerEventos })
+  assert.equal(r.cotizacion.instalacion.eventId, 'script9')
+  assert.deepEqual(calendar.llamadas.map(l => l[0]), ['patch'])
+  assert.equal(calendar.eventos.get('script9').end.dateTime, '2026-10-17T11:00:00')
+  assert.equal(calendar.eventos.get('script9').extendedProperties.shared.cot_num, '7')
+})
+
+test('enlazar a mano: el evento elegido pasa a la hora de la fila', async () => {
+  const almacen = almacenEnMemoria(), calendar = calendarFalso()
+  await crearCotizacion(almacen, { crear: true, cotNum: 8, nombre: 'Vivian', status: 'confirmada', instalacion: { fecha: '2026-10-16', inicio: '14:00', fin: '16:00' } })
+  calendar.eventos.set('otro1', { summary: 'Bodega Providencia' })
+  const r = await enlazarEvento(almacen, calendar, 'cal', { cotNum: 8, eventId: 'otro1' })
+  assert.equal(r.cotizacion.instalacion.eventId, 'otro1')
+  assert.equal(calendar.eventos.get('otro1').start.dateTime, '2026-10-16T14:00:00')
+  assert.equal((await obtenerCotizacion(almacen, 8)).instalacion.eventId, 'otro1')
 })
 
 test('cancelar: queda rechazada con motivo y se borra el evento', async () => {

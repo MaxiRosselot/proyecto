@@ -2,13 +2,14 @@
 //   POST { accion: 'actualizar', cotNum, cambios }   nota, documento, instalada, fecha/horas, montos...
 //   POST { accion: 'crear', nombre, fecha?, inicio?, fin?, telefono?, direccion?, nota? }
 //   POST { accion: 'cancelar', cotNum }
+//   POST { accion: 'enlazar', cotNum, eventId }     enlaza la venta con un evento que ya esta en el calendario
 //   POST { accion: 'importar', ventas, simular? }     historial desde el Excel (ver lib/importar-ventas.mjs)
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { respuestaDeError } from './lib/cotizaciones.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
 import { ahoraEnZona } from './lib/horarios.mjs'
 import { importarVentas } from './lib/importar-ventas.mjs'
-import { actualizarFila, cancelarInstalacion, crearInstalacion } from './lib/planilla.mjs'
+import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from './lib/planilla.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +27,8 @@ export async function handler(event) {
     let datos
     try { datos = JSON.parse(event.body || '{}') } catch { return responder(400, { ok: false, error: 'JSON inválido' }) }
     const { almacen, calendar, calendarId, leerEventos } = serviciosGoogle()
-    if (datos.accion === 'actualizar') return responder(200, { ok: true, ...(await actualizarFila(almacen, calendar, calendarId, datos.cotNum, datos.cambios)) })
+    if (datos.accion === 'actualizar') return responder(200, { ok: true, ...(await actualizarFila(almacen, calendar, calendarId, datos.cotNum, datos.cambios, { leerEventos })) })
+    if (datos.accion === 'enlazar') return responder(200, { ok: true, ...(await enlazarEvento(almacen, calendar, calendarId, datos)) })
     if (datos.accion === 'crear') return responder(200, { ok: true, ...(await crearInstalacion(almacen, calendar, calendarId, datos)) })
     if (datos.accion === 'cancelar') return responder(200, { ok: true, ...(await cancelarInstalacion(almacen, calendar, calendarId, datos)) })
     if (datos.accion === 'importar') {

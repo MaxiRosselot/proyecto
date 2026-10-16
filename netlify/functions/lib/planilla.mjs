@@ -7,15 +7,31 @@
 // Calendar y la planilla se inyectan: en Netlify son Google; en local y en los tests, falsos.
 import { ErrorCotizacion, actualizarCotizacion, crearCotizacion, obtenerCotizacion } from './cotizaciones.mjs'
 import { normalizarDocumento } from './documentos.mjs'
-import { eventoInstalacion, limpiarAdicionales, limpiarRepisas, validarHorario } from './instalaciones.mjs'
+import { MARCA_EVENTO, eventoInstalacion, limpiarAdicionales, limpiarRepisas, validarHorario } from './instalaciones.mjs'
+import { mismoNombre } from './leer-ventas.mjs'
 import { totalesCotizacion } from './totales.mjs'
 
 const falla = (mensaje, estado = 400) => { throw new ErrorCotizacion(estado, mensaje) }
 const texto = (v, max) => String(v ?? '').trim().slice(0, max)
 
-// Crea o mueve el evento de la instalacion; sin fecha, lo borra.
-async function sincronizarEvento(calendar, calendarId, cotizacion, instalacion) {
-  const { fecha, inicio, fin, eventId, invitado } = instalacion
+// El evento de esta venta en el calendario aunque no este enlazado (los que creaba el script del
+// Excel): mismo dia y el nombre del cliente en el titulo, o ya marcado con su N°.
+export const tituloSinPrefijo = t => String(t || '').replace(/^\s*instalaci[oó]n\s*[-—:]?\s*/i, '')
+async function buscarEvento(leerEventos, cotizacion, fechas) {
+  for (const fecha of [...new Set(fechas.filter(Boolean))]) {
+    const eventos = (await leerEventos(fecha, fecha)).filter(e => e.tipo !== 'visita')
+    const ev = eventos.find(e => String(e.cotNum || '') === String(cotizacion.cotNum)) || eventos.find(e => mismoNombre(cotizacion.nombre, tituloSinPrefijo(e.titulo)))
+    if (ev) return ev
+  }
+  return null
+}
+
+// Crea o mueve el evento de la instalacion; sin fecha, lo borra. Si la fila no tenia evento
+// enlazado, antes de crear uno busca el que ya exista ese dia, para no duplicarlo.
+async function sincronizarEvento(calendar, calendarId, cotizacion, instalacion, { leerEventos, fechaPrevia } = {}) {
+  const { fecha, inicio, fin, invitado } = instalacion
+  let { eventId } = instalacion
+  if (!eventId && leerEventos && fecha) eventId = (await buscarEvento(leerEventos, cotizacion, [fechaPrevia, fecha]))?.id || ''
   if (!fecha || !inicio || !fin) {
     if (eventId) await borrarEvento(calendar, calendarId, eventId)
     return { ...instalacion, eventId: '', link: '' }
@@ -37,7 +53,7 @@ async function borrarEvento(calendar, calendarId, eventId) {
 // repisas ([{ unidades, valor }] por fila), repisasTotal (un solo monto, como la columna REPISAS
 // del Excel: para ventas sin repisas detalladas o con una sola fila) y adicionales
 // (servicios, despacho, descuento).
-export async function actualizarFila(almacen, calendar, calendarId, cotNum, cambios = {}) {
+export async function actualizarFila(almacen, calendar, calendarId, cotNum, cambios = {}, { leerEventos } = {}) {
   const cotizacion = await obtenerCotizacion(almacen, cotNum)
   if (!cotizacion) falla('Venta no encontrada', 404)
   const previa = cotizacion.instalacion || {}
@@ -67,7 +83,7 @@ export async function actualizarFila(almacen, calendar, calendarId, cotNum, camb
   const actualizada = { ...cotizacion, ...datos }
   const mueveEvento = ['fecha', 'inicio', 'fin'].some(c => cambios[c] !== undefined && cambios[c] !== previa[c])
     || (datos.nombre && datos.nombre !== cotizacion.nombre && previa.eventId)
-  if (mueveEvento && calendar) Object.assign(instalacion, await sincronizarEvento(calendar, calendarId, actualizada, instalacion))
+  if (mueveEvento && calendar) Object.assign(instalacion, await sincronizarEvento(calendar, calendarId, actualizada, instalacion, { leerEventos, fechaPrevia: previa.fecha }))
 
   await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, ...datos, instalacion })
   return { cotizacion: { ...actualizada, instalacion } }
@@ -90,6 +106,20 @@ export async function crearInstalacion(almacen, calendar, calendarId, { nombre, 
     await actualizarCotizacion(almacen, { cotNum: respuesta.cotNum, instalacion })
   }
   return { cotizacion: await obtenerCotizacion(almacen, respuesta.cotNum) }
+}
+
+// Enlaza la venta con un evento que ya esta en el calendario (elegido en el detalle): el evento
+// pasa a la fecha y horas de la fila y queda marcado como de esta instalacion.
+export async function enlazarEvento(almacen, calendar, calendarId, { cotNum, eventId }) {
+  const cotizacion = await obtenerCotizacion(almacen, cotNum)
+  if (!cotizacion) falla('Venta no encontrada', 404)
+  if (!eventId) falla('Elige el evento')
+  const inst = { ...(cotizacion.instalacion || {}), eventId: String(eventId) }
+  const instalacion = inst.fecha && inst.inicio && inst.fin
+    ? await sincronizarEvento(calendar, calendarId, cotizacion, inst)
+    : { ...inst, link: (await calendar.events.patch({ calendarId, eventId: inst.eventId, sendUpdates: 'none', requestBody: { extendedProperties: { shared: { created_by: MARCA_EVENTO, cliente: cotizacion.nombre, cot_num: String(cotizacion.cotNum) } } } })).data.htmlLink || '' }
+  await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, instalacion })
+  return { cotizacion: { ...cotizacion, instalacion } }
 }
 
 // El cliente cancelo: sale de la planilla (queda como rechazada, motivo "Canceló") y se borra el evento.

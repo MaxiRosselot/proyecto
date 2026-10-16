@@ -94,7 +94,13 @@ try {
   await page.keyboard.type('30000')
   await page.keyboard.press('Enter')
   await expect(fila('Pedro Futuro')).toContainText('$214.200') // 180.000 neto + IVA
-  // Fecha: como no tenia evento, al moverla se crea en el calendario.
+  // Sin evento enlazado: se avisa en la fila y en el detalle.
+  await expect(fila('Pedro Futuro').getByLabel('Sin evento: Pedro Futuro')).toBeVisible()
+  await fila('Pedro Futuro').getByRole('button', { name: 'Pedro Futuro', exact: true }).click()
+  await expect(page.getByTestId('calendario-venta')).toContainText('Sin evento enlazado')
+  await expect(page.getByTestId('calendario-venta')).toContainText('No hay eventos ese día')
+  await page.getByRole('dialog', { name: 'Pedro Futuro' }).getByRole('button', { name: 'Cerrar' }).click()
+  // Fecha: como no tenia evento (ni hay uno con su nombre ese dia), al moverla se crea en el calendario.
   await fila('Pedro Futuro').getByLabel('Fecha de Pedro Futuro').fill('2027-03-12')
   await fila('Pedro Futuro').getByLabel('Fecha de Pedro Futuro').press('Enter')
   await expect.poll(async () => (await venta('Pedro Futuro'))?.instalacion?.eventId || '').not.toBe('')
@@ -102,6 +108,10 @@ try {
   expect([pedro.instalacion.nota, pedro.instalacion.fecha, Number(pedro.subtotal)]).toEqual(['Fabricar repisa angosta', '2027-03-12', 180000])
   const eventos = (await api('eventos-local')).eventos
   expect(eventos[pedro.instalacion.eventId].start.dateTime).toBe('2027-03-12T10:00:00')
+  await expect(fila('Pedro Futuro').getByLabel('Sin evento: Pedro Futuro')).toHaveCount(0)
+  await fila('Pedro Futuro').getByRole('button', { name: 'Pedro Futuro', exact: true }).click()
+  await expect(page.getByTestId('calendario-venta')).toContainText('Enlazada a su evento')
+  await page.getByRole('dialog', { name: 'Pedro Futuro' }).getByRole('button', { name: 'Cerrar' }).click()
 
   // Marco: instalado y sin pagar → "Por cobrar", con el WhatsApp de cobro.
   await expect(fila('Marco Prueba').getByRole('link', { name: 'Cobrar a Marco Prueba por WhatsApp' })).toBeVisible()

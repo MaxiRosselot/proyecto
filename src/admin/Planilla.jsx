@@ -8,6 +8,7 @@ import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { PagosCotizacion } from './PagosCotizacion.jsx'
 import ImportarExcel from './ImportarExcel.jsx'
+import { mismoNombre } from '../../netlify/functions/lib/leer-ventas.mjs'
 
 // La central de instalaciones: el Excel de Maxi dentro del panel. Una fila por venta, ordenadas por
 // fecha, con lo mismo que la planilla (nota, instalada, fecha y horas, documento, pago, repisas,
@@ -133,6 +134,58 @@ const linkCobro = q => linkWhatsapp(q.telefono, mensajeCobro({ nombre: q.nombre,
 
 // ── Detalle de una venta (panel lateral) ─────────────────────────────────────
 
+// El evento del calendario de la venta: si esta enlazado, avisa si hay otro con su nombre ese dia
+// (un duplicado); si no, muestra los eventos de ese dia para enlazar el suyo.
+const sinPrefijo = t => String(t || '').replace(/^\s*instalaci[oó]n\s*[-—:]?\s*/i, '')
+function CalendarioVenta({ q, onEnlazado }) {
+  const inst = q.instalacion || {}
+  const [eventos, setEventos] = useState(null)
+  const [enlazando, setEnlazando] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (!inst.fecha) return
+    let vigente = true
+    apiFetch(`/.netlify/functions/calendario?desde=${inst.fecha}&hasta=${inst.fecha}`)
+      .then(r => vigente && setEventos(r.ok ? r.eventos.filter(e => e.tipo !== 'visita') : []))
+      .catch(() => vigente && setEventos([]))
+    return () => { vigente = false }
+  }, [inst.fecha, inst.eventId])
+  if (!inst.fecha) return <div style={{ fontSize: 12.5, color: C.textMuted }}>Sin fecha: al ponerle día y horas se crea su evento.</div>
+  async function enlazar(ev) {
+    setEnlazando(ev.id); setError('')
+    try {
+      const r = await apiFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'enlazar', cotNum: q.cotNum, eventId: ev.id }) })
+      if (!r.ok) throw new Error(r.error || 'No se pudo enlazar')
+      onEnlazado(r.cotizacion)
+    } catch (e) { setError(e.message) } finally { setEnlazando('') }
+  }
+  const duplicados = (eventos || []).filter(e => e.id !== inst.eventId && mismoNombre(q.nombre, sinPrefijo(e.cliente || e.titulo)))
+  const fila = e => <span>{e.todoElDia ? 'Todo el día' : `${e.inicio}–${e.fin}`} · <strong>{e.titulo}</strong></span>
+  return (
+    <div data-testid="calendario-venta" style={{ fontSize: 12.5, display: 'grid', gap: 6 }}>
+      {inst.eventId
+        ? <div style={{ color: C.green, fontWeight: 700 }}>✓ Enlazada a su evento{inst.link ? <> · <a href={inst.link} target="_blank" rel="noreferrer" style={{ color: C.green }}>ver en Calendar</a></> : ''}</div>
+        : <div style={{ color: '#92400E', fontWeight: 700 }}>Sin evento enlazado. Si ya está en el calendario, enlázalo (se moverá a la hora de esta fila):</div>}
+      {eventos === null && <div style={{ color: C.textMuted }}>Buscando eventos de ese día…</div>}
+      {inst.eventId && duplicados.length > 0 && (
+        <div style={{ padding: '8px 10px', borderRadius: 8, background: '#FEF2F2', color: '#B91C1C' }}>
+          Ojo: ese día hay otro evento con este nombre (¿duplicado?). Revísalo y bórralo en Calendar si sobra:
+          {duplicados.map(e => <div key={e.id}>{fila(e)} {e.link && <a href={e.link} target="_blank" rel="noreferrer" style={{ color: '#B91C1C', fontWeight: 700 }}>abrir</a>}</div>)}
+        </div>
+      )}
+      {!inst.eventId && eventos && (eventos.length
+        ? eventos.map(e => (
+          <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: mismoNombre(q.nombre, sinPrefijo(e.cliente || e.titulo)) ? '#FFFBEB' : C.bg }}>
+            {fila(e)}
+            <button onClick={() => enlazar(e)} disabled={Boolean(enlazando)} style={{ ...styles.btnSecondary, fontSize: 11.5, padding: '4px 10px', flex: 'none' }}>{enlazando === e.id ? 'Enlazando…' : 'Enlazar'}</button>
+          </div>
+        ))
+        : <div style={{ color: C.textMuted }}>No hay eventos ese día en el calendario. Cambia la hora en la fila y se crea uno.</div>)}
+      {error && <div style={{ ...styles.errorBox, marginBottom: 0 }}>{error}</div>}
+    </div>
+  )
+}
+
 function Montos({ q, onGuardar }) {
   const [repisas, setRepisas] = useState(() => (q.repisas || []).map(r => ({ ...r, unidades: Number(r.unidades ?? 1) || 0, valor: Number(r.valor) || 0 })))
   const [ad, setAd] = useState(() => ({ ...q.adicionales, ...Object.fromEntries(SERVICIOS.flatMap(([c, , lista]) => [[`qty_${c}`, Number(q.adicionales?.[`qty_${c}`]) || 0], [`precio_${c}`, Number(q.adicionales?.[`precio_${c}`] ?? lista) || 0]])) }))
@@ -204,6 +257,9 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
           <span style={{ fontSize: 12, color: C.textMuted }}>Nota</span>
           <Celda valor={inst.nota} etiqueta="Nota interna" placeholder="Pendientes, fabricar con anticipación…" alGuardar={v => onActualizar({ nota: v })} estilo={{ border: '1px solid ' + C.border, background: '#FAFAFA' }} />
         </div>
+
+        <div style={titulo}>Calendario</div>
+        <CalendarioVenta q={q} onEnlazado={onCambioLocal} />
 
         <div style={titulo}>Montos (neto)</div>
         <Montos key={q.subtotal + '-' + q.total} q={q} onGuardar={cambios => onActualizar(cambios)} />
@@ -467,6 +523,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
                         <input type="checkbox" checked={f.instalada} title={f.instalada ? 'Instalada' : f.atrasada ? 'La fecha ya pasó: ¿se instaló?' : 'Marcar como instalada'} aria-label={`Instalada: ${q.nombre}`}
                           onChange={e => actualizar(q.cotNum, { instalada: e.target.checked })} style={{ width: 15, height: 15, margin: 0, flex: 'none', cursor: 'pointer' }} />
                         <button onClick={() => setDetalle(q.cotNum)} style={{ background: 'none', border: 'none', padding: '5px 0', font: 'inherit', fontWeight: 700, color: C.text, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{q.nombre}</button>
+                        {f.fecha >= hoy && !f.inst.eventId && <span title="Sin evento enlazado en el calendario: ábrela para enlazarlo" aria-label={`Sin evento: ${q.nombre}`} style={{ width: 7, height: 7, borderRadius: '50%', background: C.yellow, flex: 'none' }} />}
                       </div>
                     </td>
                     <td style={{ ...td, width: 122 }}><Celda tipo="date" valor={f.fecha} etiqueta={`Fecha de ${q.nombre}`} alGuardar={v => actualizar(q.cotNum, { fecha: v })} /></td>
