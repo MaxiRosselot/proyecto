@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mensajeConfirmarVisita, textoVisitas } from './listaVisitas.js'
+import { mensajeConfirmarVisita, mensajeVisitaReagendada, textoVisitas } from './listaVisitas.js'
 
 test('la lista de visitas va por dia, en orden de hora y con todos los datos', () => {
   const texto = textoVisitas([
@@ -23,4 +23,10 @@ test('el mensaje para confirmar la visita pide 1 hora de flexibilidad y que avis
   assert.match(texto, /1 hora de flexibilidad/)
   assert.match(texto, /si no puedes, avísanos/)
   assert.match(mensajeConfirmarVisita(visita, new Date('2026-10-10T12:00:00-03:00')), /visita del domingo 18/)
+})
+
+test('el aviso de visita reagendada lleva la nueva fecha y hora', () => {
+  const texto = mensajeVisitaReagendada({ nombre: 'Bruno Díaz', start: '2026-10-24T10:30:00-03:00', direccion: 'Calle 1' })
+  assert.match(texto, /^Hola Bruno! 👋 .*reagendada para el sábado 24 de octubre a las 10:30 en Calle 1\./)
+  assert.match(texto, /1 hora de flexibilidad/)
 })

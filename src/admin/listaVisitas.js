@@ -43,3 +43,13 @@ export function mensajeConfirmarVisita(visita, ahora = new Date()) {
     '¿Nos confirmas si estamos ok? Y si no puedes, avísanos también para reorganizarnos e intentar ser lo más puntuales posible 🙏',
   ].join('\n')
 }
+
+// Aviso al cliente cuando se le mueve la visita.
+export function mensajeVisitaReagendada(visita) {
+  const nombre = (visita.nombre || '').trim().split(/\s+/)[0]
+  return [
+    `Hola${nombre ? ' ' + nombre : ''}! 👋 Te escribimos de Repisas Don Maxi: tu visita quedó reagendada para el ${fechaLarga(visita.start).replace(',', '')} a las ${hora(visita.start)}${visita.direccion ? ` en ${visita.direccion.trim()}` : ''}.`,
+    '',
+    'Por favor considera 1 hora de flexibilidad por un eventual atraso o adelanto. Si no puedes, avísanos 🙏',
+  ].join('\n')
+}

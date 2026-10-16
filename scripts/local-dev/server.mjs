@@ -28,6 +28,7 @@ import { atenderAvisoMercadoPago, atenderReservaGet, atenderReservaPost } from '
 import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netlify/functions/lib/reservas-admin.mjs'
 import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from '../../netlify/functions/lib/planilla.mjs'
 import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
+import { horasParaReagendar, liberarHoraVisita, reagendarVisita } from '../../netlify/functions/lib/visitas.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -80,6 +81,24 @@ const horarios = {
 function slotDeVisita(v) {
   const { fecha, minutos } = ahoraEnZona(new Date(v.start))
   return `${fecha}T${aHHMM(minutos)}`
+}
+// Calendar falso para las visitas (db.visits), con lo que usa lib/visitas.mjs.
+const comoEventoDeVisita = v => ({
+  id: v.id, description: v.description || '', start: { dateTime: v.start }, end: { dateTime: v.end },
+  extendedProperties: { shared: { created_by: 'agendador-netlify', slot_key: v.slotKey ?? slotDeVisita(v) } },
+})
+const calendarVisitasLocal = {
+  events: {
+    list: async () => ({ data: { items: db.visits.map(comoEventoDeVisita) } }),
+    get: async ({ eventId }) => ({ data: comoEventoDeVisita(db.visits.find(v => v.id === eventId)) }),
+    patch: async ({ eventId, requestBody: b }) => {
+      const v = db.visits.find(x => x.id === eventId)
+      if (b.start) { v.start = b.start.dateTime; v.end = b.end.dateTime }
+      if (b.extendedProperties) v.slotKey = b.extendedProperties.shared.slot_key
+      saveData(db)
+      return { data: {} }
+    },
+  },
 }
 // Calendar falso para las instalaciones: los eventos quedan en data.json (db.eventos).
 const calendarLocal = {
@@ -204,6 +223,13 @@ const routes = {
   },
   'get-installations': () => ({ ok: true, installations: db.installations }),
   'get-sales': () => ({ ok: true, installations: db.installations }),
+  // Mismo contrato que netlify/functions/visita.mjs
+  'visita': async (body) => {
+    if (body.accion === 'horas') return { ok: true, dias: await horasParaReagendar(calendarVisitasLocal, 'local', await leerHorario(horarios)) }
+    if (body.accion === 'reagendar') return { ok: true, ...(await reagendarVisita(calendarVisitasLocal, 'local', await leerHorario(horarios), body)) }
+    if (body.accion === 'liberar') return { ok: true, ...(await liberarHoraVisita(calendarVisitasLocal, 'local', body.visitId)) }
+    return { status: 400, ok: false, error: 'Acción desconocida' }
+  },
   'update-visit-status': (body) => {
     if (!body.visitId || !body.status) return { ok: false, error: 'Faltan parámetros' }
     db.visitStatuses[body.visitId] = body.status

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
-import { VISITA_VIGENTE, mensajeConfirmarVisita, textoVisitas } from './listaVisitas.js'
+import { VISITA_VIGENTE, mensajeConfirmarVisita, mensajeVisitaReagendada, textoVisitas } from './listaVisitas.js'
 import { linkWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 
 function Badge({ status }) {
@@ -27,6 +27,78 @@ function groupByDate(visits) {
   return order.map(k => groups[k])
 }
 
+const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+const diaCorto = f => { const [y, m, d] = f.split('-').map(Number); return `${DIAS_CORTOS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} ${MESES_CORTOS[m - 1]}` }
+const chip = activo => ({
+  padding: '6px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+  border: '1.5px solid ' + (activo ? C.orange : C.border), background: activo ? C.orangeLight : C.surface, color: activo ? C.orangeDark : C.textSub,
+})
+
+// Elegir una hora libre del horario (pestaña Horarios) y mover la visita en el calendario.
+function ReagendarVisita({ visit, movida, onListo, onCerrar }) {
+  const [dias, setDias] = useState(null)
+  const [fecha, setFecha] = useState('')
+  const [hora, setHora] = useState('')
+  const [estado, setEstado] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiFetch('/.netlify/functions/visita', { method: 'POST', body: JSON.stringify({ accion: 'horas' }) })
+      .then(r => { if (!r.ok) throw new Error(r.error); setDias(r.dias); setFecha(r.dias[0]?.fecha || '') })
+      .catch(e => setError(e.message || 'No se pudieron cargar las horas'))
+  }, [])
+
+  async function mover() {
+    setEstado('moviendo'); setError('')
+    try {
+      const r = await apiFetch('/.netlify/functions/visita', { method: 'POST', body: JSON.stringify({ accion: 'reagendar', visitId: visit.id, fecha, hora }) })
+      if (!r.ok) throw new Error(r.error)
+      const nueva = { ...visit, start: r.start, end: r.end }
+      await onListo(nueva)
+    } catch (e) { setError(e.message || 'No se pudo reagendar') }
+    finally { setEstado('') }
+  }
+
+  const horas = dias?.find(d => d.fecha === fecha)?.horas || []
+  return (
+    <div data-testid="reagendar-visita" style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid ' + C.border, background: '#FAFAFB' }}>
+      {movida ? (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>✓ Reagendada para el {fmtDate(movida.start)} a las {fmtTime(movida.start)}</span>
+          {visit.celular && <a href={linkWhatsapp(visit.celular, mensajeVisitaReagendada(movida))} target="_blank" rel="noreferrer"
+            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: '#25D366', color: 'white', textDecoration: 'none' }}>💬 Avisar al cliente</a>}
+          <button onClick={onCerrar} style={{ ...styles.btnSecondary, padding: '6px 12px', fontSize: 12 }}>Listo</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Mover a otra hora libre</span>
+            <button onClick={onCerrar} style={{ background: 'none', border: 'none', fontSize: 12, color: C.textMuted, cursor: 'pointer', textDecoration: 'underline' }}>Cerrar</button>
+          </div>
+          {!dias && !error && <div style={{ fontSize: 12, color: C.textMuted }}>Buscando horas libres...</div>}
+          {dias && !dias.length && <div style={{ fontSize: 12, color: C.textMuted }}>No quedan horas libres en el horario. Abre más en la pestaña Horarios.</div>}
+          {!!dias?.length && (
+            <>
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
+                {dias.map(d => <button key={d.fecha} onClick={() => { setFecha(d.fecha); setHora('') }} style={chip(d.fecha === fecha)}>{diaCorto(d.fecha)}</button>)}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                {horas.map(h => <button key={h} onClick={() => setHora(h)} style={chip(h === hora)}>{h}</button>)}
+              </div>
+              <button onClick={mover} disabled={!hora || estado === 'moviendo'}
+                style={{ ...styles.btnPrimary, marginTop: 10, padding: '7px 14px', fontSize: 12, opacity: hora && !estado ? 1 : .5 }}>
+                {estado === 'moviendo' ? 'Moviendo...' : hora ? `Mover al ${diaCorto(fecha)} a las ${hora}` : 'Elige una hora'}
+              </button>
+            </>
+          )}
+          {error && <div style={{ ...styles.errorBox, marginTop: 8 }}>{error}</div>}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function VisitasSection({ statuses, onStatusChange, navigateTo, onVisitsLoaded }) {
   const [visits, setVisits]     = useState([])
   const [loading, setLoading]   = useState(true)
@@ -37,6 +109,8 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [cancelNote, setCancelNote] = useState({})
   const [buscar, setBuscar]     = useState('')
   const [copiado, setCopiado]   = useState('')
+  const [reagendando, setReagendando] = useState(null)
+  const [movida, setMovida] = useState(null) // la visita recien reagendada (cambia de dia en la lista)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -53,6 +127,11 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   async function handleStatus(visit, newStatus) {
     setUpdating(visit.id)
     try {
+      // Al cancelar, la hora queda libre para otro cliente.
+      if (newStatus === 'cancelada') {
+        const r = await apiFetch('/.netlify/functions/visita', { method: 'POST', body: JSON.stringify({ accion: 'liberar', visitId: visit.id }) }).catch(() => null)
+        if (!r?.ok) console.warn('No se pudo liberar la hora de la visita', visit.id, r?.error)
+      }
       await apiFetch('/.netlify/functions/update-visit-status', {
         method: 'POST',
         body: JSON.stringify({
@@ -66,6 +145,17 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
       onStatusChange(visit.id, newStatus)
     } catch { alert('Error al actualizar estado') }
     finally { setUpdating(null) }
+  }
+
+  // Despues de moverla queda agendada en su nueva hora (hay que volver a confirmarla).
+  async function reagendada(nueva) {
+    setMovida(nueva)
+    setVisits(prev => prev.map(v => v.id === nueva.id ? { ...v, start: nueva.start, end: nueva.end } : v))
+    await handleStatus(nueva, 'agendada')
+  }
+
+  function cancelar(visit) {
+    if (confirm(`¿Cancelar la visita de ${visit.nombre}? La hora queda libre para otro cliente.`)) handleStatus(visit, 'cancelada')
   }
 
   const now = new Date()
@@ -257,7 +347,14 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                               style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1.5px solid ' + VISIT_STATUS_LABELS.confirmada.color, background: C.surface, color: VISIT_STATUS_LABELS.confirmada.color, opacity: isUpdating ? .5 : 1 }}>✓ Confirmó</button>
                           </>
                         )}
+                        <button onClick={() => setReagendando(reagendando === visit.id ? null : visit.id)} disabled={isUpdating}
+                          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: reagendando === visit.id ? C.orangeLight : C.surface, color: C.textSub }}>📅 Reagendar</button>
+                        <button onClick={() => cancelar(visit)} disabled={isUpdating}
+                          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: C.surface, color: C.red }}>✕ Cancelar</button>
                       </div>
+                    )}
+                    {reagendando === visit.id && (tab === 'agendadas' || tab === 'pendientes') && (
+                      <ReagendarVisita visit={visit} movida={movida?.id === visit.id ? movida : null} onListo={reagendada} onCerrar={() => { setReagendando(null); setMovida(null) }} />
                     )}
 
                     {/* Detalle expandido */}
@@ -275,7 +372,8 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
                               <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginRight: 4 }}>Declarar estado</span>
                               <StatusBtn target="realizada"  label="Realizada"  visit={visit} />
-                              <StatusBtn target="reagendar"  label="Reagendar"  visit={visit} />
+                              <button onClick={() => setReagendando(reagendando === visit.id ? null : visit.id)} disabled={!!updating}
+                                style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: C.surface, color: C.textSub }}>Reagendar</button>
                               <StatusBtn target="cancelada"  label="Cancelada"  visit={visit} />
                             </div>
                             <input

@@ -75,6 +75,37 @@ try {
   await tarjeta('Bruno Tarde').getByRole('button', { name: 'Deshacer' }).click()
   await expect(copiar).toHaveText('📋 Copiar confirmadas (1/2)')
 
+  // Reagendar: solo ofrece horas libres (no la de Ana) y mueve la visita.
+  await tarjeta('Bruno Tarde').getByRole('button', { name: '📅 Reagendar' }).click()
+  const panel = page.getByTestId('reagendar-visita')
+  await expect(panel.getByRole('button', { name: dia.horas[0], exact: true })).toHaveCount(0) // la tiene Ana
+  const otroDia = dias.find(d => d.fecha !== dia.fecha)
+  await panel.getByRole('button', { name: new RegExp(` ${Number(otroDia.fecha.slice(8))} `) }).first().click()
+  await panel.getByRole('button', { name: otroDia.horas[0], exact: true }).click()
+  await panel.getByRole('button', { name: /^Mover al / }).click()
+  await expect(panel).toContainText('✓ Reagendada para el')
+  const aviso = decodeURIComponent(await panel.getByRole('link', { name: '💬 Avisar al cliente' }).getAttribute('href'))
+  expect(aviso).toMatch(/^https:\/\/wa\.me\/56912345670\?text=Hola Bruno! 👋 .*reagendada para el .* a las /)
+  expect(aviso).toContain(otroDia.horas[0])
+  await page.screenshot({ path: path.join(evidence, '02-reagendar.png') })
+  await panel.getByRole('button', { name: 'Listo' }).click()
+  const brunoGrupo = page.getByTestId('dia-visitas').filter({ hasText: 'Bruno Tarde' })
+  await expect(brunoGrupo).not.toContainText('Ana Temprano')
+  await expect(brunoGrupo.getByRole('button', { name: /Copiar confirmadas/ })).toHaveText('📋 Copiar confirmadas (0/1)')
+  const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
+  const hoyVisitas = (await (await page.request.get(fn('get-visits'), { headers: { Authorization: 'Bearer ' + token } })).json()).visits
+  const bruno = hoyVisitas.find(v => v.nombre === 'Bruno Tarde')
+  expect(bruno.status).toBe('agendada')
+
+  // Cancelar: sale de Agendadas, queda en Canceladas y su hora vuelve a estar libre.
+  page.once('dialog', d => d.accept())
+  await tarjeta('Ana Temprano').getByRole('button', { name: '✕ Cancelar' }).click()
+  await expect(page.getByText('Ana Temprano', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: /^Canceladas\s*\d/ }).click()
+  await expect(page.getByText('Ana Temprano', { exact: true })).toBeVisible()
+  const libre = await (await page.request.get(fn(`get-availability?date=${dia.fecha}&slots=${dia.horas[0]}`))).json()
+  expect(libre.availability[dia.horas[0]]).toBe(true)
+
   expect(errors).toEqual([])
   console.log(JSON.stringify({ ok: true }))
 } finally { await browser.close() }
