@@ -52,7 +52,6 @@ function Celda({ valor, tipo = 'text', alGuardar, etiqueta, placeholder, estilo 
   return (
     <input type={tipo} value={v} aria-label={etiqueta} placeholder={placeholder} title={tipo === 'text' && v ? String(v) : undefined} onChange={e => setV(e.target.value)} onBlur={guardar}
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setV(valor ?? ''); setTimeout(() => e.target.blur()) } }}
-      onFocus={e => { e.target.style.borderColor = C.orange; e.target.style.background = 'white' }}
       style={{ ...celdaBase, ...estilo }} className="planilla-celda" />
   )
 }
@@ -64,7 +63,7 @@ function CeldaMonto({ valor, alGuardar, etiqueta, editable = true, onAbrir }) {
   if (!editable) return <button type="button" onClick={onAbrir} aria-label={etiqueta} title="Tiene varias líneas: se edita en el detalle" style={{ ...celdaBase, textAlign: 'right', cursor: 'pointer', color: valor ? C.text : C.textMuted }}>{fmt(valor)}</button>
   return (
     <input type="text" inputMode="numeric" value={v === '0' ? '' : fmt(Number(v)).replace('$', '')} placeholder="$0" aria-label={etiqueta}
-      onFocus={e => { e.target.select(); e.target.style.borderColor = C.orange; e.target.style.background = 'white' }}
+      onFocus={e => e.target.select()}
       onChange={e => setV(String(Number(e.target.value.replace(/\D/g, '')) || 0))}
       onBlur={() => { if (Number(v) !== Number(valor || 0)) alGuardar(Number(v)) }}
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
@@ -445,6 +444,8 @@ export default function PlanillaSection({ onVerCotizacion }) {
         </div>
       ) : (
         <div style={{ ...styles.card, padding: 0, overflowX: 'auto' }}>
+          {/* Solo la celda en que se esta escribiendo lleva un borde suave; al salir, vuelve a quedar limpia. */}
+          <style>{`.planilla-celda:focus{outline:none;border-color:${C.orange}66 !important;background:#fff !important}`}</style>
           <table data-testid="planilla" onKeyDown={moverConTeclado} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1280 }}>
             <thead>
               <tr style={{ background: '#F4F5F7' }}>

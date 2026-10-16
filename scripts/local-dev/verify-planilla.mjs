@@ -74,6 +74,10 @@ try {
   expect(await enFoco()).toBe('Nota de Camila Ejemplo')
   await page.keyboard.press('Enter')
   expect(await enFoco()).toBe('Nota de Ignacia Demo')
+  // La celda que se dejo vuelve a quedar sin borde (solo la activa se marca).
+  const borde = etiqueta => page.getByLabel(etiqueta).evaluate(e => getComputedStyle(e).borderTopColor)
+  expect(await borde('Nota de Camila Ejemplo')).toBe('rgba(0, 0, 0, 0)')
+  expect(await borde('Nota de Ignacia Demo')).not.toBe('rgba(0, 0, 0, 0)')
   await expect.poll(async () => (await venta('Camila Ejemplo')).instalacion.nota).toBe('Llamar antes')
 
   // ── Editar en la celda ──
