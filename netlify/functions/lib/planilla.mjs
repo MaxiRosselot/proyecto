@@ -38,9 +38,12 @@ async function sincronizarEvento(calendar, calendarId, cotizacion, instalacion, 
   }
   validarHorario({ fecha, inicio, fin })
   const cuerpo = eventoInstalacion({ cotizacion, fecha, inicio, fin, adicionales: cotizacion.adicionales || {}, totales: totalesCotizacion(cotizacion.repisas || [], cotizacion.adicionales || {}), invitado: invitado || '', notas: instalacion.notas || instalacion.nota || '' })
-  const r = eventId
-    ? await calendar.events.patch({ calendarId, eventId, sendUpdates: invitado ? 'all' : 'none', requestBody: cuerpo })
-    : await calendar.events.insert({ calendarId, sendUpdates: 'none', requestBody: cuerpo })
+  let r = null
+  if (eventId) {
+    try { r = await calendar.events.patch({ calendarId, eventId, sendUpdates: invitado ? 'all' : 'none', requestBody: cuerpo }) }
+    catch (e) { if (![404, 410].includes(e?.code ?? e?.response?.status)) throw e } // lo borraron en Calendar: se crea de nuevo
+  }
+  r ||= await calendar.events.insert({ calendarId, sendUpdates: 'none', requestBody: cuerpo })
   return { ...instalacion, eventId: r.data.id, link: r.data.htmlLink || instalacion.link || '' }
 }
 
@@ -118,6 +121,18 @@ export async function enlazarEvento(almacen, calendar, calendarId, { cotNum, eve
   const instalacion = inst.fecha && inst.inicio && inst.fin
     ? await sincronizarEvento(calendar, calendarId, cotizacion, inst)
     : { ...inst, link: (await calendar.events.patch({ calendarId, eventId: inst.eventId, sendUpdates: 'none', requestBody: { extendedProperties: { shared: { created_by: MARCA_EVENTO, cliente: cotizacion.nombre, cot_num: String(cotizacion.cotNum) } } } })).data.htmlLink || '' }
+  await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, instalacion })
+  return { cotizacion: { ...cotizacion, instalacion } }
+}
+
+// Deja la fila en el calendario: mueve su evento a la hora de la fila, enlaza el que ya exista ese
+// dia con su nombre o, si no hay, lo crea. Lo usa "Pasar al calendario" de la planilla, fila por fila.
+export async function sincronizarFila(almacen, calendar, calendarId, { cotNum }, { leerEventos } = {}) {
+  const cotizacion = await obtenerCotizacion(almacen, cotNum)
+  if (!cotizacion) falla('Venta no encontrada', 404)
+  const inst = cotizacion.instalacion || {}
+  if (!inst.fecha || !inst.inicio || !inst.fin) falla(`${cotizacion.nombre}: le falta la fecha o las horas`)
+  const instalacion = await sincronizarEvento(calendar, calendarId, cotizacion, inst, { leerEventos })
   await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, instalacion })
   return { cotizacion: { ...cotizacion, instalacion } }
 }

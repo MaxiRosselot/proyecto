@@ -280,6 +280,93 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
   )
 }
 
+// ── Pasar el periodo al calendario ───────────────────────────────────────────
+// Primero muestra que va a hacer con cada instalacion (ya esta, se enlaza a un evento con su nombre,
+// se mueve a su hora o se crea) y al confirmar lo hace fila por fila, con avance.
+const ACCIONES = {
+  ok: ['Ya están en el calendario', C.green],
+  mover: ['Se corrige la hora de su evento', C.blue],
+  enlazar: ['Se enlazan con el evento que ya tienen', '#0EA5E9'],
+  crear: ['Se crea su evento', C.orange],
+  sinhora: ['Sin horas: no se pueden agendar', C.textMuted],
+}
+function PasarAlCalendario({ filas, rango, titulo, onCerrar, onListo }) {
+  const [plan, setPlan] = useState(null)
+  const [error, setError] = useState('')
+  const [hechas, setHechas] = useState(null) // null: revisando | numero: avanzando
+  const [fallas, setFallas] = useState([])
+  useEffect(() => {
+    apiFetch(`/.netlify/functions/calendario?desde=${rango[0]}&hasta=${rango[1]}`).then(r => {
+      if (!r.ok) throw new Error(r.error || 'No se pudo leer el calendario')
+      const eventos = r.eventos.filter(e => e.tipo !== 'visita')
+      setPlan(filas.filter(f => f.fecha).map(f => {
+        const { inicio, fin, eventId } = f.inst
+        if (!inicio || !fin) return { f, accion: 'sinhora' }
+        if (eventId) {
+          const ev = eventos.find(e => e.id === eventId)
+          return { f, accion: ev && ev.fecha === f.fecha && ev.inicio === inicio && ev.fin === fin ? 'ok' : 'mover' }
+        }
+        const ev = eventos.find(e => e.fecha === f.fecha && (String(e.cotNum || '') === String(f.q.cotNum) || mismoNombre(f.q.nombre, sinPrefijo(e.cliente || e.titulo))))
+        return ev ? { f, accion: 'enlazar', evento: ev.titulo } : { f, accion: 'crear' }
+      }))
+    }).catch(e => setError(e.message))
+  }, [])
+  const pendientes = (plan || []).filter(p => ['mover', 'enlazar', 'crear'].includes(p.accion))
+  async function hacer() {
+    setHechas(0)
+    const cola = [...pendientes], errores = []
+    // De a tres a la vez: rapido sin pasar los limites de Google.
+    await Promise.all([0, 1, 2].map(async () => {
+      for (let p = cola.shift(); p; p = cola.shift()) {
+        try {
+          const r = await apiFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'sincronizar', cotNum: p.f.q.cotNum }) })
+          if (!r.ok) throw new Error(r.error || 'No se pudo')
+        } catch (e) { errores.push(`${p.f.q.nombre}: ${e.message}`) }
+        setHechas(n => n + 1)
+      }
+    }))
+    setFallas(errores)
+    if (!errores.length) onListo()
+  }
+  const terminado = hechas !== null && hechas >= pendientes.length
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Pasar al calendario" onClick={e => e.target === e.currentTarget && hechas === null && onCerrar()}
+      style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'rgba(17,24,39,.4)', display: 'grid', placeItems: 'center', padding: 16 }}>
+      <div data-testid="pasar-calendario" style={{ ...styles.card, width: 'min(620px, 100%)', maxHeight: '88vh', overflowY: 'auto' }}>
+        <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>Pasar {titulo.toLowerCase()} al calendario</h3>
+        <p style={{ fontSize: 13, color: C.textSub, marginTop: 0 }}>Cada instalación queda con su evento en el calendario del negocio, a la hora de la planilla. Los eventos que ya existen con el nombre del cliente se enlazan: no se duplican.</p>
+        {error && <div style={styles.errorBox}>{error}</div>}
+        {!plan && !error && <div style={styles.empty}>Revisando el calendario…</div>}
+        {plan && Object.entries(ACCIONES).map(([accion, [texto, color]]) => {
+          const grupo = plan.filter(p => p.accion === accion)
+          if (!grupo.length) return null
+          return (
+            <details key={accion} open={accion === 'enlazar' || accion === 'crear'} style={{ marginBottom: 8 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color }}>{texto} · {grupo.length}</summary>
+              <div style={{ fontSize: 12.5, color: C.textSub, padding: '4px 0 0 14px', display: 'grid', gap: 2 }}>
+                {grupo.map(p => <div key={p.f.q.cotNum}>{fechaCorta(p.f.fecha)} {p.f.inst.inicio ? `${p.f.inst.inicio}–${p.f.inst.fin}` : ''} · <strong>{p.f.q.nombre}</strong>{p.evento ? <span style={{ color: C.textMuted }}> → “{p.evento}”</span> : ''}</div>)}
+              </div>
+            </details>
+          )
+        })}
+        {hechas !== null && (
+          <div style={{ margin: '10px 0' }}>
+            <div style={{ height: 8, borderRadius: 99, background: C.border, overflow: 'hidden' }}><div style={{ width: `${pendientes.length ? hechas * 100 / pendientes.length : 100}%`, height: '100%', background: C.green, transition: 'width .2s' }} /></div>
+            <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 4 }}>{terminado ? `✓ Listo: ${hechas - fallas.length} de ${pendientes.length}` : `Agendando ${hechas} de ${pendientes.length}…`}</div>
+          </div>
+        )}
+        {fallas.length > 0 && <div style={styles.errorBox}>No se pudieron agendar:<br />{fallas.join(' · ')}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+          {hechas === null
+            ? <><button onClick={onCerrar} style={styles.btnSecondary}>Cancelar</button>
+              <button onClick={hacer} disabled={!plan || !pendientes.length} style={{ ...styles.btnPrimary, opacity: plan && pendientes.length ? 1 : .5 }}>{plan && !pendientes.length ? 'Todo está al día' : `Hacer ${pendientes.length} cambios`}</button></>
+            : terminado && <button onClick={onListo} style={styles.btnPrimary}>Cerrar</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Nueva instalacion ────────────────────────────────────────────────────────
 
 function NuevaInstalacion({ onCrear, onCancelar }) {
@@ -372,6 +459,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
   const [detalle, setDetalle] = useState(null)
   const [nueva, setNueva] = useState(false)
   const [importar, setImportar] = useState(false)
+  const [pasar, setPasar] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -455,6 +543,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
             {[['semana', 'Semana'], ['mes', 'Mes'], ['todo', 'Todo']].map(([k, n]) => <button key={k} role="tab" aria-selected={periodo === k} onClick={() => setPeriodo(k)} style={segmento(periodo === k)}>{n}</button>)}
           </div>
           <button onClick={() => setNueva(v => !v)} style={{ ...styles.btnPrimary, fontSize: 12.5, padding: '8px 14px' }}>+ Nueva instalación</button>
+          {periodo !== 'todo' && <button onClick={() => setPasar(true)} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>Pasar al calendario</button>}
           <button onClick={() => setImportar(true)} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>Importar Excel</button>
         </div>
       </div>
@@ -558,6 +647,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
       ))}
 
       {abierta && <Detalle q={abierta} onCerrar={() => setDetalle(null)} onActualizar={c => actualizar(abierta.cotNum, c)} onCambioLocal={c => reemplazar({ cotNum: abierta.cotNum, ...c })} onVerCotizacion={onVerCotizacion} />}
+      {pasar && rango && <PasarAlCalendario titulo={titulo} rango={rango} filas={filas.filter(f => f.fecha >= rango[0] && f.fecha <= rango[1])} onCerrar={() => setPasar(false)} onListo={() => { setPasar(false); cargar() }} />}
       {importar && <ImportarExcel onCerrar={() => setImportar(false)} onListo={() => { setImportar(false); setPeriodo('todo'); cargar() }} />}
     </div>
   )
