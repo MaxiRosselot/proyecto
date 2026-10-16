@@ -4,13 +4,14 @@
 //   POST { accion: 'cancelar', cotNum }
 //   POST { accion: 'enlazar', cotNum, eventId }     enlaza la venta con un evento que ya esta en el calendario
 //   POST { accion: 'sincronizar', cotNum }          la deja en el calendario (mueve, enlaza o crea su evento)
+//   POST { accion: 'sincronizar', cotNums: [...] }  lo mismo para un bloque (hasta 12)
 //   POST { accion: 'importar', ventas, simular? }     historial desde el Excel (ver lib/importar-ventas.mjs)
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { respuestaDeError } from './lib/cotizaciones.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
 import { ahoraEnZona } from './lib/horarios.mjs'
 import { importarVentas } from './lib/importar-ventas.mjs'
-import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento, sincronizarFila } from './lib/planilla.mjs'
+import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento, sincronizarFila, sincronizarVarias } from './lib/planilla.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,7 @@ export async function handler(event) {
     const { almacen, calendar, calendarId, leerEventos } = serviciosGoogle()
     if (datos.accion === 'actualizar') return responder(200, { ok: true, ...(await actualizarFila(almacen, calendar, calendarId, datos.cotNum, datos.cambios, { leerEventos })) })
     if (datos.accion === 'enlazar') return responder(200, { ok: true, ...(await enlazarEvento(almacen, calendar, calendarId, datos)) })
-    if (datos.accion === 'sincronizar') return responder(200, { ok: true, ...(await sincronizarFila(almacen, calendar, calendarId, datos, { leerEventos })) })
+    if (datos.accion === 'sincronizar') return responder(200, { ok: true, ...(await (Array.isArray(datos.cotNums) ? sincronizarVarias : sincronizarFila)(almacen, calendar, calendarId, datos, { leerEventos })) })
     if (datos.accion === 'crear') return responder(200, { ok: true, ...(await crearInstalacion(almacen, calendar, calendarId, datos)) })
     if (datos.accion === 'cancelar') return responder(200, { ok: true, ...(await cancelarInstalacion(almacen, calendar, calendarId, datos)) })
     if (datos.accion === 'importar') {

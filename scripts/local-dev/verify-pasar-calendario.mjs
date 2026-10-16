@@ -42,7 +42,10 @@ try {
   await expect(dialogo).toContainText('Sin horas: no se pueden agendar · 1')
   await expect(dialogo).toContainText('Ya están en el calendario')
   await page.screenshot({ path: path.join(evidence, '05-pasar-al-calendario.png') })
+  // Google pide una pausa en el primer intento: el panel espera y reintenta solo.
+  await api('simular-limite', { veces: 1 })
   await dialogo.getByRole('button', { name: 'Hacer 2 cambios' }).click()
+  await expect(dialogo).toContainText('Google pidió una pausa: sigo en')
   await expect(page.getByTestId('pasar-calendario')).toHaveCount(0) // se cierra solo si todo salio bien
 
   // Bruno quedo enlazado a su evento del script (marcado como instalacion), Carla con uno nuevo.

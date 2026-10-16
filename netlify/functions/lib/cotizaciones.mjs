@@ -218,6 +218,21 @@ export async function actualizarCotizacion(almacen, datos) {
   return { estado: 200, respuesta: { ok: true, cotNum: String(cotNum) } }
 }
 
+// Varias a la vez ("Pasar al calendario"): una lectura y una escritura para todas, en vez de
+// tres lecturas por cotizacion. Google limita las lecturas de la planilla por minuto.
+export async function actualizarVariasCotizaciones(almacen, lista) {
+  const filas = await almacen.leerFilas()
+  if (lista.some(d => d.instalacion || d.pagos || d.reserva)) await almacen.asegurarEncabezado()
+  const escrituras = lista.map(datos => {
+    const cotNum = numeroValido(datos.cotNum)
+    const encontrada = cotNum && buscar(filas, cotNum)
+    if (!encontrada) throw new ErrorCotizacion(404, `La cotización N° ${datos.cotNum} no existe`)
+    const actual = filaACotizacion(encontrada.valores, { conProyecto: true })
+    return { fila: encontrada.fila, valores: cotizacionAFila({ ...actual, ...pick(datos, EDITABLES), cotNum, creado: actual.creado }) }
+  })
+  if (escrituras.length) await almacen.actualizarVarias(escrituras)
+}
+
 export async function borrarCotizacion(almacen, cotNum) {
   const encontrada = buscar(await almacen.leerFilas(), cotNum)
   if (!encontrada) throw new ErrorCotizacion(404, 'Cotización no encontrada')
@@ -233,13 +248,21 @@ function pick(datos, campos) {
 
 // Hoja de Google. Las filas de datos parten en la 2; la 1 son los encabezados.
 // Se lee sin formato: los montos llegan como numeros y no como "1.234.000".
+//
+// Google permite 60 lecturas por minuto: dentro de una misma llamada (un almacen por request) las
+// filas leidas se reutilizan hasta la proxima escritura, y el encabezado se revisa una sola vez.
 export function almacenSheets(sheets, spreadsheetId, hoja = HOJA) {
   const rango = r => `${hoja}!${r}`
   const fila = n => rango(`A${n}:${ULTIMA_COLUMNA}${n}`)
+  let leidas = null, encabezadoListo = false
+  const escribio = () => { leidas = null }
   return {
     async leerFilas() {
-      const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: rango(`A2:${ULTIMA_COLUMNA}`), valueRenderOption: 'UNFORMATTED_VALUE' })
-      return (res.data.values || []).map((valores, i) => ({ fila: i + 2, valores }))
+      if (!leidas) {
+        const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: rango(`A2:${ULTIMA_COLUMNA}`), valueRenderOption: 'UNFORMATTED_VALUE' })
+        leidas = (res.data.values || []).map((valores, i) => ({ fila: i + 2, valores }))
+      }
+      return leidas
     },
     async leerFila(n) {
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: fila(n), valueRenderOption: 'UNFORMATTED_VALUE' })
@@ -247,12 +270,14 @@ export function almacenSheets(sheets, spreadsheetId, hoja = HOJA) {
     },
     // Crea la fila de titulos si falta, y agrega "Proyecto 3D" a hojas que tenian solo 16.
     async asegurarEncabezado() {
+      if (encabezadoListo) return
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: fila(1) })
       const actuales = res.data.values?.[0] || []
-      if (actuales.length >= ENCABEZADOS.length) return
-      await sheets.spreadsheets.values.update({ spreadsheetId, range: fila(1), valueInputOption: 'RAW', requestBody: { values: [ENCABEZADOS] } })
+      if (actuales.length < ENCABEZADOS.length) await sheets.spreadsheets.values.update({ spreadsheetId, range: fila(1), valueInputOption: 'RAW', requestBody: { values: [ENCABEZADOS] } })
+      encabezadoListo = true
     },
     async agregar(valores) {
+      escribio()
       const res = await sheets.spreadsheets.values.append({ spreadsheetId, range: rango('A1'), valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values: [valores] } })
       const n = Number(String(res.data.updates?.updatedRange || '').match(/!\$?[A-Z]+\$?(\d+)/)?.[1])
       if (!Number.isSafeInteger(n)) throw new Error('La planilla no informó en qué fila quedó la cotización')
@@ -260,14 +285,21 @@ export function almacenSheets(sheets, spreadsheetId, hoja = HOJA) {
     },
     // Muchas filas de una vez (importar el historial): una sola llamada por bloque, no una por fila.
     async agregarVarias(lista) {
+      escribio()
       for (let i = 0; i < lista.length; i += 500) {
         await sheets.spreadsheets.values.append({ spreadsheetId, range: rango('A1'), valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values: lista.slice(i, i + 500) } })
       }
     },
     async actualizar(n, valores) {
+      escribio()
       await sheets.spreadsheets.values.update({ spreadsheetId, range: fila(n), valueInputOption: 'RAW', requestBody: { values: [valores] } })
     },
+    async actualizarVarias(lista) {
+      escribio()
+      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data: lista.map(e => ({ range: fila(e.fila), values: [e.valores] })) } })
+    },
     async borrar(n) {
+      escribio()
       const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' })
       const sheetId = meta.data.sheets.find(s => s.properties.title === hoja)?.properties.sheetId
       if (sheetId === undefined) throw new ErrorCotizacion(404, 'Hoja no encontrada')
@@ -292,12 +324,16 @@ export function almacenEnMemoria(filasIniciales = [], alCambiar = () => {}) {
     async agregar(valores) { filas.push([...valores]); guardar(); return filas.length + 1 },
     async agregarVarias(lista) { lista.forEach(v => filas.push([...v])); guardar() },
     async actualizar(n, valores) { filas[n - 2] = [...valores]; guardar() },
+    async actualizarVarias(lista) { lista.forEach(e => { filas[e.fila - 2] = [...e.valores] }); guardar() },
     async borrar(n) { filas.splice(n - 2, 1); guardar() },
   }
 }
 
 // Respuesta HTTP comun para los handlers de Netlify.
+export const esLimiteDeGoogle = error => error?.code === 429 || error?.response?.status === 429 || /quota exceeded|rate limit/i.test(String(error?.message || ''))
 export function respuestaDeError(error, corsHeaders) {
+  // Google pidio una pausa (lecturas por minuto): se avisa claro y con 429 para que el panel reintente.
+  if (esLimiteDeGoogle(error)) return { statusCode: 429, headers: corsHeaders, body: JSON.stringify({ ok: false, limite: true, reintentarEn: 30, error: 'Google pidió una pausa (límite de lecturas por minuto). Espera unos segundos y vuelve a intentarlo.' }) }
   const estado = error instanceof ErrorCotizacion ? error.estado : 500
   if (estado >= 500) console.error('cotizaciones:', error)
   return { statusCode: estado, headers: corsHeaders, body: JSON.stringify({ ok: false, error: error instanceof ErrorCotizacion ? error.message : String(error) }) }

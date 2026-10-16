@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { C, apiFetch, fmt, styles } from './utils.js'
+import { C, adminFetch, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
@@ -295,6 +295,7 @@ function PasarAlCalendario({ filas, rango, titulo, onCerrar, onListo }) {
   const [error, setError] = useState('')
   const [hechas, setHechas] = useState(null) // null: revisando | numero: avanzando
   const [fallas, setFallas] = useState([])
+  const [pausa, setPausa] = useState(0)
   useEffect(() => {
     apiFetch(`/.netlify/functions/calendario?desde=${rango[0]}&hasta=${rango[1]}`).then(r => {
       if (!r.ok) throw new Error(r.error || 'No se pudo leer el calendario')
@@ -312,19 +313,30 @@ function PasarAlCalendario({ filas, rango, titulo, onCerrar, onListo }) {
     }).catch(e => setError(e.message))
   }, [])
   const pendientes = (plan || []).filter(p => ['mover', 'enlazar', 'crear'].includes(p.accion))
+  // Por bloques de 6: una lectura de la planilla por bloque. Si Google pide una pausa (limite de
+  // lecturas por minuto), se espera lo que dice y se reintenta el mismo bloque.
   async function hacer() {
     setHechas(0)
-    const cola = [...pendientes], errores = []
-    // De a tres a la vez: rapido sin pasar los limites de Google.
-    await Promise.all([0, 1, 2].map(async () => {
-      for (let p = cola.shift(); p; p = cola.shift()) {
+    const errores = []
+    for (let i = 0; i < pendientes.length; i += 6) {
+      const bloque = pendientes.slice(i, i + 6)
+      for (let intento = 0; ; intento++) {
+        let res, r
         try {
-          const r = await apiFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'sincronizar', cotNum: p.f.q.cotNum }) })
-          if (!r.ok) throw new Error(r.error || 'No se pudo')
-        } catch (e) { errores.push(`${p.f.q.nombre}: ${e.message}`) }
-        setHechas(n => n + 1)
+          res = await adminFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'sincronizar', cotNums: bloque.map(p => p.f.q.cotNum) }) })
+          r = await res.json().catch(() => ({}))
+        } catch (e) { r = { error: e.message } }
+        if (res?.status === 429 && intento < 5) {
+          for (let s = r.reintentarEn || 30; s > 0; s--) { setPausa(s); await new Promise(ok => setTimeout(ok, 1000)) }
+          setPausa(0)
+          continue
+        }
+        if (r.ok) errores.push(...(r.errores || []))
+        else errores.push(...bloque.map(p => `${p.f.q.nombre}: ${r.error || 'No se pudo'}`))
+        break
       }
-    }))
+      setHechas(n => n + bloque.length)
+    }
     setFallas(errores)
     if (!errores.length) onListo()
   }
@@ -352,7 +364,7 @@ function PasarAlCalendario({ filas, rango, titulo, onCerrar, onListo }) {
         {hechas !== null && (
           <div style={{ margin: '10px 0' }}>
             <div style={{ height: 8, borderRadius: 99, background: C.border, overflow: 'hidden' }}><div style={{ width: `${pendientes.length ? hechas * 100 / pendientes.length : 100}%`, height: '100%', background: C.green, transition: 'width .2s' }} /></div>
-            <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 4 }}>{terminado ? `✓ Listo: ${hechas - fallas.length} de ${pendientes.length}` : `Agendando ${hechas} de ${pendientes.length}…`}</div>
+            <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 4 }}>{terminado ? `✓ Listo: ${hechas - fallas.length} de ${pendientes.length}` : pausa ? `Google pidió una pausa: sigo en ${pausa} s…` : `Agendando ${hechas} de ${pendientes.length}…`}</div>
           </div>
         )}
         {fallas.length > 0 && <div style={styles.errorBox}>No se pudieron agendar:<br />{fallas.join(' · ')}</div>}
@@ -478,7 +490,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
       const r = await apiFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'actualizar', cotNum, cambios }) })
       if (!r.ok) throw new Error(r.error || 'No se pudo guardar')
       reemplazar(r.cotizacion)
-    } catch (e) { setAviso(e.message); cargar() }
+    } catch (e) { setAviso(e.message); if (!/pausa/.test(e.message)) cargar() }
   }
   async function cancelar(q) {
     if (!window.confirm(`¿Cancelar la instalación de ${q.nombre}? Sale de la planilla (queda como "Canceló") y se borra su evento del calendario.`)) return
