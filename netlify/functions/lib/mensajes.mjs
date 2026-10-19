@@ -79,7 +79,9 @@ export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl, linkPago }) {
     '',
     `Total: ${pesos(total)} con IVA incluido.`,
     ...(pdfUrl ? [`Puede verla aquí: ${pdfUrl}`] : []),
-    ...(linkPago ? [`Aquí puede elegir el día de su instalación y pagar (total o abono del 50%): ${linkPago}`] : []),
+    ...(linkPago ? [/\/reserva\?/.test(linkPago)
+      ? `Aquí puede elegir el día de su instalación y pagar (total o abono del 50%): ${linkPago}`
+      : `Puede pagar en línea aquí (total o abono del 50%): ${linkPago}`] : []),
     '',
     `Si paga por transferencia, tiene un ${OFERTA.descuento}% de descuento.`,
     'Cualquier duda, respóndanos por aquí.',

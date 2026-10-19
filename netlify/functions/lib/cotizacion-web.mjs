@@ -90,7 +90,9 @@ export function correoCliente({ cliente, cotNum, total, modulos, avisoA, linkPag
     `${TEXTO_OFERTA}.`,
     '',
     'Para reservar tu instalación:',
-    `• Elige tu día y paga aquí (transferencia con ${OFERTA.descuento}% de descuento, o Mercado Pago): ${linkPago}`,
+    /\/reserva\?/.test(linkPago)
+      ? `• Elige tu día y paga aquí (transferencia con ${OFERTA.descuento}% de descuento, o Mercado Pago): ${linkPago}`
+      : `• Paga en línea aquí: ${linkPago}`,
     `• Datos para transferir: ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
     `• O confírmanos por WhatsApp: ${linkWhatsapp(`Hola, quiero aceptar la cotización N° ${cotNum}`)}`,
     '',

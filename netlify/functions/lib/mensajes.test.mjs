@@ -15,6 +15,12 @@ test('con su link el mensaje invita a elegir el dia y pagar', () => {
   assert.match(texto, /elegir el día de su instalación y pagar \(total o abono del 50%\): https:\/\/donmaxi\.example\/reserva\?c=3&t=x/)
 })
 
+test('con el link fijo de Mercado Pago el mensaje invita a pagar en linea', () => {
+  const texto = mensajeCotizacion({ nombre: 'Ana', cotNum: 3, total: 1000, linkPago: 'https://link.mercadopago.cl/repisasdonmaxi' })
+  assert.match(texto, /Puede pagar en línea aquí \(total o abono del 50%\): https:\/\/link\.mercadopago\.cl\/repisasdonmaxi/)
+  assert.doesNotMatch(texto, /elegir el día/)
+})
+
 test('sin link de Drive el mensaje no promete el PDF', () => {
   assert.doesNotMatch(mensajeCotizacion({ nombre: '', cotNum: 1, total: 1000 }), /verla aquí/)
 })

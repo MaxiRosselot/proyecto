@@ -46,6 +46,8 @@ process.env.ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || randomByt
 // Mercado Pago simulado (mpLocal, mas abajo): los links de pago se arman igual que en produccion.
 process.env.MP_ACCESS_TOKEN = 'local-simulado'
 process.env.PAGO_LINK_SECRET = 'solo-local-links-de-pago'
+// Como en Netlify: la reserva queda apagada salvo que se inicie con RESERVA_ACTIVA=1 (verify-reserva).
+process.env.RESERVA_ACTIVA = process.env.RESERVA_ACTIVA || '0'
 process.env.SITE_URL = PUBLIC_URL
 
 function loadData() {

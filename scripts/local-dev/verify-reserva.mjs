@@ -1,7 +1,8 @@
 // Prueba E2E del link de la cotizacion: el cliente ve los bloques libres, reserva y paga.
 // - Transferencia: avisa, Don Maxi la confirma en el panel, se agenda y se le confirma.
 // - Mercado Pago (simulado en el backend local): al aprobarse, se agenda sola.
-// Contra el entorno local (start-native.mjs), con datos limpios.
+// Contra el entorno local (start-native.mjs), con datos limpios y la reserva activa:
+//   RESERVA_ACTIVA=1 node scripts/local-dev/start-native.mjs
 //   node scripts/local-dev/verify-reserva.mjs
 import { chromium, expect } from '@playwright/test'
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs'

@@ -6,6 +6,8 @@
 // Pago aprueba un pago avisa a mp-webhook y el pago queda registrado solo.
 //
 // Mercado Pago y la planilla se inyectan: en Netlify son reales; en local y en los tests, falsos.
+// El link de reserva esta apagado hasta que la pagina /reserva quede lista: sin RESERVA_ACTIVA=1
+// las cotizaciones llevan el link fijo de Mercado Pago (MARCA.linkPago).
 // Sin MP_ACCESS_TOKEN el link sigue funcionando para agendar y transferir; solo Mercado Pago queda
 // fuera, y el PDF usa el link fijo de siempre (MARCA.linkPago).
 import { createHmac, timingSafeEqual } from 'node:crypto'
@@ -21,7 +23,7 @@ export const MEDIO_MP = 'Mercado Pago'
 export function configPago(env = process.env) {
   const secreto = env.PAGO_LINK_SECRET || env.ADMIN_SESSION_SECRET
   const base = String(env.SITE_URL || env.URL || '').replace(/\/$/, '')
-  return secreto && base ? { token: env.MP_ACCESS_TOKEN || '', secreto, base } : null
+  return secreto && base ? { token: env.MP_ACCESS_TOKEN || '', secreto, base, reserva: env.RESERVA_ACTIVA === '1' } : null
 }
 
 export function firmaPago(cotNum, secreto) {
@@ -39,8 +41,8 @@ export function linkReserva(cotNum, config = configPago()) {
   return `${config.base}/reserva?c=${encodeURIComponent(cotNum)}&t=${firmaPago(cotNum, config.secreto)}`
 }
 
-// El link que va en el PDF y los mensajes: el de reserva, o el link fijo si no hay sitio configurado.
-export const linkPagoCotizacion = (cotNum, config = configPago()) => linkReserva(cotNum, config) || MARCA.linkPago
+// El link que va en el PDF y los mensajes: el fijo de Mercado Pago, o el de reserva si esta activa.
+export const linkPagoCotizacion = (cotNum, config = configPago()) => (config?.reserva && linkReserva(cotNum, config)) || MARCA.linkPago
 
 // Para el panel: cada cotizacion con su link, que el navegador no puede firmar.
 export const conLinkPago = (cotizacion, config = configPago()) => ({ ...cotizacion, linkPago: linkPagoCotizacion(cotizacion.cotNum, config) })

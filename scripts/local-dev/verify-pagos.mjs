@@ -1,7 +1,8 @@
 // Prueba E2E del pago en linea: link de la cotizacion → /pagar → Mercado Pago (simulado en el
 // backend local) → aviso → pago registrado e instalacion agendada; documento en la planilla y
 // en Estadisticas.
-// Contra el entorno local (start-native.mjs), con datos limpios.
+// Contra el entorno local (start-native.mjs), con datos limpios y la reserva activa:
+//   RESERVA_ACTIVA=1 node scripts/local-dev/start-native.mjs
 //   node scripts/local-dev/verify-pagos.mjs
 import { chromium, expect } from '@playwright/test'
 import { mkdirSync } from 'node:fs'

@@ -6,7 +6,7 @@ import { avisoAutentico, configPago, firmaValida, linkPagoCotizacion, opcionesDe
 import { anotarBoleta } from './pagos.mjs'
 import { MARCA } from './marca.mjs'
 
-const CONFIG = { token: 'tok', secreto: 'secreto-de-prueba', base: 'https://donmaxi.example' }
+const CONFIG = { token: 'tok', secreto: 'secreto-de-prueba', base: 'https://donmaxi.example', reserva: true }
 
 async function conCotizacion(extra = {}) {
   const almacen = almacenEnMemoria()
@@ -20,9 +20,15 @@ async function conCotizacion(extra = {}) {
 test('sin sitio configurado se usa el link fijo; sin token igual hay link de reserva', () => {
   assert.equal(configPago({}), null)
   assert.equal(linkPagoCotizacion(1500, null), MARCA.linkPago)
-  const sinToken = configPago({ ADMIN_SESSION_SECRET: 's', URL: 'https://x.netlify.app/' })
-  assert.deepEqual(sinToken, { token: '', secreto: 's', base: 'https://x.netlify.app' })
+  const sinToken = configPago({ ADMIN_SESSION_SECRET: 's', URL: 'https://x.netlify.app/', RESERVA_ACTIVA: '1' })
+  assert.deepEqual(sinToken, { token: '', secreto: 's', base: 'https://x.netlify.app', reserva: true })
   assert.match(linkPagoCotizacion(7, sinToken), /^https:\/\/x\.netlify\.app\/reserva\?c=7&t=/)
+})
+
+test('mientras la reserva no este activa, la cotizacion lleva el link fijo de Mercado Pago', () => {
+  const config = configPago({ ADMIN_SESSION_SECRET: 's', URL: 'https://x.netlify.app/', MP_ACCESS_TOKEN: 't' })
+  assert.equal(config.reserva, false)
+  assert.equal(linkPagoCotizacion(7, config), 'https://link.mercadopago.cl/repisasdonmaxi')
 })
 
 test('el link va firmado y no sirve para otra cotizacion', () => {
