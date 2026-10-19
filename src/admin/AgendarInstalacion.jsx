@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { OFERTA, SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
-import { duracion, fechaLarga, linkWhatsappInstalacion } from './whatsappInstalacion.js'
+import { duracion, fechaLarga, mensajeInstalacionDe } from './whatsappInstalacion.js'
+import CopiarMensaje from './CopiarMensaje.jsx'
 
 const ENDPOINT = '/.netlify/functions/instalacion'
 const correoValido = email => /^[^\s@<>()",;]+@[^\s@<>()",;]+\.[^\s@<>()",;]{2,}$/.test(String(email || '').trim())
@@ -209,7 +210,7 @@ export function ResumenInstalacion({ quote, onReagendar, onInvitado }) {
         Duración {duracion(inst.inicio, inst.fin)} · {inst.invitado ? `Invitación enviada a ${inst.invitado}` : 'Sin invitación por correo'}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <a href={linkWhatsappInstalacion(quote, inst)} target="_blank" rel="noreferrer" style={{ ...boton, background: '#25D366', borderColor: '#25D366', color: 'white' }}>Avisar por WhatsApp</a>
+        <CopiarMensaje texto={mensajeInstalacionDe(quote, inst)} etiqueta="📋 Copiar mensaje de agendamiento" />
         {inst.link && <a href={inst.link} target="_blank" rel="noreferrer" style={boton}>Ver en Calendar</a>}
         <button onClick={onReagendar} style={boton}>Reagendar</button>
       </div>

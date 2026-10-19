@@ -76,8 +76,8 @@ try {
   await admin.screenshot({ path: path.join(evidence, '05-panel-verificar.png'), fullPage: true })
   await panel.getByRole('button', { name: /Recibí la transferencia: confirmar y agendar/ }).click()
   await expect(tarjeta.getByText(/Transferencia confirmada e instalación agendada/)).toBeVisible()
-  const whatsapp = tarjeta.getByRole('link', { name: 'Avisar por WhatsApp' })
-  expect(decodeURIComponent(await whatsapp.getAttribute('href'))).toMatch(/Su hora ya está agendada.*Recibimos su pago de \$107\.100 \(saldo de \$107\.100 al terminar\)/s)
+  await tarjeta.getByRole('button', { name: '📋 Copiar mensaje de agendamiento' }).click()
+  expect(await tarjeta.getByTestId('mensaje-copiado').inputValue()).toMatch(/Su hora ya está agendada.*Recibimos su pago de \$107\.100 \(saldo de \$107\.100 al terminar\)/s)
   await admin.screenshot({ path: path.join(evidence, '06-confirmada.png'), fullPage: true })
   const q1 = (await api('get-quotes?cotNum=' + rocio.cotNum)).quote
   expect([q1.status, q1.adicionales.descuento_pct, Number(q1.total), q1.reserva]).toEqual(['confirmada', 10, 214200, null])

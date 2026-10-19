@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { duracion, fechaLarga, linkWhatsappRecordatorio } from './whatsappInstalacion.js'
-import { linkWhatsapp, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
+import { mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
+import CopiarMensaje from './CopiarMensaje.jsx'
 
 const TIPOS = {
   instalacion: { nombre: 'Instalación', color: '#059669', fondo: '#D1FAE5', texto: '#065F46' },
@@ -86,9 +87,7 @@ function Detalle({ evento, onCerrar, onVerCotizacion }) {
             </a>
           )}
           {evento.tipo === 'instalacion' && (
-            <a href={linkWhatsapp(evento.telefono, mensajeInstalacion({ nombre: evento.cliente, direccion: evento.ubicacion }, evento))} target="_blank" rel="noreferrer" style={boton}>
-              Confirmación de hora por WhatsApp
-            </a>
+            <CopiarMensaje texto={mensajeInstalacion({ nombre: evento.cliente, direccion: evento.ubicacion }, evento)} etiqueta="📋 Copiar mensaje de agendamiento" estilo={{ padding: '9px 12px' }} />
           )}
           {evento.cotNum && <button onClick={() => onVerCotizacion(evento.cotNum)} style={boton}>Ver cotización y pagos</button>}
           {evento.link && <a href={evento.link} target="_blank" rel="noreferrer" style={boton}>Abrir en Google Calendar</a>}

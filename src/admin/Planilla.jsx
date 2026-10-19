@@ -3,7 +3,8 @@ import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
-import { linkWhatsapp, mensajeCobro, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
+import { mensajeCobro, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
+import CopiarMensaje from './CopiarMensaje.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { PagosCotizacion } from './PagosCotizacion.jsx'
@@ -159,7 +160,7 @@ function lineasCobro(q) {
     ...(m.despacho ? [{ nombre: 'Despacho', monto: m.despacho }] : []),
   ]
 }
-const linkCobro = q => linkWhatsapp(q.telefono, mensajeCobro({ nombre: q.nombre, fecha: q.instalacion?.fecha }, lineasCobro(q), { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 }, resumenPagos(q.total, q.pagos), q.linkPago && !/mercadopago/.test(q.linkPago) ? q.linkPago : ''))
+const textoCobro = q => mensajeCobro({ nombre: q.nombre, fecha: q.instalacion?.fecha }, lineasCobro(q), { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 }, resumenPagos(q.total, q.pagos))
 
 // ── Detalle de una venta (panel lateral) ─────────────────────────────────────
 
@@ -298,8 +299,8 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
 
         <div style={titulo}>Acciones</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {pago.saldo > 0 && <a href={linkCobro(q)} target="_blank" rel="noreferrer" style={{ ...boton, background: '#25D366', borderColor: '#25D366', color: 'white' }}>Cobrar por WhatsApp</a>}
-          {inst.fecha && <a href={linkWhatsapp(q.telefono, mensajeInstalacion(q, inst, pago))} target="_blank" rel="noreferrer" style={boton}>Confirmar hora por WhatsApp</a>}
+          {pago.saldo > 0 && <CopiarMensaje texto={textoCobro(q)} etiqueta="📋 Copiar mensaje de cobro" />}
+          {inst.fecha && <CopiarMensaje texto={mensajeInstalacion(q, inst, pago)} etiqueta="📋 Copiar mensaje de agendamiento" />}
           {inst.link && <a href={inst.link} target="_blank" rel="noreferrer" style={boton}>Ver en Calendar</a>}
           {q.pdfUrl && <a href={q.pdfUrl} target="_blank" rel="noreferrer" style={boton}>Ver PDF</a>}
           {onVerCotizacion && inst.origen !== 'excel' && <button onClick={() => onVerCotizacion(q.cotNum)} style={boton}>Ver cotización</button>}
@@ -526,7 +527,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
                 <span><strong style={{ color: porEmitir(f.documento) ? C.red : C.textSub }}>{f.documento || (f.sugerido ? f.sugerido + '?' : '—')}</strong> · {f.pago.estado === 'pagada' ? <span style={{ color: C.green }}>Pagada</span> : f.pago.pagado ? `${f.pago.porcentaje}%` : <span style={{ color: f.instalada ? C.red : C.textMuted }}>Sin pago</span>}</span>
               </div>
               {f.inst.nota && <div style={{ fontSize: 12, color: '#92400E', marginTop: 4 }}>📝 {f.inst.nota}</div>}
-              {f.porCobrar && <a onClick={e => e.stopPropagation()} href={linkCobro(f.q)} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700, color: '#128C7E' }}>💬 Cobrar {fmt(f.pago.saldo)}</a>}
+              {f.porCobrar && <div style={{ marginTop: 6 }}><CopiarMensaje compacto texto={textoCobro(f.q)} etiqueta={`📋 Cobro ${fmt(f.pago.saldo)}`} estilo={{ padding: '4px 10px' }} /></div>}
             </div>
             ))}
             </React.Fragment>
@@ -578,7 +579,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
                     <td style={{ ...td, textAlign: 'right', fontWeight: 700, padding: '2px 8px', whiteSpace: 'nowrap' }}>{fmt(f.montos.neto)}</td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: C.orangeDark, padding: '2px 8px', whiteSpace: 'nowrap' }}>{fmt(f.montos.bruto)}</td>
                     <td style={{ ...td, width: 34, textAlign: 'center' }}>
-                      {f.porCobrar && <a href={linkCobro(q)} target="_blank" rel="noreferrer" aria-label={`Cobrar a ${q.nombre} por WhatsApp`} title={`Cobrar ${fmt(f.pago.saldo)} por WhatsApp`} style={{ textDecoration: 'none', fontSize: 16 }}>💬</a>}
+                      {f.porCobrar && <CopiarMensaje compacto texto={textoCobro(q)} etiqueta="📋" estilo={{ border: 'none', background: 'none', fontSize: 15 }} />}
                     </td>
                   </tr>
                 )

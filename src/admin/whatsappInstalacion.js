@@ -6,6 +6,8 @@ import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 export { duracion, fechaLarga, mensajeInstalacion, mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 
 // Al agendar: "Su hora ya esta agendada".
+export const mensajeInstalacionDe = (cotizacion, instalacion) =>
+  mensajeInstalacion(cotizacion, instalacion, resumenPagos(cotizacion.total, cotizacion.pagos))
 export const linkWhatsappInstalacion = (cotizacion, instalacion) =>
   linkWhatsapp(cotizacion.telefono, mensajeInstalacion(cotizacion, instalacion, resumenPagos(cotizacion.total, cotizacion.pagos)))
 

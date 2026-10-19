@@ -43,9 +43,9 @@ try {
 
   // Pedir confirmacion: link de WhatsApp al celular del cliente con el mensaje.
   const tarjeta = nombre => grupo.locator('div', { has: page.getByText(nombre, { exact: true }) }).filter({ has: page.getByRole('button', { name: /Confirmó|Deshacer/ }) }).last()
-  const wa = tarjeta('Ana Temprano').getByRole('link', { name: '💬 Pedir confirmación' })
-  const href = decodeURIComponent(await wa.getAttribute('href'))
-  expect(href).toMatch(/^https:\/\/wa\.me\/56912345671\?text=Hola Ana! 👋/)
+  await tarjeta('Ana Temprano').getByRole('button', { name: '📋 Copiar mensaje de confirmación' }).click()
+  const href = await tarjeta('Ana Temprano').getByTestId('mensaje-copiado').inputValue()
+  expect(href).toMatch(/^Hola Ana! 👋/)
   expect(href).toContain('1 hora de flexibilidad')
   expect(href).toContain('si no puedes, avísanos')
 
@@ -84,8 +84,9 @@ try {
   await panel.getByRole('button', { name: otroDia.horas[0], exact: true }).click()
   await panel.getByRole('button', { name: /^Mover al / }).click()
   await expect(panel).toContainText('✓ Reagendada para el')
-  const aviso = decodeURIComponent(await panel.getByRole('link', { name: '💬 Avisar al cliente' }).getAttribute('href'))
-  expect(aviso).toMatch(/^https:\/\/wa\.me\/56912345670\?text=Hola Bruno! 👋 .*reagendada para el .* a las /)
+  await panel.getByRole('button', { name: '📋 Copiar aviso para el cliente' }).click()
+  const aviso = await panel.getByTestId('mensaje-copiado').inputValue()
+  expect(aviso).toMatch(/^Hola Bruno! 👋 .*reagendada para el .* a las /)
   expect(aviso).toContain(otroDia.horas[0])
   await page.screenshot({ path: path.join(evidence, '02-reagendar.png') })
   await panel.getByRole('button', { name: 'Listo' }).click()

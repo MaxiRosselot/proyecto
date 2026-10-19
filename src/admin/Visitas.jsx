@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
 import { VISITA_VIGENTE, mensajeConfirmarVisita, mensajeVisitaReagendada, textoVisitas } from './listaVisitas.js'
-import { linkWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
+import CopiarMensaje from './CopiarMensaje.jsx'
 
 function Badge({ status }) {
   const s = VISIT_STATUS_LABELS[status] || VISIT_STATUS_LABELS.agendada
@@ -66,9 +66,8 @@ function ReagendarVisita({ visit, movida, onListo, onCerrar }) {
       {movida ? (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>✓ Reagendada para el {fmtDate(movida.start)} a las {fmtTime(movida.start)}</span>
-          {visit.celular && <a href={linkWhatsapp(visit.celular, mensajeVisitaReagendada(movida))} target="_blank" rel="noreferrer"
-            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: '#25D366', color: 'white', textDecoration: 'none' }}>💬 Avisar al cliente</a>}
           <button onClick={onCerrar} style={{ ...styles.btnSecondary, padding: '6px 12px', fontSize: 12 }}>Listo</button>
+          <CopiarMensaje texto={mensajeVisitaReagendada(movida)} etiqueta="📋 Copiar aviso para el cliente" />
         </div>
       ) : (
         <>
@@ -339,10 +338,6 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                           </>
                         ) : (
                           <>
-                            {visit.celular
-                              ? <a href={linkWhatsapp(visit.celular, mensajeConfirmarVisita(visit))} target="_blank" rel="noreferrer"
-                                  style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: '#25D366', color: 'white', textDecoration: 'none' }}>💬 Pedir confirmación</a>
-                              : <span style={{ fontSize: 12, color: C.textMuted }}>Sin celular para WhatsApp</span>}
                             <button onClick={() => handleStatus(visit, 'confirmada')} disabled={isUpdating}
                               style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1.5px solid ' + VISIT_STATUS_LABELS.confirmada.color, background: C.surface, color: VISIT_STATUS_LABELS.confirmada.color, opacity: isUpdating ? .5 : 1 }}>✓ Confirmó</button>
                           </>
@@ -351,6 +346,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                           style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: reagendando === visit.id ? C.orangeLight : C.surface, color: C.textSub }}>📅 Reagendar</button>
                         <button onClick={() => cancelar(visit)} disabled={isUpdating}
                           style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: C.surface, color: C.red }}>✕ Cancelar</button>
+                        {status !== 'confirmada' && <CopiarMensaje texto={mensajeConfirmarVisita(visit)} etiqueta="📋 Copiar mensaje de confirmación" />}
                       </div>
                     )}
                     {reagendando === visit.id && (tab === 'agendadas' || tab === 'pendientes') && (

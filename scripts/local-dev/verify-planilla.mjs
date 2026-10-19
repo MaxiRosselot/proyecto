@@ -119,15 +119,18 @@ try {
   await expect(page.getByTestId('calendario-venta')).toContainText('Enlazada a su evento')
   await page.getByRole('dialog', { name: 'Pedro Futuro' }).getByRole('button', { name: 'Cerrar' }).click()
 
-  // Marco: instalado y sin pagar → "Por cobrar", con el WhatsApp de cobro.
-  await expect(fila('Marco Prueba').getByRole('link', { name: 'Cobrar a Marco Prueba por WhatsApp' })).toBeVisible()
-  const cobro = decodeURIComponent(await fila('Marco Prueba').getByRole('link', { name: 'Cobrar a Marco Prueba por WhatsApp' }).getAttribute('href'))
-  expect(cobro).toMatch(/Saldo a pagar: \$226\.100/)
+  // Marco: instalado y sin pagar → "Por cobrar", con el mensaje de cobro para copiar (sin datos bancarios).
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base })
+  await fila('Marco Prueba').getByRole('button', { name: '📋' }).click()
+  const cobro = (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')
+  expect(cobro).toMatch(/Detalle \(valores netos\):\n• /)
+  expect(cobro).toMatch(/\*Total a pagar: \$226\.100\*/)
+  expect(cobro).not.toMatch(/RUT|Cta\./)
   // Paga el total desde la celda "Pagado".
   await fila('Marco Prueba').getByRole('button', { name: /^Pago de Marco Prueba/ }).click()
   await page.getByRole('menuitem', { name: /Pagó el total/ }).click()
   await expect(fila('Marco Prueba').getByRole('button', { name: 'Pago de Marco Prueba: Sí' })).toBeVisible()
-  await expect(fila('Marco Prueba').getByRole('link', { name: /Cobrar a Marco/ })).toHaveCount(0)
+  await expect(fila('Marco Prueba').getByRole('button', { name: /📋|Copiado/ })).toHaveCount(0)
 
   // ── Detalle: despacho ──
   await fila('Camila Ejemplo').getByRole('button', { name: 'Camila Ejemplo', exact: true }).click()

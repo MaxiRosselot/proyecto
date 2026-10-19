@@ -147,18 +147,20 @@ export function correoReservaConfirmada({ nombre, email, cotNum, direccion }, in
 
 // Cobro de una instalacion ya hecha: detalle de lo instalado, lo pagado y el saldo.
 // lineas: [{ nombre, monto }] en neto; totales: { subtotal, iva, total }; pago: { pagado, saldo }.
-export function mensajeCobro({ nombre, fecha }, lineas, totales, pago, linkPago) {
+// Para cobrar: el detalle de lo que se hizo y el monto final. Sin datos bancarios
+// (esos los manda el admin aparte).
+export function mensajeCobro({ nombre, fecha }, lineas, totales, pago) {
+  const descuento = lineas.reduce((s, l) => s + l.monto, 0) - totales.subtotal
   return [
     `${saludo(nombre)} Le escribimos de Repisas Don Maxi por el pago de su instalación${fecha ? ` del ${fechaLarga(fecha).toLowerCase()}` : ''} 🙌`,
     '',
-    'Detalle (neto):',
+    'Detalle (valores netos):',
     ...lineas.map(l => `• ${l.nombre}: ${pesos(l.monto)}`),
-    `Neto ${pesos(totales.subtotal)} + IVA ${pesos(totales.iva)} = *${pesos(totales.total)}*`,
-    ...(pago.pagado ? [`Pagado: ${pesos(pago.pagado)}`] : []),
-    `*Saldo a pagar: ${pesos(pago.saldo)}*`,
+    ...(descuento > 0 ? [`• Descuento: −${pesos(descuento)}`] : []),
     '',
-    `Puede transferir a ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
-    ...(linkPago ? [`o pagar en línea aquí: ${linkPago}`] : []),
+    `Neto ${pesos(totales.subtotal)} + IVA ${pesos(totales.iva)} = ${pesos(totales.total)}`,
+    ...(pago.pagado ? [`Ya pagado: ${pesos(pago.pagado)}`] : []),
+    `*Total a pagar: ${pesos(pago.saldo)}*`,
     '',
     '¡Muchas gracias!',
   ].join('\n')
