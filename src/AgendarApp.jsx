@@ -138,7 +138,7 @@ export default function AgendarApp() {
   const adicionales = useMemo(() => (cot ? conElegidos(cot.adicionales, cot.servicios, elegidos) : {}), [cot, elegidos])
   const duracion = cot ? duracionInstalacionMin(cot.repisas, adicionales) : 0
   const total = cot ? totalesCotizacion(cot.repisas, adicionales).total : 0
-  const dias = useMemo(() => (datos?.ocupados ? disponibilidadAgenda(datos.ocupados, duracion, new Date()) : []), [datos, duracion])
+  const dias = useMemo(() => (datos?.ocupados ? disponibilidadAgenda(datos.ocupados, duracion, new Date(), datos.horario || undefined) : []), [datos, duracion])
   // Si cambia la duracion (otro servicio), la hora elegida puede dejar de calzar.
   useEffect(() => {
     if (hora && !dias.some(d => d.fecha === hora.fecha && d.horas.some(h => h.inicio === hora.inicio && h.fin === hora.fin))) setHora(null)
@@ -226,7 +226,7 @@ export default function AgendarApp() {
 
       <section className="rsv-tarjeta">
         <h2><span className="rsv-paso">2</span> Elige día y hora</h2>
-        <p className="rsv-sub" data-testid="agenda-duracion">Tu instalación dura aprox. <strong>{duracionTexto(duracion)}</strong>. Lunes a viernes, entre 10:00 y 16:00.</p>
+        <p className="rsv-sub" data-testid="agenda-duracion">Tu instalación dura aprox. <strong>{duracionTexto(duracion)}</strong>. Te mostramos solo las horas que calzan con nuestra agenda.</p>
         <ElegirHora dias={dias} elegida={hora} onElegir={setHora} />
       </section>
 

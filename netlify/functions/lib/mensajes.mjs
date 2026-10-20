@@ -251,8 +251,27 @@ export function correoAgendaAdmin({ nombre, telefono, cotNum, direccion, adicion
       ...(servicios.length ? ['', 'Servicios adicionales:', ...servicios] : []),
       `Total: ${pesos(total)} con IVA`,
       '',
-      'Quedó en el Calendario y en Instalaciones. Falta confirmarle por WhatsApp.',
-      ...(linkPanel ? [linkPanel] : []),
+      'Quedó en el Calendario y en Instalaciones. Falta confirmarle por WhatsApp:',
+      '',
+      '———',
+      mensajeConfirmarInstalacion({ nombre, direccion }, instalacion),
+      '———',
+      ...(telefono ? ['', `Abrir el chat con el mensaje: ${linkWhatsapp(telefono, mensajeConfirmarInstalacion({ nombre, direccion }, instalacion))}`] : []),
+      ...(linkPanel ? ['', linkPanel] : []),
     ].join('\n'),
   }
+}
+
+// Para confirmar la instalacion con el cliente por WhatsApp (como el de las visitas): el dia
+// anterior o apenas agenda desde su link. "de mañana" si es al dia siguiente.
+export function mensajeConfirmarInstalacion({ nombre, direccion }, { fecha, inicio, fin }, ahora = new Date()) {
+  const manana = new Date(ahora.getTime() + 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }) === fecha
+  const dia = fechaLarga(fecha).replace(',', '').toLowerCase()
+  return [
+    `${saludo(nombre)} 👋 Le escribimos de Repisas Don Maxi para confirmar su instalación ${manana ? `de mañana ${dia}` : `del ${dia}`}, de ${inicio} a ${fin} hrs${direccion ? ` en ${direccion}` : ''}.`,
+    '',
+    'Por favor considere 1 hora de flexibilidad por un eventual atraso o adelanto.',
+    '',
+    '¿Nos confirma si estamos ok? Y si no puede, avísenos también para reorganizarnos e intentar ser lo más puntuales posible 🙏',
+  ].join('\n')
 }

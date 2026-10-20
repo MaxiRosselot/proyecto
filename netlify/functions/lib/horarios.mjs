@@ -31,6 +31,15 @@ export const HORARIO_POR_DEFECTO = Object.freeze({
   semanas: 4,
 })
 
+// Horario de las instalaciones (pestaña "Horarios instalaciones"): lunes a viernes de 10 a 16.
+// Se edita en Admin → Horarios → Instalaciones (cerrar un dia, dejar solo la tarde, etc.).
+export const HOJA_HORARIOS_INSTALACIONES = 'Horarios instalaciones'
+export const HORARIO_INSTALACIONES = Object.freeze({
+  semanal: Object.fromEntries([1, 2, 3, 4, 5].map(d => [d, [{ desde: '10:00', hasta: '16:00' }]])),
+  fechas: {},
+  semanas: 4,
+})
+
 export class ErrorHorario extends Error {
   constructor(mensaje) { super(mensaje); this.estado = 400 }
 }
@@ -173,10 +182,10 @@ const sinTilde = s => String(s || '').trim().toLowerCase().normalize('NFD').repl
 
 // Lee las filas tal como esten, tambien si alguien las edito a mano en la planilla.
 // Sin filas (pestaña nueva o vacia) se usa el horario por defecto.
-export function filasAHorario(filas) {
+export function filasAHorario(filas, porDefecto = HORARIO_POR_DEFECTO) {
   const datos = (filas || []).filter(f => f?.some(c => String(c ?? '').trim()))
-  if (!datos.length) return structuredClone(HORARIO_POR_DEFECTO)
-  const config = { semanal: {}, fechas: {}, semanas: HORARIO_POR_DEFECTO.semanas }
+  if (!datos.length) return structuredClone(porDefecto)
+  const config = { semanal: {}, fechas: {}, semanas: porDefecto.semanas }
   for (const [tipo, clave, desde, hasta] of datos.map(f => f.map(c => String(c ?? '').trim()))) {
     const t = sinTilde(tipo)
     if (t === 'semanas') config.semanas = Number(clave)
@@ -218,12 +227,12 @@ export function almacenHorariosSheets(sheets, spreadsheetId, hoja = HOJA_HORARIO
 
 // Horario vigente. Si la planilla tiene algo mal escrito a mano, se avisa en el log y se usa el
 // por defecto antes que dejar a los clientes sin poder agendar.
-export async function leerHorario(almacen) {
+export async function leerHorario(almacen, porDefecto = HORARIO_POR_DEFECTO) {
   const filas = await almacen.leerFilas()
-  try { return validarHorario(filasAHorario(filas)) }
+  try { return validarHorario(filasAHorario(filas, porDefecto)) }
   catch (e) {
-    console.error('Pestaña Horarios inválida, se usa el horario por defecto:', e.message)
-    return validarHorario(HORARIO_POR_DEFECTO)
+    console.error('Pestaña de horarios inválida, se usa el horario por defecto:', e.message)
+    return validarHorario(porDefecto)
   }
 }
 

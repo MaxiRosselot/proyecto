@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
+import { mensajeConfirmarInstalacion, linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
 
 test('mensaje de la cotizacion: numero, total, link al PDF y la oferta', () => {
   const texto = mensajeCotizacion({ nombre: 'Marta Díaz', cotNum: 1579, total: 303450, pdfUrl: 'https://drive.google.com/file/d/abc/view' })
@@ -29,4 +29,13 @@ test('el link abre el chat del cliente con el mensaje', () => {
   const link = linkWhatsapp('9 4451 0600', mensajeCotizacion({ nombre: 'Ana', cotNum: 2, total: 1000, pdfUrl: 'https://x.y/z' }))
   assert.match(link, /^https:\/\/wa\.me\/56944510600\?text=/)
   assert.match(decodeURIComponent(link), /https:\/\/x\.y\/z/)
+})
+
+test('el mensaje para confirmar la instalacion pide 1 hora de flexibilidad y que avise si no puede', () => {
+  const inst = { fecha: '2026-10-21', inicio: '10:00', fin: '12:30' }
+  const t = mensajeConfirmarInstalacion({ nombre: 'Paula Rojas', direccion: 'Los Leones 123' }, inst, new Date('2026-10-20T12:00:00-03:00'))
+  assert.match(t, /^¡Hola Paula! 👋 .*confirmar su instalación de mañana miércoles 21 de octubre, de 10:00 a 12:30 hrs en Los Leones 123\./)
+  assert.match(t, /1 hora de flexibilidad/)
+  assert.match(t, /si no puede, avísenos/)
+  assert.match(mensajeConfirmarInstalacion({ nombre: 'Paula' }, inst, new Date('2026-10-10T12:00:00-03:00')), /instalación del miércoles 21 de octubre/)
 })

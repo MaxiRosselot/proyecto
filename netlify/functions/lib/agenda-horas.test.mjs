@@ -25,7 +25,7 @@ test('solo horas pegadas a las 10, a las 16 o a otra instalacion', () => {
   assert.deepEqual(horasDelDia([], 360).map(h => h.inicio), ['10:00'])
 })
 
-test('lunes a viernes, el mismo dia solo hasta las 8:00', () => {
+test('lunes a viernes por defecto, el mismo dia solo hasta las 8:00, y con el horario editable', () => {
   // Martes 20 de octubre de 2026.
   const temprano = disponibilidadAgenda({}, 120, new Date('2026-10-20T07:30:00-03:00'))
   assert.equal(temprano[0].fecha, '2026-10-20')
@@ -34,6 +34,13 @@ test('lunes a viernes, el mismo dia solo hasta las 8:00', () => {
   assert.ok(tarde.every(d => ![0, 6].includes(new Date(d.fecha + 'T12:00:00Z').getUTCDay())))
   const lleno = disponibilidadAgenda({ '2026-10-21': [{ desde: 600, hasta: 960 }] }, 120, new Date('2026-10-20T09:00:00-03:00'))
   assert.equal(lleno[0].fecha, '2026-10-22')
+  // Horario editado: el miercoles 21 cerrado y el jueves 22 solo en la tarde.
+  const rango = [{ desde: '10:00', hasta: '16:00' }]
+  const horario = { semanal: { 1: rango, 2: rango, 3: rango, 4: rango, 5: rango },
+    fechas: { '2026-10-21': [], '2026-10-22': [{ desde: '13:00', hasta: '16:00' }] }, semanas: 1 }
+  const editado = disponibilidadAgenda({}, 120, new Date('2026-10-20T09:00:00-03:00'), horario)
+  assert.deepEqual(editado.slice(0, 2).map(d => [d.fecha, d.horas.map(h => h.inicio)]), [['2026-10-22', ['13:00', '14:00']], ['2026-10-23', ['10:00', '14:00']]])
+  assert.equal(editado.at(-1).fecha, '2026-10-27') // 1 semana
 })
 
 test('lo ocupado: instalaciones del calendario y ventas con fecha sin evento, menos la propia', () => {

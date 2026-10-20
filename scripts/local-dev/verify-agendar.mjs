@@ -7,6 +7,7 @@ import { chromium, devices, expect } from '@playwright/test'
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { ahoraEnZona, sumarDias, diaSemana } from '../../netlify/functions/lib/horarios.mjs'
+import { fechaLarga } from '../../netlify/functions/lib/mensajes.mjs'
 
 const base = process.env.LOCAL_PUBLIC_URL || 'http://127.0.0.1:5176'
 if (!['127.0.0.1', 'localhost'].includes(new URL(base).hostname)) throw new Error('Esta prueba solo escribe en el backend local')
@@ -40,6 +41,24 @@ try {
   await expect(admin.getByRole('button', { name: '📅 Copiar link para agendar' }).first()).toBeVisible()
   await expect(admin.getByRole('button', { name: 'Copiar link de pago' }).first()).toBeVisible()
 
+  // Horarios → Instalaciones: se cierra el primer dia habil que viene y el siguiente queda solo en la tarde.
+  const { disponibilidadAgenda } = await import('../../netlify/functions/lib/agenda-horas.mjs')
+  const [cerrado, soloTarde] = disponibilidadAgenda({}, 150, new Date()).map(d => d.fecha)
+  await admin.getByRole('navigation').getByRole('button', { name: 'Horarios', exact: true }).click()
+  await admin.getByRole('tab', { name: 'Instalaciones' }).click()
+  const editor = admin.getByTestId('horarios-instalaciones')
+  await expect(editor.getByRole('heading', { name: 'Horarios de instalaciones' })).toBeVisible()
+  await editor.getByLabel('Fecha especial').fill(cerrado)
+  await editor.getByRole('button', { name: 'Cerrar ese día' }).click()
+  await editor.getByLabel('Fecha especial').fill(soloTarde)
+  await editor.getByRole('button', { name: 'Abrir con horario' }).click()
+  await editor.locator(`[data-fecha="${soloTarde}"]`).getByLabel('Desde').selectOption('13:00')
+  await editor.getByRole('button', { name: 'Guardar cambios' }).click()
+  await expect(editor.getByRole('status')).toContainText('Horario de instalaciones guardado')
+  // Las visitas no cambian.
+  await admin.getByRole('tab', { name: 'Visitas' }).click()
+  await expect(admin.getByTestId('horarios-visitas').locator(`[data-fecha="${cerrado}"]`)).toHaveCount(0)
+
   // El cliente, en el celular.
   const cel = await browser.newPage({ ...devices['Pixel 5'] })
   cel.on('pageerror', e => errors.push(e.stack || e.message))
@@ -52,22 +71,23 @@ try {
   await cel.getByRole('checkbox', { name: 'Retiro y orden de artículos' }).check()
   await expect(cel.getByTestId('agenda-total')).toContainText('$285.600')
   await expect(cel.getByTestId('agenda-duracion')).toContainText('3 h')
-  // Solo horas pegadas: un dia libre ofrece 10:00 y 13:00 (termina a las 16:00).
+  // El dia cerrado no aparece; el de solo tarde ofrece 13:00 (pegada al inicio y al final).
+  await expect(cel.getByRole('button', { name: new RegExp(`^${fechaLarga(cerrado)} de`) })).toHaveCount(0)
   const primerDia = cel.getByTestId('dia-agenda').first()
-  await expect(primerDia.getByRole('button')).toHaveText(['10:00a 13:00', '13:00a 16:00'])
+  await expect(primerDia.getByRole('button')).toHaveText(['13:00a 16:00'])
   await cel.screenshot({ path: path.join(evidence, '01-elegir.png'), fullPage: true })
   await primerDia.getByRole('button').first().click()
   const antes = asuntos().length
   await cel.getByRole('button', { name: 'Agendar instalación' }).click()
   const listo = cel.getByTestId('agenda-lista')
-  await expect(listo).toContainText('De 10:00 a 13:00 hrs')
+  await expect(listo).toContainText('De 13:00 a 16:00 hrs')
   await expect(listo).toContainText('Te enviamos un correo')
   await expect(listo).toContainText('Te escribiremos por WhatsApp para confirmar')
   await expect(listo).toContainText('El pago es una vez terminada la instalación')
   await cel.screenshot({ path: path.join(evidence, '02-listo.png'), fullPage: true })
 
   const q = (await api('get-quotes?cotNum=' + guardada.cotNum)).quote
-  expect([q.status, q.adicionales.qty_retiro_orden, Number(q.total), q.instalacion.inicio, q.instalacion.fin, q.instalacion.agendadaPorCliente]).toEqual(['confirmada', 1, 285600, '10:00', '13:00', true])
+  expect([q.status, q.adicionales.qty_retiro_orden, Number(q.total), q.instalacion.fecha, q.instalacion.inicio, q.instalacion.fin, q.instalacion.agendadaPorCliente]).toEqual(['confirmada', 1, 285600, soloTarde, '13:00', '16:00', true])
   const nuevos = asuntos().slice(antes).join('\n')
   expect(nuevos).toMatch(/Tu instalación quedó agendada/)
   expect(nuevos).toMatch(/📅 Agendó: Paula Agenda/)
@@ -75,7 +95,7 @@ try {
   // Al volver a entrar ve su hora. Si faltan 48 h o mas, puede cambiarla.
   await cel.goto(enlace.toString())
   const actual = cel.getByTestId('agenda-actual')
-  await expect(actual).toContainText('De 10:00 a 13:00 hrs')
+  await expect(actual).toContainText('De 13:00 a 16:00 hrs')
   const hoy = ahoraEnZona().fecha
   const lejos = q.instalacion.fecha >= sumarDias(hoy, 3)
   if (lejos) {

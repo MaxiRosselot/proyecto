@@ -3,7 +3,7 @@ import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
-import { mensajeCobro, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
+import { mensajeCobro, mensajeConfirmarInstalacion, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
 import CopiarMensaje from './CopiarMensaje.jsx'
 import { textoMateriales, ventasPorInstalar } from './materiales.js'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
@@ -302,6 +302,7 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {pago.saldo > 0 && <CopiarMensaje texto={textoCobro(q)} etiqueta="📋 Copiar mensaje de cobro" />}
           {inst.fecha && <CopiarMensaje texto={mensajeInstalacion(q, inst, pago)} etiqueta="📋 Copiar mensaje de agendamiento" />}
+          {inst.fecha && inst.inicio && <CopiarMensaje texto={mensajeConfirmarInstalacion(q, inst)} etiqueta="📋 Copiar mensaje de confirmación" />}
           {inst.link && <a href={inst.link} target="_blank" rel="noreferrer" style={boton}>Ver en Calendar</a>}
           {q.pdfUrl && <a href={q.pdfUrl} target="_blank" rel="noreferrer" style={boton}>Ver PDF</a>}
           {onVerCotizacion && inst.origen !== 'excel' && <button onClick={() => onVerCotizacion(q.cotNum)} style={boton}>Ver cotización</button>}

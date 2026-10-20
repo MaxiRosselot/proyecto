@@ -15,7 +15,7 @@ import {
   listarCotizaciones, obtenerCotizacion, siguienteDisponible,
 } from '../../netlify/functions/lib/cotizaciones.mjs'
 import {
-  DURACION_MIN, aHHMM, ahoraEnZona, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario,
+  DURACION_MIN, HORARIO_INSTALACIONES, aHHMM, ahoraEnZona, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario,
 } from '../../netlify/functions/lib/horarios.mjs'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
@@ -79,6 +79,11 @@ const cotizaciones = almacenEnMemoria(db.cotizacionesFilas, filas => { db.cotiza
 const horarios = {
   async leerFilas() { return db.horariosFilas ?? null },
   async guardarFilas(filas) { db.horariosFilas = filas; saveData(db) },
+}
+// Horario de las instalaciones (pestaña "Horarios instalaciones" en produccion).
+const horariosInstalaciones = {
+  async leerFilas() { return db.horariosInstalacionesFilas ?? null },
+  async guardarFilas(filas) { db.horariosInstalacionesFilas = filas; saveData(db) },
 }
 // Hora de Chile de una visita ya agendada, como la slot_key que guarda create_event.
 function slotDeVisita(v) {
@@ -170,6 +175,7 @@ function depsReserva() {
     almacen: cotizaciones, config: configPago(), mp: mpLocal, calendar: calendarLocal, calendarId: 'repisas@donmaxi.cl',
     leerEventos: async (desde, hasta) => eventosLocales().map(ev => eventoParaVista(ev)).filter(e => e.fecha >= desde && e.fecha <= hasta),
     enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com',
+    leerHorario: () => leerHorario(horariosInstalaciones, HORARIO_INSTALACIONES),
   }
 }
 
@@ -306,7 +312,12 @@ const routes = {
   // Mismo contrato que netlify/functions/horarios.mjs
   'horarios': async (body, params, method) => {
     if (method === 'POST') {
-      const config = await guardarHorario(horarios, body)
+      const { agenda, ...horario } = body
+      const config = await guardarHorario(agenda === 'instalaciones' ? horariosInstalaciones : horarios, horario)
+      return { ok: true, config, dias: diasDisponibles(config) }
+    }
+    if (params.get('agenda') === 'instalaciones') {
+      const config = await leerHorario(horariosInstalaciones, HORARIO_INSTALACIONES)
       return { ok: true, config, dias: diasDisponibles(config) }
     }
     const config = await leerHorario(horarios)

@@ -53,6 +53,8 @@ test('agenda con un servicio: duracion, calendario, total y correos al cliente y
   assert.match(correos[0].texto, /agendar\?c=1500/)
   assert.equal(correos[1].para, 'admin@example.cl')
   assert.match(correos[1].asunto, /Agendó: Marta Díaz · Miércoles/)
+  // Trae el mensaje para confirmarle por WhatsApp, listo para copiar y con el link al chat.
+  assert.match(correos[1].texto, /Falta confirmarle por WhatsApp[\s\S]*confirmar su instalación de mañana miércoles 21 de octubre, de 12:30 a 15:30[\s\S]*wa\.me\/56977778888/)
   // Al volver a entrar ve su hora.
   const g = await leer(await atenderAgendaGet({ c: '1500', t: T }, deps))
   assert.equal(g.estado, 'agendada')

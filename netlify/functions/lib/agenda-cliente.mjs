@@ -9,6 +9,7 @@ import { ErrorCotizacion, actualizarCotizacion, listarCotizaciones, obtenerCotiz
 import {
   SERVICIOS_CLIENTE, disponibilidadAgenda, duracionInstalacionMin, ocupadosAgenda, puedeReagendar, rangoAgendaCliente
 } from './agenda-horas.mjs'
+import { HORARIO_INSTALACIONES } from './horarios.mjs'
 import { agendarInstalacion } from './instalaciones.mjs'
 import { SERVICIOS, WHATSAPP } from './marca.mjs'
 import { correoAgendaAdmin, correoAgendaCliente } from './mensajes.mjs'
@@ -59,9 +60,12 @@ export function conServiciosElegidos(adicionales = {}, elegidos = {}) {
   return siguiente
 }
 
-async function ocupadosPara(cotizacion, deps) {
+// El horario de instalaciones (Admin → Horarios → Instalaciones); sin el, lunes a viernes de 10 a 16.
+const horarioDe = async deps => (deps.leerHorario ? await deps.leerHorario() : HORARIO_INSTALACIONES)
+
+async function ocupadosPara(cotizacion, deps, horario) {
   const ahora = new Date(deps.ahora ?? Date.now())
-  const { desde, hasta } = rangoAgendaCliente(ahora)
+  const { desde, hasta } = rangoAgendaCliente(ahora, horario)
   const [eventos, { quotes }] = await Promise.all([deps.leerEventos(desde, hasta), listarCotizaciones(deps.almacen)])
   return ocupadosAgenda({ eventos, cotizaciones: quotes, excepto: { cotNum: cotizacion.cotNum, eventId: cotizacion.instalacion?.eventId } })
 }
@@ -91,7 +95,8 @@ export async function atenderAgendaGet(params, deps) {
   const ahora = new Date(deps.ahora ?? Date.now())
   const v = vista(cotizacion, ahora)
   const conAgenda = estado === 'por-agendar' || (estado === 'agendada' && v.puedeReagendar)
-  return json(200, { ok: true, estado, cotizacion: v, ocupados: conAgenda ? await ocupadosPara(cotizacion, deps) : {}, ahora: ahora.toISOString(), whatsapp: WHATSAPP })
+  const horario = conAgenda ? await horarioDe(deps) : null
+  return json(200, { ok: true, estado, cotizacion: v, horario, ocupados: conAgenda ? await ocupadosPara(cotizacion, deps, horario) : {}, ahora: ahora.toISOString(), whatsapp: WHATSAPP })
 }
 
 // POST { c, t, fecha, inicio, servicios: { retiro_orden: 1, cajas: 2, ... } } → agenda o reagenda.
@@ -118,7 +123,8 @@ async function agendarPost(body, deps) {
 
   const adicionales = conServiciosElegidos(cotizacion.adicionales || {}, body.servicios || {})
   const duracion = duracionInstalacionMin(cotizacion.repisas || [], adicionales)
-  const dias = disponibilidadAgenda(await ocupadosPara(cotizacion, deps), duracion, ahora)
+  const horario = await horarioDe(deps)
+  const dias = disponibilidadAgenda(await ocupadosPara(cotizacion, deps, horario), duracion, ahora, horario)
   const hora = dias.find(d => d.fecha === body.fecha)?.horas.find(h => h.inicio === body.inicio)
   if (!hora) falla('Ese horario ya no está disponible. Elige otro, por favor.', 409)
 

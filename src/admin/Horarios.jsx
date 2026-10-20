@@ -1,14 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, styles } from './utils.js'
 import {
-  DIAS, PASO_MIN, MAX_SEMANAS, ahoraEnZona, aHHMM, diaSemana, diasDisponibles, rangosDelDia, validarHorario,
+  DIAS, PASO_MIN, MAX_SEMANAS, ahoraEnZona, aHHMM, diaSemana, diasDisponibles, rangosDelDia, sumarDias, validarHorario,
 } from '../../netlify/functions/lib/horarios.mjs'
 
 // Horas que se pueden elegir en los selectores: de 06:00 a 23:00, cada media hora.
 const HORAS = Array.from({ length: (23 - 6) * 60 / PASO_MIN + 1 }, (_, i) => aHHMM(6 * 60 + i * PASO_MIN))
 // La semana parte el lunes, como en el calendario chileno.
 const ORDEN_SEMANA = [1, 2, 3, 4, 5, 6, 0]
-const RANGO_NUEVO = { desde: '10:00', hasta: '14:00' }
+const RANGO_VISITA = { desde: '10:00', hasta: '14:00' }
+const RANGO_INSTALACION = { desde: '10:00', hasta: '16:00' }
+// Dos agendas: las visitas (la pagina publica) y las instalaciones (el link /agendar del cliente).
+const AGENDAS = {
+  visitas: { titulo: 'Horarios de visitas', url: '', rango: RANGO_VISITA,
+    ayuda: `Define cuándo pueden agendar visitas los clientes. Las visitas parten cada ${PASO_MIN} minutos dentro de cada rango. Las visitas ya agendadas no se borran al cambiar el horario.` },
+  instalaciones: { titulo: 'Horarios de instalaciones', url: '&agenda=instalaciones', rango: RANGO_INSTALACION,
+    ayuda: 'Cuándo pueden agendar su instalación los clientes desde su link. Para un día que no trabajan, ciérralo en Fechas especiales; si tienen otra cosa en la mañana, deja ese día solo con la tarde. Las instalaciones ya agendadas no se mueven.' },
+}
 
 const capitalizar = s => s.charAt(0).toUpperCase() + s.slice(1)
 function fechaLarga(iso) {
@@ -17,7 +25,7 @@ function fechaLarga(iso) {
 }
 const textoRangos = rangos => rangos.map(r => `${r.desde}–${r.hasta}`).join(', ')
 
-function EditorRangos({ rangos, onChange }) {
+function EditorRangos({ rangos, onChange, rangoNuevo = RANGO_VISITA }) {
   const sel = { padding: '6px 8px', border: '1.5px solid ' + C.border, borderRadius: 7, fontSize: 13, fontFamily: 'inherit', background: '#FAFAFA' }
   const cambiar = (i, campo, valor) => onChange(rangos.map((r, j) => (j === i ? { ...r, [campo]: valor } : r)))
   return (
@@ -35,7 +43,7 @@ function EditorRangos({ rangos, onChange }) {
             style={{ background: 'none', border: '1.5px solid ' + C.border, borderRadius: 6, width: 28, height: 28, cursor: 'pointer', color: C.textMuted }}>x</button>
         </div>
       ))}
-      <button type="button" onClick={() => onChange([...rangos, { ...RANGO_NUEVO }])}
+      <button type="button" onClick={() => onChange([...rangos, { ...rangoNuevo }])}
         style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: C.orange, cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: 0 }}>
         + Agregar rango
       </button>
@@ -44,6 +52,9 @@ function EditorRangos({ rangos, onChange }) {
 }
 
 export default function HorariosSection() {
+  const [agenda, setAgenda]     = useState('visitas')
+  const A = AGENDAS[agenda]
+  const RANGO_NUEVO = A.rango
   const [config, setConfig]     = useState(null)
   const [guardado, setGuardado] = useState(null)   // ultima version guardada, para saber si hay cambios
   const [error, setError]       = useState('')
@@ -53,25 +64,45 @@ export default function HorariosSection() {
   const hoy = ahoraEnZona().fecha
 
   async function cargar() {
-    setError('')
+    setError(''); setMensaje(''); setConfig(null)
     try {
-      const res = await apiFetch('/.netlify/functions/horarios?config=1')
+      const res = await apiFetch('/.netlify/functions/horarios?config=1' + A.url)
       if (!res.ok) throw new Error(res.error || 'No se pudieron cargar los horarios')
       setConfig(res.config); setGuardado(JSON.stringify(res.config))
     } catch (e) { setError(e.message) }
   }
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { cargar() }, [agenda])
 
   // Vista previa con la misma funcion que usa el servidor para la pagina publica.
+  // Instalaciones: los dias abiertos con sus rangos (las horas exactas dependen de cada trabajo).
   const { previa, invalido } = useMemo(() => {
     if (!config) return { previa: [], invalido: '' }
-    try { return { previa: diasDisponibles(validarHorario(config, hoy)), invalido: '' } }
+    try {
+      const limpio = validarHorario(config, hoy)
+      if (agenda === 'visitas') return { previa: diasDisponibles(limpio), invalido: '' }
+      const dias = []
+      for (let f = hoy; f <= sumarDias(hoy, limpio.semanas * 7); f = sumarDias(f, 1)) if (rangosDelDia(limpio, f).length) dias.push({ fecha: f, horas: null })
+      return { previa: dias, invalido: '' }
+    }
     catch (e) { return { previa: [], invalido: e.message } }
-  }, [config, hoy])
+  }, [config, hoy, agenda])
+
+  const selectorAgenda = (
+    <div role="tablist" aria-label="Agenda" style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: '#EEF0F3', marginBottom: 16 }}>
+      {[['visitas', 'Visitas'], ['instalaciones', 'Instalaciones']].map(([k, n]) => (
+        <button key={k} type="button" role="tab" aria-selected={agenda === k}
+          onClick={() => { if (k !== agenda && (!config || JSON.stringify(config) === guardado || window.confirm('Hay cambios sin guardar. ¿Cambiar de agenda igual?'))) setAgenda(k) }}
+          style={{ padding: '6px 14px', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', background: agenda === k ? 'white' : 'transparent', color: agenda === k ? C.text : C.textSub, boxShadow: agenda === k ? '0 1px 3px rgba(0,0,0,.12)' : 'none' }}>
+          {n}
+        </button>
+      ))}
+    </div>
+  )
 
   if (!config) return (
     <div>
-      <h2 style={{ ...styles.sectionTitle, marginBottom: 24 }}>Horarios de visitas</h2>
+      {selectorAgenda}
+      <h2 style={{ ...styles.sectionTitle, marginBottom: 24 }}>{A.titulo}</h2>
       {error ? <div style={styles.errorBox}>{error}</div> : <div style={styles.empty}>Cargando horarios...</div>}
     </div>
   )
@@ -93,10 +124,12 @@ export default function HorariosSection() {
   async function guardar() {
     setGuardando(true); setError(''); setMensaje('')
     try {
-      const res = await apiFetch('/.netlify/functions/horarios', { method: 'POST', body: JSON.stringify(config) })
+      const res = await apiFetch('/.netlify/functions/horarios', { method: 'POST', body: JSON.stringify({ ...config, agenda }) })
       if (!res.ok) throw new Error(res.error || 'No se pudo guardar')
       setConfig(res.config); setGuardado(JSON.stringify(res.config))
-      setMensaje(`Horarios guardados. Los clientes ya ven ${res.dias.length} ${res.dias.length === 1 ? 'fecha disponible' : 'fechas disponibles'}.`)
+      setMensaje(agenda === 'visitas'
+        ? `Horarios guardados. Los clientes ya ven ${res.dias.length} ${res.dias.length === 1 ? 'fecha disponible' : 'fechas disponibles'}.`
+        : 'Horario de instalaciones guardado. El link para agendar ya lo usa.')
     } catch (e) { setError(e.message) }
     finally { setGuardando(false) }
   }
@@ -104,18 +137,16 @@ export default function HorariosSection() {
   const fila = { display: 'grid', gridTemplateColumns: '130px 1fr', gap: 12, alignItems: 'start', padding: '12px 0', borderTop: '1px solid ' + C.border }
 
   return (
-    <div>
+    <div data-testid={`horarios-${agenda}`}>
+      {selectorAgenda}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 10, flexWrap: 'wrap' }}>
-        <h2 style={styles.sectionTitle}>Horarios de visitas</h2>
+        <h2 style={styles.sectionTitle}>{A.titulo}</h2>
         <button onClick={guardar} disabled={!hayCambios || guardando || Boolean(invalido)}
           style={{ ...styles.btnPrimary, opacity: !hayCambios || guardando || invalido ? .55 : 1 }}>
           {guardando ? 'Guardando...' : hayCambios ? 'Guardar cambios' : 'Sin cambios'}
         </button>
       </div>
-      <p style={{ color: C.textSub, fontSize: 13, marginTop: 0, marginBottom: 20 }}>
-        Define cuándo pueden agendar los clientes. Las visitas parten cada {PASO_MIN} minutos dentro de cada rango.
-        Las visitas ya agendadas no se borran al cambiar el horario.
-      </p>
+      <p style={{ color: C.textSub, fontSize: 13, marginTop: 0, marginBottom: 20 }}>{A.ayuda}</p>
 
       {error    && <div style={styles.errorBox}>{error}</div>}
       {invalido && <div style={styles.errorBox}>{invalido}</div>}
@@ -135,7 +166,7 @@ export default function HorariosSection() {
                 {capitalizar(DIAS[d])}
               </label>
               {rangos.length
-                ? <EditorRangos rangos={rangos} onChange={r => setSemanal(d, r)} />
+                ? <EditorRangos rangos={rangos} rangoNuevo={RANGO_NUEVO} onChange={r => setSemanal(d, r)} />
                 : <span style={{ fontSize: 13, color: C.textMuted, paddingTop: 6 }}>Cerrado</span>}
             </div>
           )
@@ -168,7 +199,7 @@ export default function HorariosSection() {
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 {rangos.length
-                  ? <EditorRangos rangos={rangos} onChange={r => setFecha(f, r)} />
+                  ? <EditorRangos rangos={rangos} rangoNuevo={RANGO_NUEVO} onChange={r => setFecha(f, r)} />
                   : <span style={styles.badge(C.red)}>Cerrado</span>}
                 <button type="button" onClick={() => quitarFecha(f)}
                   style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
@@ -198,7 +229,7 @@ export default function HorariosSection() {
                 <div key={d.fecha} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0', borderTop: '1px solid ' + C.border }}>
                   <span style={{ fontWeight: 600 }}>{fechaLarga(d.fecha)}</span>
                   <span style={{ color: C.textSub }}>
-                    {textoRangos(rangosDelDia(config, d.fecha))} · {d.horas.length} {d.horas.length === 1 ? 'horario' : 'horarios'}
+                    {textoRangos(rangosDelDia(config, d.fecha))}{d.horas ? ` · ${d.horas.length} ${d.horas.length === 1 ? 'horario' : 'horarios'}` : ''}
                   </span>
                 </div>
               ))}

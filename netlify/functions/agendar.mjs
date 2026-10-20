@@ -2,7 +2,9 @@
 //   GET  ?c=&t=  → estado de su agendamiento, su cotizacion y lo ocupado de la agenda
 //   POST { c, t, fecha, inicio, servicios }  → agenda o reagenda (hasta 48 h antes)
 // Las reglas viven en lib/agenda-horas.mjs y lib/agenda-cliente.mjs.
+import { google } from 'googleapis'
 import { atenderAgendaGet, atenderAgendaPost } from './lib/agenda-cliente.mjs'
+import { HOJA_HORARIOS_INSTALACIONES, HORARIO_INSTALACIONES, almacenHorariosSheets, leerHorario } from './lib/horarios.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
 import { configPago } from './lib/mercadopago.mjs'
 
@@ -12,7 +14,11 @@ export async function handler(event) {
   const config = configPago()
   if (!config) return json(503, { ok: false, error: 'El agendamiento en línea no está configurado' })
   try {
-    const deps = { ...serviciosGoogle(), config }
+    // El horario de instalaciones que se edita en Admin → Horarios → Instalaciones.
+    const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+    auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
+    const horarios = almacenHorariosSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID, HOJA_HORARIOS_INSTALACIONES)
+    const deps = { ...serviciosGoogle(), config, leerHorario: () => leerHorario(horarios, HORARIO_INSTALACIONES) }
     if (event.httpMethod === 'GET') return await atenderAgendaGet(event.queryStringParameters || {}, deps)
     if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Método no permitido' })
     let body
