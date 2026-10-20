@@ -256,8 +256,8 @@ const OPCIONES = [
     puntos: ['Graba tu bodega desde la puerta', 'Suma las medidas si las tienes', 'Te enviamos la cotización a tu correo'] },
   { clave: 'cotizar-auto', titulo: 'Cotización automática', sello: 'Precio al instante', destacada: true, a: '/cotiza', boton: 'Cotizar ahora',
     puntos: ['Dibuja tu bodega con sus medidas', 'Elige tus repisas y míralas en 3D', 'Ves el precio al instante y te llega el PDF'] },
-  { clave: 'cotizar-visita', titulo: 'Agenda una visita', sello: 'Medimos por ti', a: '/visita', boton: 'Agendar visita',
-    puntos: ['Un especialista toma las medidas (15 min)', 'Te asesora con el diseño', 'Te enviamos la cotización después'] },
+  { clave: 'cotizar-visita', titulo: 'Agenda una visita', sello: 'Sin costo · domingos', a: '/visita', boton: 'Agendar visita',
+    puntos: ['Visita sin costo, los domingos', 'Un especialista toma las medidas (15 min)', 'Te asesora con el diseño', 'Te enviamos la cotización después'] },
 ]
 
 function Cotizar({ fotos }) {

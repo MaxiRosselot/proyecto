@@ -36,6 +36,7 @@ export const PREGUNTAS = [
     grupo: 'Cotización',
     preguntas: [
       ['¿Cómo cotizo?', 'De tres formas: con la cotización automática (dibujas tu bodega y ves el precio al instante), enviándonos fotos o un video, o agendando una visita para que un especialista tome las medidas.'],
+      ['¿La visita tiene costo?', 'No. Las visitas son sin costo y las hacemos los domingos: un especialista toma las medidas y te enviamos la cotización.'],
       ['¿Qué medidas necesito para cotizar en línea?', 'El largo de cada muro, el alto de la bodega y dónde está la puerta. Si no las tienes, envíanos fotos o un video desde la puerta y te ayudamos.'],
       ['¿Los precios incluyen IVA?', 'La cotización muestra el neto, el IVA y el total. El total ya incluye la instalación.'],
       ['¿Cuánto se demoran en enviarme la cotización?', 'La cotización automática te llega al correo al instante. Si nos envías fotos, te la enviamos apenas las revisemos; si nos falta alguna medida, te escribimos por WhatsApp.'],
