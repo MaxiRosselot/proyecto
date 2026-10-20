@@ -26,9 +26,20 @@ try {
   // ── Paso 1: medidas y puerta ──
   await expect(cfg.getByRole('heading', { name: 'Mide tu bodega' })).toBeVisible({ timeout: 30000 })
   const medida = etiqueta => cfg.getByLabel(new RegExp(`^${etiqueta}`))
-  await medida('A Muro').fill('400')
-  await medida('B · E').fill('220')
-  await medida('Alto').fill('260')
+  // Las medidas se aplican al salir del campo (o con Enter): mientras se escribe, el plano no cambia.
+  const escribir = async (etiqueta, valor) => { await medida(etiqueta).fill(valor); await medida(etiqueta).press('Enter') }
+  const cotaA = cfg.locator('svg.cli-planta text', { hasText: /^A · / })
+  const antesA = await cotaA.textContent()
+  await medida('A Muro').fill('4')
+  await expect(cotaA).toHaveText(antesA)
+  await medida('A Muro').press('Enter')
+  await expect(cfg.getByText(/muro A \(fondo\) debe medir entre 80/)).toBeVisible()
+  await escribir('A Muro', '400')
+  await expect(cfg.locator('svg.cli-planta text', { hasText: 'A · 400 cm' })).toHaveCount(1)
+  await escribir('B · E', '70')
+  await expect(cfg.getByText(/muros B y E deben medir entre 80/)).toBeVisible()
+  await escribir('B · E', '220')
+  await escribir('Alto', '260')
   await expect(medida('Ancho de la puerta')).toHaveValue('80')
   const posicion = cfg.getByLabel('Posición de la puerta, desde la esquina izquierda')
   await posicion.fill('160')
@@ -41,10 +52,10 @@ try {
   await expect(cfg.locator('svg.cli-planta text', { hasText: /^D ·/ })).toHaveCount(0)
   await expect(cfg.locator('svg.cli-planta text', { hasText: 'C · 320 cm' })).toHaveCount(1)
   // Una puerta imposible avisa y no deja seguir.
-  await medida('Ancho de la puerta').fill('500')
+  await escribir('Ancho de la puerta', '500')
   await expect(cfg.getByText(/ancho de la puerta debe estar/)).toBeVisible()
   await expect(cfg.getByRole('button', { name: 'Ver mis repisas' })).toBeDisabled()
-  await medida('Ancho de la puerta').fill('80')
+  await escribir('Ancho de la puerta', '80')
   await posicion.fill('160')
   await cfg.getByRole('button', { name: 'Ver mis repisas' }).click()
 
