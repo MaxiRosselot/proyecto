@@ -342,7 +342,11 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       const mismoRango = x => x.kind !== 'rack' && filaPrecioRepisa({ largoM: x.l, profM: x.p, altoM: x.a }, tabla) === guardada
       setRepisas(prev => prev.map(x => (x.id !== r.id && mismoRango(x) && x.v === fila.precio ? { ...x, v: r.v } : x)))
       setMensajePrecio({ ok: true, texto: `✓ Precio guardado en la planilla: ${fmt(r.v)} para repisas de ${fila.alto} cm de alto, ${fila.prof + 8} cm de profundidad y ${fila.desde}–${fila.hasta} cm de largo. Se usa desde ya en todas las cotizaciones nuevas, también en /cotiza.` })
-    } catch (error) { setMensajePrecio({ ok: false, texto: error.message }) }
+    } catch (error) {
+      setMensajePrecio({ ok: false, texto: error.message })
+      // Que no pase desapercibido: el precio NO quedo guardado.
+      window.alert('No se guardó el precio en la tabla.\n\n' + error.message)
+    }
     finally { setActualizandoPrecio(false) }
   }
 
@@ -512,7 +516,11 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
 
       setAutoSaved(true)
       if (avisoPdf) setError(avisoPdf)
-    } catch (e) { setError(e.message) }
+    } catch (e) {
+      setError(e.message)
+      // Que no pase desapercibido: la cotizacion NO quedo guardada.
+      window.alert('La cotización no se guardó.\n\n' + e.message)
+    }
     finally { setGenerating(false) }
   }
 
