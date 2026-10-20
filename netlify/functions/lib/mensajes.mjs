@@ -272,6 +272,6 @@ export function mensajeConfirmarInstalacion({ nombre, direccion }, { fecha, inic
     '',
     'Por favor considere 1 hora de flexibilidad por un eventual atraso o adelanto.',
     '',
-    '¿Nos confirma si estamos ok? Y si no puede, avísenos también para reorganizarnos e intentar ser lo más puntuales posible 🙏',
+    '¿Nos confirma si estamos ok? 🙏',
   ].join('\n')
 }

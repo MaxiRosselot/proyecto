@@ -96,3 +96,15 @@ body:has(.rsv){background:var(--fondo, #FAF8F5)}
 .agd-pasos{list-style:none;padding:0;margin:14px 0 6px;display:grid;gap:8px;text-align:left;font-size:14px}
 .agd-pasos li{padding:10px 12px;border-radius:12px;background:var(--fondo)}
 .agd-aviso{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;font-size:13.5px}
+/* Dibujo isometrico de la bodega en /agendar, con un emoji por servicio sumado */
+.agd-dibujo{position:relative;margin:4px auto 14px;max-width:300px;padding:14px;border-radius:22px;background:radial-gradient(circle at 50% 40%,#fff 0,var(--acento-suave) 75%);border:1.5px solid var(--borde)}
+.agd-dibujo img{display:block;width:100%;aspect-ratio:1;object-fit:contain;mix-blend-mode:multiply}
+.agd-dibujo-respaldo{display:grid;place-items:center;aspect-ratio:1}
+.agd-repisa-iso{width:88%;height:auto;filter:drop-shadow(0 10px 14px rgba(122,82,48,.18))}
+.agd-dibujo figcaption{text-align:center;font-size:12.5px;font-weight:700;color:var(--suave);margin-top:6px}
+.agd-emoji{position:absolute;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#fff;box-shadow:0 6px 16px rgba(0,0,0,.14);font-size:22px;animation:agd-pop .35s cubic-bezier(.3,1.6,.5,1)}
+.agd-emoji small{position:absolute;right:-4px;bottom:-4px;min-width:20px;padding:1px 5px;border-radius:99px;background:var(--acento);color:#fff;font-size:11px;font-weight:800}
+.agd-emoji.arriba-izq{top:10px;left:10px}.agd-emoji.arriba-der{top:10px;right:10px}
+.agd-emoji.abajo-izq{bottom:44px;left:10px}.agd-emoji.abajo-der{bottom:44px;right:10px}
+@keyframes agd-pop{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.agd-emoji{animation:none}}

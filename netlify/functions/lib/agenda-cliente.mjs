@@ -82,6 +82,8 @@ function vista(cotizacion, ahora) {
     servicios: serviciosDe(cotizacion.adicionales || {}),
     instalacion: i?.fecha ? { fecha: i.fecha, inicio: i.inicio, fin: i.fin } : null,
     puedeReagendar: puedeReagendar(i, ahora),
+    // Para dibujar su bodega en isometrica en la pagina (el mismo modelo del PDF).
+    proyecto3d: cotizacion.proyecto3d || null,
   }
 }
 

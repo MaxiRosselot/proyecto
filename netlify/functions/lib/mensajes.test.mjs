@@ -36,6 +36,7 @@ test('el mensaje para confirmar la instalacion pide 1 hora de flexibilidad y que
   const t = mensajeConfirmarInstalacion({ nombre: 'Paula Rojas', direccion: 'Los Leones 123' }, inst, new Date('2026-10-20T12:00:00-03:00'))
   assert.match(t, /^¡Hola Paula! 👋 .*confirmar su instalación de mañana miércoles 21 de octubre, de 10:00 a 12:30 hrs en Los Leones 123\./)
   assert.match(t, /1 hora de flexibilidad/)
-  assert.match(t, /si no puede, avísenos/)
+  assert.match(t, /¿Nos confirma si estamos ok\? 🙏$/)
+  assert.doesNotMatch(t, /si no puede/)
   assert.match(mensajeConfirmarInstalacion({ nombre: 'Paula' }, inst, new Date('2026-10-10T12:00:00-03:00')), /instalación del miércoles 21 de octubre/)
 })

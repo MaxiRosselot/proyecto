@@ -7,6 +7,9 @@ import './reserva.css'
 // se coordina por WhatsApp). Puede sumar servicios adicionales, y si vuelve a entrar ve su hora y
 // puede reagendar hasta 48 h antes. Reglas: netlify/functions/lib/agenda-horas.mjs y agenda-cliente.mjs.
 const API = '/.netlify/functions/agendar'
+const URL_3D = (import.meta.env.VITE_REPISAS_3D_URL || window.location.origin).replace(/\/$/, '')
+const ORIGEN_3D = new URL(URL_3D).origin
+const PROTOCOLO = '1'
 const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 const soloDigitos = s => String(s || '').replace(/\D/g, '')
 const fechaUTC = iso => new Date(iso + 'T12:00:00Z')
@@ -29,6 +32,96 @@ function WhatsApp({ whatsapp, cotNum, texto = 'Escríbenos por WhatsApp', mensaj
   if (!whatsapp) return null
   const m = mensaje || `Hola, tengo una consulta sobre la instalación de la cotización N° ${cotNum}`
   return <a className="rsv-boton whatsapp" href={`https://wa.me/${soloDigitos(whatsapp)}?text=${encodeURIComponent(m)}`} target="_blank" rel="noreferrer">{texto}</a>
+}
+
+function bytesADataUrl(buffer) {
+  const bytes = new Uint8Array(buffer)
+  let binario = ''
+  for (let i = 0; i < bytes.length; i += 8192) binario += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192))
+  return 'data:image/png;base64,' + btoa(binario)
+}
+
+// La isometrica de su bodega, dibujada en un visor 3D fuera de pantalla (como regenerarPdf.js).
+// Si no hay modelo o el visor falla, queda el dibujo de respaldo.
+function useIsometrica(proyecto) {
+  const [imagen, setImagen] = useState(null)
+  useEffect(() => {
+    if (!proyecto) return
+    const url = new URL('/embed', URL_3D)
+    url.searchParams.set('mode', 'quote')
+    url.searchParams.set('parentOrigin', window.location.origin)
+    url.searchParams.set('protocolVersion', PROTOCOLO)
+    const frame = document.createElement('iframe')
+    frame.src = url.toString()
+    frame.title = 'Dibujo de tu bodega'
+    frame.setAttribute('aria-hidden', 'true')
+    frame.tabIndex = -1
+    Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: '700px', height: '700px', border: '0' })
+    document.body.appendChild(frame)
+    const exportId = crypto.randomUUID()
+    const enviar = (type, payload, requestId = crypto.randomUUID()) =>
+      frame.contentWindow?.postMessage({ type, version: PROTOCOLO, requestId, payload }, ORIGEN_3D)
+    function terminar() { clearTimeout(reloj); window.removeEventListener('message', escuchar); frame.remove() }
+    function escuchar(event) {
+      if (event.origin !== ORIGEN_3D || event.source !== frame.contentWindow || event.data?.version !== PROTOCOLO) return
+      const msg = event.data
+      if (msg.type === 'repisas:ready') enviar('repisas:load-project', { project: proyecto })
+      if (msg.type === 'repisas:project-loaded') setTimeout(() => enviar('repisas:export-request', { kind: 'quote-views', views: [{ view: 'isometric', width: 640, height: 640 }] }, exportId), 400)
+      if (msg.type === 'repisas:export-complete' && msg.requestId === exportId) {
+        const img = msg.payload?.images?.find(i => i.view === 'isometric')
+        if (img) setImagen(bytesADataUrl(img.bytes))
+        terminar()
+      }
+      if (msg.type === 'repisas:error' || msg.type === 'repisas:project-invalid') terminar()
+    }
+    const reloj = setTimeout(terminar, 40000)
+    window.addEventListener('message', escuchar)
+    return terminar
+  }, [proyecto])
+  return imagen
+}
+
+// Un emoji por cada servicio sumado, flotando alrededor del dibujo.
+const EMOJIS = { retiro_orden: '🧹', retiro_basura: '🗑️', cajas: '📦', bici: '🚲' }
+const LUGARES = ['arriba-izq', 'arriba-der', 'abajo-izq', 'abajo-der']
+
+// Respaldo sin modelo 3D: una repisa de 4 niveles en isometrica (x a lo largo, y al fondo, z hacia arriba).
+const iso = (x, y, z) => `${(92 + (x - y) * 0.866 * 26).toFixed(1)},${(128 + (x + y) * 0.5 * 26 - z * 26).toFixed(1)}`
+const cara = (...p) => p.map(q => iso(...q)).join(' ')
+function RepisaIso() {
+  const L = 4, F = 1.5, niveles = [0.25, 1.4, 2.55, 3.7]
+  const pata = (x, y) => <polygon key={`p${x}${y}`} points={cara([x, y, 0], [x + .12, y, 0], [x + .12, y, 3.8], [x, y, 3.8])} fill="#7A5230" />
+  return (
+    <svg viewBox="0 0 240 230" role="img" aria-label="Repisa de madera a medida" className="agd-repisa-iso">
+      <polygon points={cara([0, 0, 0], [L, 0, 0], [L, F, 0], [0, F, 0])} fill="rgba(0,0,0,.07)" />
+      {pata(0, F)}{pata(L / 2, F)}
+      {niveles.map(z => (
+        <g key={z}>
+          <polygon points={cara([0, 0, z], [L, 0, z], [L, F, z], [0, F, z])} fill="#E2B373" />
+          <polygon points={cara([0, F, z], [L, F, z], [L, F, z - .14], [0, F, z - .14])} fill="#B9844A" />
+          <polygon points={cara([L, 0, z], [L, F, z], [L, F, z - .14], [L, 0, z - .14])} fill="#9C6B3A" />
+        </g>
+      ))}
+      {pata(0, 0)}{pata(L / 2, 0)}{pata(L - .12, F)}{pata(L - .12, 0)}
+    </svg>
+  )
+}
+
+function Dibujo({ imagen, servicios, elegidos }) {
+  const activos = servicios.map(s => ({ ...s, n: elegidos[s.clave] ?? s.cantidad })).filter(s => s.n > 0 && EMOJIS[s.clave])
+  return (
+    <figure className="agd-dibujo" data-testid="agenda-dibujo">
+      {imagen
+        ? <img src={imagen} alt="Tu bodega con las repisas, en vista isométrica" />
+        : <div className="agd-dibujo-respaldo"><RepisaIso /></div>}
+      {activos.map((s, i) => (
+        <span key={s.clave} className={`agd-emoji ${LUGARES[i % LUGARES.length]}`} title={s.nombre} aria-label={s.nombre} role="img">
+          {EMOJIS[s.clave]}{s.porCantidad && s.n > 1 && <small>×{s.n}</small>}
+        </span>
+      ))}
+      <figcaption>{imagen ? 'Así quedará tu bodega' : 'Tus repisas a medida'}{activos.length ? ' + ' + activos.map(s => s.nombre.toLowerCase()).join(', ') : ''}</figcaption>
+    </figure>
+  )
 }
 
 // Los servicios con lo que eligio el cliente, igual que el servidor (agenda-cliente.mjs).
@@ -135,6 +228,7 @@ export default function AgendarApp() {
   useEffect(() => { cargar() }, [cargar])
 
   const cot = datos?.cotizacion
+  const isometrica = useIsometrica(cot?.proyecto3d)
   const adicionales = useMemo(() => (cot ? conElegidos(cot.adicionales, cot.servicios, elegidos) : {}), [cot, elegidos])
   const duracion = cot ? duracionInstalacionMin(cot.repisas, adicionales) : 0
   const total = cot ? totalesCotizacion(cot.repisas, adicionales).total : 0
@@ -219,6 +313,7 @@ export default function AgendarApp() {
       <section className="rsv-tarjeta">
         <h2><span className="rsv-paso">1</span> ¿Agregamos algo?</h2>
         <p className="rsv-sub">Servicios opcionales para el día de la instalación.</p>
+        <Dibujo imagen={isometrica} servicios={cot.servicios} elegidos={elegidos} />
         <Servicios servicios={cot.servicios} elegidos={elegidos} onCambio={(clave, n) => setElegidos(e => ({ ...e, [clave]: n }))} />
         <div className="rsv-resumen" data-testid="agenda-total"><span>Total con IVA</span><strong>{pesos(total)}</strong></div>
         <p className="rsv-sub" style={{ margin: '8px 0 0' }}>Se paga una vez terminada la instalación.</p>
