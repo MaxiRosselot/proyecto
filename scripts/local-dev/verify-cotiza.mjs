@@ -120,9 +120,9 @@ try {
     return new TextDecoder().decode((await r.arrayBuffer()).slice(0, 4))
   })
   expect(pdfVisto).toBe('%PDF')
-  await expect(page.getByText('10% de descuento pagando por transferencia')).toBeVisible()
-  // El link de pago es el de esta cotizacion (firmado), no el link fijo.
-  await expect(page.getByRole('link', { name: 'Agendar y pagar mi instalación' })).toHaveAttribute('href', new RegExp(`/reserva\\?c=${numero}&t=`))
+  await expect(page.getByText('5% de descuento pagando por transferencia')).toBeVisible()
+  // Con la reserva apagada (como en produccion) el boton solo paga, con el link fijo de Mercado Pago.
+  await expect(page.getByRole('link', { name: 'Pagar en línea' })).toHaveAttribute('href', 'https://link.mercadopago.cl/repisasdonmaxi')
   await expect(page.getByRole('link', { name: 'Aceptar por WhatsApp' })).toHaveAttribute('href', new RegExp(`wa\\.me/56951020367\\?text=.*${numero}`))
   await expect(page.getByText(/visita/i).filter({ visible: true })).toHaveCount(0)
   await page.getByText('Pagar por transferencia').click()

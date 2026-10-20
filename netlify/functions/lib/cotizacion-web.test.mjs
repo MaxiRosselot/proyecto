@@ -72,11 +72,11 @@ test('crea la cotizacion con su modelo, sube el PDF y la envia al cliente con co
   assert.match(correos[0].asunto, /N° 1421/)
   assert.match(correos[0].texto, /\$238\.000/)
   // Empuja a cerrar: descuento por transferencia, link para agendar y pagar, y WhatsApp; nada de visita.
-  assert.match(correos[0].texto, /Paga por transferencia y obtén 10% de descuento/)
+  assert.match(correos[0].texto, /Paga por transferencia y obtén 5% de descuento/)
   assert.match(correos[0].texto, /link\.mercadopago\.cl/)
   assert.match(correos[0].texto, /wa\.me\/56951020367\?text=/)
   assert.doesNotMatch(correos[0].texto, /visita/i)
-  assert.deepEqual(r.oferta, { descuento: 10, medio: 'transferencia' })
+  assert.deepEqual(r.oferta, { descuento: 5, medio: 'transferencia' })
   assert.equal(r.pago.link, 'https://link.mercadopago.cl/repisasdonmaxi')
   assert.equal(correos[0].adjuntos[0].nombre, 'Cotizacion 1421 - Repisas Don Maxi.pdf')
   assert.equal(correos[1].responderA, 'ana@example.com')

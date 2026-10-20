@@ -39,11 +39,11 @@ test('el link va firmado y no sirve para otra cotizacion', () => {
   assert.ok(!firmaValida('1500', 'x', CONFIG.secreto))
 })
 
-test('la transferencia lleva el 10% de descuento; Mercado Pago no', async () => {
+test('la transferencia lleva el 5% de descuento; Mercado Pago no', async () => {
   const q = await obtenerCotizacion(await conCotizacion(), 1500)
   const transferencia = opcionesDePago(q, 'transferencia')
-  assert.equal(transferencia.descuento, 10)
-  assert.deepEqual(transferencia.opciones.map(o => [o.id, o.monto]), [['total', 107100], ['abono', 53550]])
+  assert.equal(transferencia.descuento, 5)
+  assert.deepEqual(transferencia.opciones.map(o => [o.id, o.monto]), [['total', 113050], ['abono', 56525]])
   const mp = opcionesDePago(q, 'mercadopago')
   assert.equal(mp.descuento, 0)
   assert.deepEqual(mp.opciones.map(o => [o.id, o.monto]), [['total', 119000], ['abono', 59500]])

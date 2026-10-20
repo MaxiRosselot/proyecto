@@ -7,7 +7,7 @@ test('mensaje de la cotizacion: numero, total, link al PDF y la oferta', () => {
   assert.match(texto, /^¡Hola Marta! Le envío su cotización N° 1579/)
   assert.match(texto, /Total: \$303\.450 con IVA incluido\./)
   assert.match(texto, /Puede verla aquí: https:\/\/drive\.google\.com\/file\/d\/abc\/view/)
-  assert.match(texto, /Si paga por transferencia, tiene un 10% de descuento\./)
+  assert.match(texto, /Si paga por transferencia, tiene un 5% de descuento\./)
 })
 
 test('con su link el mensaje invita a elegir el dia y pagar', () => {

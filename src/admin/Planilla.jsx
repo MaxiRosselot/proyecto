@@ -5,6 +5,7 @@ import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
 import { mensajeCobro, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
 import CopiarMensaje from './CopiarMensaje.jsx'
+import { textoMateriales, ventasPorInstalar } from './materiales.js'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { PagosCotizacion } from './PagosCotizacion.jsx'
@@ -387,6 +388,33 @@ const cumple = (f, filtro) => ({
   todas: true, cobrar: f.porCobrar, documentos: porEmitir(f.documento), notas: Boolean(f.inst.nota), pendientes: !f.instalada && Boolean(f.fecha), sinfecha: !f.fecha,
 }[filtro])
 
+// Recuento de terciado y laterales de las instalaciones que vienen, para comprar y fabricar.
+function MaterialesProximos({ quotes, hoy, onCerrar }) {
+  const [dias, setDias] = useState(7)
+  const hasta = dias ? sumarDias(hoy, dias - 1) : null
+  const ventas = ventasPorInstalar(quotes, hoy, hasta)
+  const texto = textoMateriales(ventas)
+  const opcion = activo => ({ padding: '5px 11px', borderRadius: 99, cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', border: '1.5px solid ' + (activo ? C.orange : C.border), background: activo ? C.orangeLight : 'white', color: activo ? C.orangeDark : C.textSub })
+  return (
+    <div data-testid="materiales-proximos" style={{ ...styles.card, marginBottom: 12, padding: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <strong style={{ fontSize: 14 }}>🪵 Materiales de las próximas instalaciones</strong>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {[[7, 'Próximos 7 días'], [14, '14 días'], [0, 'Todas']].map(([n, nombre]) => (
+            <button key={n} type="button" aria-pressed={dias === n} onClick={() => setDias(n)} style={opcion(dias === n)}>{nombre}</button>
+          ))}
+          <button type="button" onClick={onCerrar} aria-label="Cerrar materiales" style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: C.textMuted }}>×</button>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>
+        {ventas.length} {ventas.length === 1 ? 'instalación' : 'instalaciones'} por hacer · cubiertas: largo × fondo útil (profundidad − 8 cm), una por nivel · laterales: alto × profundidad, 2 por módulo y 1 al centro sobre 110 cm.
+      </div>
+      <pre data-testid="materiales-texto" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 12.5, lineHeight: 1.5, background: '#FAFAFA', border: '1px solid ' + C.border, borderRadius: 8, padding: '10px 12px', margin: '0 0 10px', maxHeight: 360, overflow: 'auto' }}>{texto}</pre>
+      {ventas.length > 0 && <CopiarMensaje texto={texto} etiqueta="📋 Copiar lista para el maestro" compacto />}
+    </div>
+  )
+}
+
 export default function PlanillaSection({ onVerCotizacion }) {
   const hoy = ahoraEnZona().fecha
   const [movil, setMovil] = useState(() => window.innerWidth < 900)
@@ -402,6 +430,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
   const [detalle, setDetalle] = useState(null)
   const [nueva, setNueva] = useState(false)
   const [importar, setImportar] = useState(false)
+  const [materiales, setMateriales] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -485,9 +514,12 @@ export default function PlanillaSection({ onVerCotizacion }) {
             {[['semana', 'Semana'], ['mes', 'Mes'], ['todo', 'Todo']].map(([k, n]) => <button key={k} role="tab" aria-selected={periodo === k} onClick={() => setPeriodo(k)} style={segmento(periodo === k)}>{n}</button>)}
           </div>
           <button onClick={() => setNueva(v => !v)} style={{ ...styles.btnPrimary, fontSize: 12.5, padding: '8px 14px' }}>+ Nueva instalación</button>
+          <button onClick={() => setMateriales(v => !v)} aria-pressed={materiales} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>🪵 Materiales</button>
           <button onClick={() => setImportar(true)} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>Importar Excel</button>
         </div>
       </div>
+
+      {materiales && <MaterialesProximos quotes={quotes} hoy={hoy} onCerrar={() => setMateriales(false)} />}
 
       {nueva && <NuevaInstalacion onCrear={crear} onCancelar={() => setNueva(false)} />}
 

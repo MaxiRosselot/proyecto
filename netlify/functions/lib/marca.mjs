@@ -5,7 +5,7 @@ export const CONDICIONES = 'Puede abonar un 50% antes de la instalación, o paga
 // Descuento por pagar con transferencia: Mercado Pago cobra comision, la transferencia no.
 // Lo muestran el PDF, /cotiza, el correo, WhatsApp y la pagina de reserva; se aplica al confirmar
 // el primer pago por transferencia (si la cotizacion no tiene ya otro descuento).
-export const OFERTA = { descuento: 10, medio: 'transferencia' };
+export const OFERTA = { descuento: 5, medio: 'transferencia' };
 export const TEXTO_OFERTA = `Paga por transferencia y obtén ${OFERTA.descuento}% de descuento`;
 export const WHATSAPP = '+56951020367';
 

@@ -179,6 +179,7 @@ export default function CotizaApp() {
   if (resultado) {
     const { cotNum, total, oferta, pago, whatsapp, pdfDisponible } = resultado
     const mensaje = `Hola, quiero aceptar la cotización N° ${cotNum} por ${pesos(total)}`
+    const conReserva = /\/reserva\?/.test(pago.link || '')
     return (
       <div className="ctz">
         <Encabezado titulo="¡Tu cotización está lista!" />
@@ -198,11 +199,12 @@ export default function CotizaApp() {
 
           <div className="ctz-oferta">
             <strong>{oferta.descuento}% de descuento pagando por transferencia</strong>
-            <span>Elige el día de tu instalación y reserva en un par de minutos</span>
+            <span>{conReserva ? 'Elige el día de tu instalación y reserva en un par de minutos' : 'O paga en línea con débito o crédito'}</span>
           </div>
 
           <div className="ctz-acciones">
-            <a className="ctz-boton" href={pago.link}>Agendar y pagar mi instalación</a>
+            {/* Con la reserva apagada el link es el fijo de Mercado Pago: solo paga, no agenda. */}
+            <a className="ctz-boton" href={pago.link}>{conReserva ? 'Agendar y pagar mi instalación' : 'Pagar en línea'}</a>
             <a className="ctz-boton whatsapp" href={`https://wa.me/${soloDigitos(whatsapp)}?text=${encodeURIComponent(mensaje)}`} target="_blank" rel="noreferrer">Aceptar por WhatsApp</a>
           </div>
           <p className="ctz-nota">Puedes abonar el 50% para reservar y pagar el resto al terminar. Transferencia, o débito y crédito con Mercado Pago.</p>

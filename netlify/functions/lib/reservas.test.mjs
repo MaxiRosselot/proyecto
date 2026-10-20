@@ -60,7 +60,7 @@ test('las reservas de otros clientes ocupan su bloque mientras siguen vigentes',
 test('el monto lo calcula el servidor y un bloque tomado se rechaza', async () => {
   const almacen = await conCotizacion()
   const { reserva } = await solicitarReserva(almacen, { cotNum: 1500, fecha: '2026-10-15', inicio: '10:00', medio: 'transferencia', opcion: 'abono' }, { ahora: AHORA })
-  assert.deepEqual([reserva.monto, reserva.descuentoPct, reserva.estado, reserva.fin], [53550, 10, 'por verificar', '13:00'])
+  assert.deepEqual([reserva.monto, reserva.descuentoPct, reserva.estado, reserva.fin], [56525, 5, 'por verificar', '13:00'])
   const otra = await conCotizacion()
   await assert.rejects(solicitarReserva(otra, { cotNum: 1500, fecha: '2026-10-15', inicio: '10:00', medio: 'transferencia', opcion: 'total' },
     { tomados: [{ fecha: '2026-10-15', desde: 600, hasta: 780 }], ahora: AHORA }), /se acaba de ocupar/)
@@ -75,9 +75,9 @@ test('confirmar la transferencia: descuento, pago, instalacion agendada y reserv
   assert.equal(estadoCliente(await obtenerCotizacion(almacen, 1500), AHORA), 'verificando')
   const calendar = calendarFalso()
   const { cotizacion, instalacion } = await confirmarTransferencia(almacen, calendar, 'repisas@donmaxi.cl', { cotNum: 1500 }, AHORA)
-  assert.equal(cotizacion.adicionales.descuento_pct, 10)
-  assert.equal(Number(cotizacion.total), 107100)
-  assert.deepEqual(cotizacion.pagos.map(p => [p.monto, p.medio]), [[107100, 'Transferencia']])
+  assert.equal(cotizacion.adicionales.descuento_pct, 5)
+  assert.equal(Number(cotizacion.total), 113050)
+  assert.deepEqual(cotizacion.pagos.map(p => [p.monto, p.medio]), [[113050, 'Transferencia']])
   assert.equal(cotizacion.status, 'confirmada')
   assert.equal(cotizacion.reserva, null)
   assert.deepEqual([instalacion.fecha, instalacion.inicio, instalacion.fin, instalacion.invitado], ['2026-10-15', '13:00', '16:00', 'marta@example.cl'])
@@ -104,7 +104,7 @@ test('pagina del cliente: link, disponibilidad, aviso de transferencia con corre
   const get = JSON.parse((await atenderReservaGet({ c: '1500', t: T }, deps)).body)
   assert.equal(get.estado, 'por-agendar')
   assert.deepEqual(get.disponibilidad[0].bloques.map(b => b.libre), [false, true])
-  assert.equal(get.pagos.transferencia.opciones[0].monto, 107100)
+  assert.equal(get.pagos.transferencia.opciones[0].monto, 113050)
   assert.equal(get.pagos.mercadopago.opciones[0].monto, 119000)
   assert.equal(get.cotizacion.nombre, 'Marta')
 
@@ -113,8 +113,8 @@ test('pagina del cliente: link, disponibilidad, aviso de transferencia con corre
   const ok = await atenderReservaPost({ c: '1500', t: T, accion: 'transferencia', fecha: '2026-10-15', inicio: '13:00', opcion: 'abono' }, deps)
   assert.equal(ok.statusCode, 200)
   assert.deepEqual(correos.map(c => c.para), ['marta@example.cl', 'admin@example.cl'])
-  assert.match(correos[0].texto, /Recibimos tu aviso de transferencia por \$53\.550/)
-  assert.match(correos[1].asunto, /Transferencia por verificar: \$53\.550 · Marta Díaz/)
+  assert.match(correos[0].texto, /Recibimos tu aviso de transferencia por \$56\.525/)
+  assert.match(correos[1].asunto, /Transferencia por verificar: \$56\.525 · Marta Díaz/)
   assert.equal(JSON.parse((await atenderReservaGet({ c: '1500', t: T }, deps)).body).estado, 'verificando')
 })
 

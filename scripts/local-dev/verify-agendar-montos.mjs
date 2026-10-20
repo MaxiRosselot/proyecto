@@ -40,14 +40,14 @@ try {
   await page.keyboard.type('0')
   await tarjeta.getByLabel('Precio de la repisa 1').click()
   await page.keyboard.type('100000')
-  await tarjeta.getByRole('button', { name: /Transferencia · 10%/ }).click()
-  // 100.000 + 2 x 15.000 = 130.000; -10% = 117.000; IVA 22.230; total 139.230.
+  await tarjeta.getByRole('button', { name: /Transferencia · 5%/ }).click()
+  // 100.000 + 2 x 15.000 = 130.000; -5% = 123.500; IVA 23.465; total 146.965.
   const resumen = tarjeta.getByTestId('resumen-montos')
   await expect(resumen).toContainText('Repisas' + pesos(100000))
   await expect(resumen).toContainText('Servicios adicionales' + pesos(30000))
-  await expect(resumen).toContainText('-' + pesos(13000))
-  await expect(resumen).toContainText('Neto' + pesos(117000))
-  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText(pesos(139230))
+  await expect(resumen).toContainText('-' + pesos(6500))
+  await expect(resumen).toContainText('Neto' + pesos(123500))
+  await expect(tarjeta.getByTestId('total-instalacion')).toHaveText(pesos(146965))
   await expect(tarjeta.getByTestId('repisas-agendar')).toContainText('no va')
   await tarjeta.getByLabel('Día de la instalación').fill(sumarDias(ahoraEnZona().fecha, 3))
   await page.screenshot({ path: path.join(evidence, '01-agendar.png'), fullPage: true })
@@ -56,7 +56,7 @@ try {
 
   const guardada = (await api('get-quotes?cotNum=' + q.cotNum)).quote
   expect(guardada.repisas.map(r => [r.unidades, r.valor])).toEqual([[1, 100000], [0, 90000]])
-  expect([Number(guardada.total), guardada.adicionales.qty_cajas, guardada.adicionales.descuento_pct]).toEqual([139230, 2, 10])
+  expect([Number(guardada.total), guardada.adicionales.qty_cajas, guardada.adicionales.descuento_pct]).toEqual([146965, 2, 5])
   expect(errors).toEqual([])
   console.log(JSON.stringify({ ok: true }))
 } finally { await browser.close() }

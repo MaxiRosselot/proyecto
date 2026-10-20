@@ -41,7 +41,7 @@ test('rejects invalid figures and malformed image data',async()=>{
 test('follows the handoff template: Lora/Poppins, metre format, transfer discount and payment link',async()=>{
   const result=await generateQuotePdf({cot_num:7,repisas:[{largo:2.4,prof:.48,alto:2,niveles:4,unidades:1,valor:110000}]});
   const {text}=await pdf(result.bytes);
-  for(const t of ['2.40 m','0.48 m','2 m','Paga por transferencia y obtén 10% de descuento','Hasta 3 cuotas sin interés.','Pagar cotización']) assert.ok(text.includes(t),t);
+  for(const t of ['2.40 m','0.48 m','2 m','Paga por transferencia y obtén 5% de descuento','Hasta 3 cuotas sin interés.','Pagar cotización']) assert.ok(text.includes(t),t);
   const raw=result.bytes.toString('latin1');
   assert.ok(raw.includes('Poppins')&&raw.includes('Lora'),'fonts embedded');
   assert.ok(raw.includes('link.mercadopago.cl/repisasdonmaxi'),'payment link');
