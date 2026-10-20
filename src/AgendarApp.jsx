@@ -85,41 +85,19 @@ function useIsometrica(proyecto) {
 const EMOJIS = { retiro_orden: '🧹', retiro_basura: '🗑️', cajas: '📦', bici: '🚲' }
 const LUGARES = ['arriba-izq', 'arriba-der', 'abajo-izq', 'abajo-der']
 
-// Respaldo sin modelo 3D: una repisa de 4 niveles en isometrica (x a lo largo, y al fondo, z hacia arriba).
-const iso = (x, y, z) => `${(92 + (x - y) * 0.866 * 26).toFixed(1)},${(128 + (x + y) * 0.5 * 26 - z * 26).toFixed(1)}`
-const cara = (...p) => p.map(q => iso(...q)).join(' ')
-function RepisaIso() {
-  const L = 4, F = 1.5, niveles = [0.25, 1.4, 2.55, 3.7]
-  const pata = (x, y) => <polygon key={`p${x}${y}`} points={cara([x, y, 0], [x + .12, y, 0], [x + .12, y, 3.8], [x, y, 3.8])} fill="#7A5230" />
-  return (
-    <svg viewBox="0 0 240 230" role="img" aria-label="Repisa de madera a medida" className="agd-repisa-iso">
-      <polygon points={cara([0, 0, 0], [L, 0, 0], [L, F, 0], [0, F, 0])} fill="rgba(0,0,0,.07)" />
-      {pata(0, F)}{pata(L / 2, F)}
-      {niveles.map(z => (
-        <g key={z}>
-          <polygon points={cara([0, 0, z], [L, 0, z], [L, F, z], [0, F, z])} fill="#E2B373" />
-          <polygon points={cara([0, F, z], [L, F, z], [L, F, z - .14], [0, F, z - .14])} fill="#B9844A" />
-          <polygon points={cara([L, 0, z], [L, F, z], [L, F, z - .14], [L, 0, z - .14])} fill="#9C6B3A" />
-        </g>
-      ))}
-      {pata(0, 0)}{pata(L / 2, 0)}{pata(L - .12, F)}{pata(L - .12, 0)}
-    </svg>
-  )
-}
-
 function Dibujo({ imagen, servicios, elegidos }) {
   const activos = servicios.map(s => ({ ...s, n: elegidos[s.clave] ?? s.cantidad })).filter(s => s.n > 0 && EMOJIS[s.clave])
   return (
     <figure className="agd-dibujo" data-testid="agenda-dibujo">
       {imagen
         ? <img src={imagen} alt="Tu bodega con las repisas, en vista isométrica" />
-        : <div className="agd-dibujo-respaldo"><RepisaIso /></div>}
+        : <div className="agd-dibujo-cargando" role="status"><span aria-hidden="true" />Cargando tu bodega en 3D…</div>}
       {activos.map((s, i) => (
         <span key={s.clave} className={`agd-emoji ${LUGARES[i % LUGARES.length]}`} title={s.nombre} aria-label={s.nombre} role="img">
           {EMOJIS[s.clave]}{s.porCantidad && s.n > 1 && <small>×{s.n}</small>}
         </span>
       ))}
-      <figcaption>{imagen ? 'Así quedará tu bodega' : 'Tus repisas a medida'}{activos.length ? ' + ' + activos.map(s => s.nombre.toLowerCase()).join(', ') : ''}</figcaption>
+      <figcaption>{'Así quedará tu bodega'}{activos.length ? ' + ' + activos.map(s => s.nombre.toLowerCase()).join(', ') : ''}</figcaption>
     </figure>
   )
 }
@@ -313,7 +291,7 @@ export default function AgendarApp() {
       <section className="rsv-tarjeta">
         <h2><span className="rsv-paso">1</span> ¿Agregamos algo?</h2>
         <p className="rsv-sub">Servicios opcionales para el día de la instalación.</p>
-        <Dibujo imagen={isometrica} servicios={cot.servicios} elegidos={elegidos} />
+        {cot.proyecto3d && <Dibujo imagen={isometrica} servicios={cot.servicios} elegidos={elegidos} />}
         <Servicios servicios={cot.servicios} elegidos={elegidos} onCambio={(clave, n) => setElegidos(e => ({ ...e, [clave]: n }))} />
         <div className="rsv-resumen" data-testid="agenda-total"><span>Total con IVA</span><strong>{pesos(total)}</strong></div>
         <p className="rsv-sub" style={{ margin: '8px 0 0' }}>Se paga una vez terminada la instalación.</p>

@@ -1,5 +1,5 @@
 // Prueba E2E del dibujo de /agendar: con modelo 3D se ve la isometrica de su bodega, y cada
-// servicio sumado agrega su emoji. Sin modelo queda el dibujo de respaldo.
+// servicio sumado agrega su emoji. Mientras se dibuja, "Cargando"; sin modelo no hay dibujo.
 // Contra el entorno local (start-native.mjs, con el configurador 3D), con datos limpios.
 //   node scripts/local-dev/verify-agendar-dibujo.mjs
 import { chromium, devices, expect } from '@playwright/test'
@@ -39,6 +39,7 @@ try {
   // Con modelo: la isometrica real.
   await cliente.goto(await crear('Dibujo Con', bodega))
   const dibujo = cliente.getByTestId('agenda-dibujo')
+  await expect(dibujo).toContainText('Cargando tu bodega en 3D')
   await expect(dibujo.getByRole('img', { name: /vista isométrica/ })).toBeVisible({ timeout: 45000 })
   await expect(dibujo).toContainText('Así quedará tu bodega')
   await cliente.getByRole('checkbox', { name: /Retiro y orden/i }).check({ force: true })
@@ -51,12 +52,10 @@ try {
   await cliente.getByRole('checkbox', { name: /Retiro y orden/i }).uncheck({ force: true })
   await expect(dibujo.getByRole('img', { name: /Retiro y orden/i })).toHaveCount(0)
 
-  // Sin modelo: el respaldo, igual con sus emojis.
+  // Sin modelo (cotizaciones antiguas): no se muestra dibujo.
   await cliente.goto(await crear('Dibujo Sin'))
-  await expect(cliente.getByTestId('agenda-dibujo')).toContainText('Tus repisas a medida')
-  await cliente.getByRole('button', { name: /Agregar .*bici/i }).click()
-  await expect(cliente.getByTestId('agenda-dibujo').getByRole('img', { name: /bici/i })).toBeVisible()
-  await cliente.getByTestId('agenda-dibujo').screenshot({ path: path.join(evidence, 'dibujo-respaldo.png') })
+  await expect(cliente.getByRole('heading', { name: /agenda tu instalación/ })).toBeVisible()
+  await expect(cliente.getByTestId('agenda-dibujo')).toHaveCount(0)
 
   expect(errors).toEqual([])
   console.log(JSON.stringify({ ok: true }))
