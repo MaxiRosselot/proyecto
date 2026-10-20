@@ -6,7 +6,8 @@ import { join } from 'node:path';
 
 // Geometry, texts and palette follow Maxi's handoff (cotizador.zip, 25-09-2026:
 // plantilla_cotizacion.html + datos_ejemplo.json), measured in points from his rendered PDF. Letter size.
-const C = { accent: '#5B3A29', ink: '#2E241C', body: '#4A3D2E', sub: '#6B5B47', muted: '#8A7A66', faint: '#9A8B76', card: '#F5F2EC', cardLine: '#ECE6DC', frame: '#E7E1D8', rowLine: '#EDE9E2', head: '#F0E6DA', amber: '#FBF0DC', amberLine: '#D9A441', amberInk: '#8A5A12', green: '#1F7A4D' };
+// accent: el naranjo del logo, de relleno (con texto C.ink encima); accentInk: el mismo tono oscurecido para textos.
+const C = { accent: '#DB992B', accentInk: '#8F5D0F', ink: '#2E241C', body: '#4A3D2E', sub: '#6B5B47', muted: '#8A7A66', faint: '#9A8B76', card: '#F5F2EC', cardLine: '#ECE6DC', frame: '#E7E1D8', rowLine: '#EDE9E2', head: '#F0E6DA', amber: '#FBF0DC', amberLine: '#D9A441', amberInk: '#8A5A12', green: '#1F7A4D' };
 const L = 42, R = 570, W = R - L, FOOT = 751.8;
 const F = { serif: 'Lora-Bold', sans: 'Poppins', bold: 'Poppins-Bold' };
 const money = value => '$' + Math.round(value).toLocaleString('es-CL');
@@ -100,7 +101,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     fit(logo, L, 30, 50.5, 19.5);
     label(`Cotización N.º ${data.cot_num || ''}`, 330, 35, R - 330, C.muted, 'right');
     rule(60);
-    if (title) text(title, L, 71.2, W, titleSize, C.accent, F.serif);
+    if (title) text(title, L, 71.2, W, titleSize, C.accentInk, F.serif);
     if (subtitle) text(subtitle, L, 97.3, W, 9.75, C.sub);
   }
   const fecha = d => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d).filter(p => p.type !== 'literal').map(p => p.value).join('/');
@@ -108,10 +109,10 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   // Page 1: header, drawings, client, items and payment.
   page(`${FOOTER_MATERIAL} · Ver servicios adicionales en pág. 2`);
   fit(logo, L, 26.8, 62, 24);
-  text(`Cotización N.º ${data.cot_num || ''}`, 330, 25.5, R - 330, 12, C.accent, F.serif, { align: 'right' });
+  text(`Cotización N.º ${data.cot_num || ''}`, 330, 25.5, R - 330, 12, C.accentInk, F.serif, { align: 'right' });
   text(`Válida hasta ${fecha(new Date(now.getTime() + 7 * 86400000))}`, 330, 41.6, R - 330, 7.5, C.muted, F.sans, { align: 'right' });
   box(L, 60.4, W, 28.8, C.accent, undefined, 6);
-  withIcon('Repisas Don Maxi — N.º 1 en Google (', star, `${MARCA.rating} · ${MARCA.resenas} reseñas)`, L, 68.7, 9.75, '#FFFFFF', F.bold, 'center');
+  withIcon('Repisas Don Maxi — N.º 1 en Google (', star, `${MARCA.rating} · ${MARCA.resenas} reseñas)`, L, 68.7, 9.75, C.ink, F.bold, 'center');
   // Drawings give up to 125 pt of height so a quote of about six rows still ends on page 1.
   // Una fila con titulo (rack o repisa con colgador) ocupa 13 pt mas.
   const heading = r => r.kind === 'rack' ? `${r.label} · cajas incluidas` : r.colgador ? 'Repisa con colgador' : undefined;
@@ -155,9 +156,9 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     // Rounded on top only, like the template (border-radius 8px 8px 0 0).
     doc.roundedRect(L, y, W, 19.9, 6).fill(C.accent);
     doc.rect(L, y + 10, W, 9.9).fill(C.accent);
-    [['Largo', col.largo], ['Profund.', col.prof], ['Alto', col.alto], ['Niveles', col.niveles], ['Uds.', col.uds]].forEach(([t, x]) => label(t, x, y + 5.2, 70, C.head));
-    label('Valor', col.valorEnd - 80, y + 5.2, 80, C.head, 'right');
-    label('Total', col.totalEnd - 80, y + 5.2, 80, C.head, 'right');
+    [['Largo', col.largo], ['Profund.', col.prof], ['Alto', col.alto], ['Niveles', col.niveles], ['Uds.', col.uds]].forEach(([t, x]) => label(t, x, y + 5.2, 70, C.ink));
+    label('Valor', col.valorEnd - 80, y + 5.2, 80, C.ink, 'right');
+    label('Total', col.totalEnd - 80, y + 5.2, 80, C.ink, 'right');
     y += 19.9;
   }
   function row(cells, value, units, heading) {
@@ -184,7 +185,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   if (y > 540) { page(FOOTER_MATERIAL, 'Resumen de cotización'); y = 110; }
   y += 33.5;
   box(L, y, 357, 58.4, C.card, C.cardLine);
-  label('Condiciones', 54.8, y + 10.9, 200, C.accent);
+  label('Condiciones', 54.8, y + 10.9, 200, C.accentInk);
   text(CONDICIONES, 54.8, y + 24, 320, 8.25, C.body);
   // Con descuento, el detalle sube dos lineas: subtotal antes del descuento, descuento y neto.
   if (descuento) {
@@ -196,8 +197,8 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   }
   text('IVA', 412.5, y + 15, 80, 8.62, C.sub); text(money(iva), 470, y + 15, 100, 8.62, C.sub, F.sans, { align: 'right' });
   box(412.5, y + 31.6, R - 412.5, 26.8, C.accent, undefined, 6);
-  text('TOTAL', 421.5, y + 41.8, 60, 7.5, '#FFFFFF');
-  text(money(total), 450, y + 36.9, 111, 12.75, '#FFFFFF', F.serif, { align: 'right' });
+  text('TOTAL', 421.5, y + 41.8, 60, 7.5, C.ink);
+  text(money(total), 450, y + 36.9, 111, 12.75, C.ink, F.serif, { align: 'right' });
   y += 66.7;
   box(L, y, W, 32.5, C.amber, C.amberLine);
   withIcon('', clock, descuento
@@ -214,7 +215,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   const reserva = payUrl.includes('/reserva?');
   label(reserva ? 'Agenda y paga en línea' : 'Link de pago', 319.9, y + 15.2);
   text(reserva ? 'Elige el día de tu instalación y paga.' : 'Hasta 3 cuotas sin interés.', 319.9, y + 28.8, 230, 8.62, C.body);
-  withIcon(reserva ? 'Agendar y pagar' : 'Pagar cotización', arrow, '', 319.9, y + 45.4, 9.38, C.accent, F.bold, 'left', 230);
+  withIcon(reserva ? 'Agendar y pagar' : 'Pagar cotización', arrow, '', 319.9, y + 45.4, 9.38, C.accentInk, F.bold, 'left', 230);
   doc.link(319.9, y + 44, 110, 14, payUrl);
 
   // Page 2: optional services, gross prices shown next to net.
@@ -226,7 +227,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     const ty = cy + (121.5 - 32.6 - doc.font(F.sans).fontSize(9).heightOfString(r.description, { width: 336, lineGap: .45 })) / 2;
     text(r.title, 55.5, ty, 250, 12, C.ink, F.serif);
     text(`neto ${money(r.price)}`, 291.5, ty + 3.8, 100, 7.88, C.muted, F.sans, { align: 'right' });
-    text(money(Math.round(r.price * 1.19)), 291.5, ty + 14.9, 100, 12.75, C.accent, F.serif, { align: 'right' });
+    text(money(Math.round(r.price * 1.19)), 291.5, ty + 14.9, 100, 12.75, C.accentInk, F.serif, { align: 'right' });
     text(r.description, 55.5, ty + 32.6, 336, 9, C.sub, F.sans, { lineGap: .45 });
     doc.save().roundedRect(406.5, cy + 12, 150, 97.5, 7.5).clip();
     doc.image(asset(`servicio-${r.key}.jpg`), 406.5, cy + 12, { cover: [150, 97.5], align: 'center', valign: 'center' });
@@ -235,7 +236,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
 
   // Page 3: gallery.
   page('Terciado estructural 18mm y pino cepillado 2×2', 'Galería de trabajos', 'Algunos proyectos que hemos instalado.');
-  withIcon('Ver portafolio completo', arrow, MARCA.galeriaUrl, 300, 98.3, 9, C.accent, F.bold, 'right', R - 300);
+  withIcon('Ver portafolio completo', arrow, MARCA.galeriaUrl, 300, 98.3, 9, C.accentInk, F.bold, 'right', R - 300);
   doc.link(330, 97, R - 330, 13, `https://${MARCA.galeriaUrl}`);
   doc.save().roundedRect(63, 124.6, 486, 607.4, 6).clip();
   fit(asset('galeria.jpg'), 63, 124.6, 486, 607.4);

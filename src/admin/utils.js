@@ -42,6 +42,7 @@ export const SECTIONS = [
   { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
   { id: 'estadisticas',  label: 'Estadísticas',  icon: 'chart', corto: 'Stats' },
   { id: 'horarios',      label: 'Horarios',      icon: 'clock' },
+  { id: 'web',           label: 'Web',           icon: 'image' },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }
@@ -98,9 +99,9 @@ export function porCreacion(a, b) {
 
 // Design tokens
 const C = {
-  orange:      '#F47920',
-  orangeDark:  '#D4600A',
-  orangeLight: '#FFF4EC',
+  orange:      '#DB992B',
+  orangeDark:  '#A86E14',
+  orangeLight: '#FBF3E4',
   bg:          '#F4F5F7',
   surface:     '#FFFFFF',
   border:      '#E8E8EC',
@@ -139,13 +140,13 @@ export const styles = {
   },
   tabActive: {
     background: C.orange, borderColor: C.orange, color: 'white',
-    boxShadow: '0 2px 8px rgba(244,121,32,.35)',
+    boxShadow: '0 2px 8px rgba(219,153,43,.35)',
   },
   btnPrimary: {
     background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
     color: 'white', border: 'none', borderRadius: 9, padding: '9px 20px',
     fontSize: 13, fontWeight: 700, cursor: 'pointer',
-    boxShadow: '0 3px 10px rgba(244,121,32,.3)',
+    boxShadow: '0 3px 10px rgba(219,153,43,.3)',
     transition: 'opacity .15s',
   },
   btnSecondary: {

@@ -1,6 +1,8 @@
 // Datos comerciales de Don Maxi que aparecen en el PDF, en el correo y en /cotiza.
 // Un solo lugar: si cambia la cuenta, el link de pago o la oferta, cambia en todos lados.
-export const MARCA = { razonSocial: 'Don Maxi SPA', rut: '77.386.684-8', banco: 'Banco BCI', tipoCuenta: 'Corriente', numeroCuenta: '13702807', rating: '5.0', resenas: '231', linkPago: 'https://link.mercadopago.cl/repisasdonmaxi', galeriaUrl: 'www.donmaxi.cl/galeria' };
+export const MARCA = { razonSocial: 'Don Maxi SPA', rut: '77.386.684-8', banco: 'Banco BCI', tipoCuenta: 'Corriente', numeroCuenta: '13702807', rating: '5.0', resenas: '231', linkPago: 'https://link.mercadopago.cl/repisasdonmaxi', galeriaUrl: 'repisasdonmaxi.cl/fotos', sitio: 'https://repisasdonmaxi.cl', correo: 'repisas@donmaxi.cl',
+  // Ficha de Google (para "ver reseñas"). Reemplazar por el link de la ficha en Maps cuando se tenga.
+  googleResenas: 'https://www.google.com/search?q=Repisas+Don+Maxi' };
 export const CONDICIONES = 'Puede abonar un 50% antes de la instalación, o pagar el total al finalizar el trabajo. Garantía de 5 años sobre estructura e instalación.';
 // Descuento por pagar con transferencia: Mercado Pago cobra comision, la transferencia no.
 // Lo muestran el PDF, /cotiza, el correo, WhatsApp y la pagina de reserva; se aplica al confirmar

@@ -72,7 +72,7 @@ try {
   // ── Pagina publica ──
   const publica = await browser.newPage({ viewport: { width: 430, height: 932 } })
   publica.on('pageerror', e => errors.push(e.stack || e.message))
-  await publica.goto(base + '/')
+  await publica.goto(base + '/visita')
   await expect(publica.getByText('Fechas disponibles')).toBeVisible()
   const botonesFecha = publica.locator('.date-btn')
   await expect(botonesFecha).toHaveCount(Object.keys(dias).length)
@@ -92,7 +92,7 @@ try {
   await publica.waitForURL(/confirm\.html/)
 
   // La hora tomada ya no se ofrece.
-  await publica.goto(base + '/')
+  await publica.goto(base + '/visita')
   await publica.locator('.date-btn').first().click()
   await expect(publica.getByRole('button', { name: '09:30' })).toBeDisabled()
   await expect(publica.locator('.slot:not([disabled])')).toHaveCount(3)

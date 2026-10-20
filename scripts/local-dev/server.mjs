@@ -30,6 +30,9 @@ import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netl
 import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from '../../netlify/functions/lib/planilla.mjs'
 import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
 import { horasParaReagendar, liberarHoraVisita, reagendarVisita } from '../../netlify/functions/lib/visitas.mjs'
+import { almacenFotosMemoria, almacenSolicitudesMemoria } from '../../netlify/functions/lib/sitio.mjs'
+import { atenderSitio } from '../../netlify/functions/sitio.mjs'
+import { atenderWebFotos } from '../../netlify/functions/web-fotos.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -180,7 +183,14 @@ function depsReserva() {
 }
 
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto'])
+
+// Sitio publico: fotos de Admin → Web y archivos de "Envíanos fotos" en memoria (en produccion, Drive).
+const fotosWeb = almacenFotosMemoria()
+const solicitudesWeb = almacenSolicitudesMemoria()
+function depsSitio() {
+  return { fotos: fotosWeb, solicitudes: solicitudesWeb, enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com' }
+}
 
 // Los PDF y correos de las cotizaciones web quedan en disco: nada sale a Google ni a un correo real.
 function guardarPdfLocal(bytes) {
@@ -411,6 +421,19 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(result.statusCode, { ...CORS, ...(result.headers || {}) })
       // El PDF viaja en base64: Netlify lo decodifica en produccion, aca hay que hacerlo.
       return res.end(result.isBase64Encoded ? Buffer.from(result.body, 'base64') : (result.body || ''))
+    }
+
+    // Sitio publico y Admin → Web: los handlers de produccion con almacenes en memoria.
+    if (name === 'sitio' || name === 'web-fotos') {
+      try {
+        const r = name === 'sitio' ? await atenderSitio(event, depsSitio()) : await atenderWebFotos(event, fotosWeb)
+        res.writeHead(r.statusCode, { ...CORS, ...r.headers }); return res.end(r.body)
+      } catch (e) { if (!(e.estado < 500)) console.error(`[local-api] ${name} failed:`, e); return send(res, e.estado || 500, { ok: false, error: e.message }) }
+    }
+    if (name === 'foto') {
+      const f = await fotosWeb.leer(url.searchParams.get('id') || '')
+      if (!f) { res.writeHead(404); return res.end('No encontrada') }
+      res.writeHead(200, { 'Content-Type': f.tipo, 'Cache-Control': 'public, max-age=31536000, immutable' }); return res.end(f.datos)
     }
 
     // Pagina /agendar del cliente: mismas reglas que netlify/functions/agendar.mjs.

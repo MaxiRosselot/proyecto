@@ -1,5 +1,5 @@
 /* /cotiza — mismo lenguaje visual que la pagina de agendar (naranjo Don Maxi, tarjetas redondeadas). */
-.ctz{--acento:#E8701A;--acento-osc:#B4520C;--texto:#1C1917;--suave:#6B6560;--borde:#E7E2DC;--fondo:#FAF8F5;
+.ctz{--acento:#DB992B;--acento-osc:#8F5D0F;--sobre-acento:#1F1A14;--texto:#1C1917;--suave:#6B6560;--borde:#E7E2DC;--fondo:#FAF8F5;
   max-width:1100px;margin:0 auto;padding:clamp(12px,3vw,28px) clamp(12px,3vw,28px) 96px;
   font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;color:var(--texto)}
 .ctz *{box-sizing:border-box}
@@ -15,9 +15,9 @@
 .ctz-form label{display:grid;gap:6px;font-size:13px;font-weight:700}
 .ctz-form label small{font-weight:500;color:var(--suave)}
 .ctz-form input{min-height:48px;padding:10px 14px;border:1.5px solid var(--borde);border-radius:12px;font:inherit;font-size:16px;background:var(--fondo)}
-.ctz-form input:focus{outline:none;border-color:var(--acento);background:#fff;box-shadow:0 0 0 3px rgba(232,112,26,.14)}
+.ctz-form input:focus{outline:none;border-color:var(--acento);background:#fff;box-shadow:0 0 0 3px rgba(219,153,43,.14)}
 .ctz-trampa{position:absolute!important;left:-9999px;width:1px;height:1px;opacity:0}
-.ctz-boton{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:52px;padding:12px 18px;border:none;border-radius:14px;background:var(--acento);color:#fff;font:inherit;font-weight:800;font-size:15px;text-decoration:none;cursor:pointer;box-shadow:0 8px 20px rgba(232,112,26,.28)}
+.ctz-boton{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:52px;padding:12px 18px;border:none;border-radius:14px;background:var(--acento);color:var(--sobre-acento);font:inherit;font-weight:800;font-size:15px;text-decoration:none;cursor:pointer;box-shadow:0 8px 20px rgba(219,153,43,.28)}
 .ctz-boton:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
 .ctz-boton.secundario{background:#fff;color:var(--acento-osc);border:1.5px solid var(--acento);box-shadow:none}
 .ctz-nota{margin:4px 0 0;font-size:12.5px;color:var(--suave)}
@@ -45,7 +45,7 @@
 .ctz-progreso{width:min(420px,100%);background:#fff;border-radius:20px;padding:24px 22px;box-shadow:0 24px 60px rgba(0,0,0,.25);display:grid;gap:12px}
 .ctz-progreso h2{margin:0;font-size:18px;font-weight:800}
 .ctz-progreso-barra{height:10px;border-radius:999px;background:#F1ECE6;overflow:hidden}
-.ctz-progreso-barra span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--acento),#F59E0B);transition:width .3s ease}
+.ctz-progreso-barra span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--acento),#EBC27A);transition:width .3s ease}
 .ctz-progreso-cifras{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--suave);font-variant-numeric:tabular-nums}
 .ctz-progreso-etapas{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:14px;color:var(--suave)}
 .ctz-progreso-etapas li{display:flex;align-items:center;gap:10px}

@@ -8,6 +8,7 @@ import HorariosSection     from './admin/Horarios.jsx'
 import CalendarioSection   from './admin/Calendario.jsx'
 import EstadisticasSection from './admin/Instalaciones.jsx'
 import PlanillaSection from './admin/Planilla.jsx'
+import FotosWebSection from './admin/FotosWeb.jsx'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -19,6 +20,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     clock:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
     chart:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="7" width="3" height="10" rx="1"/><rect x="16" y="4" width="3" height="13" rx="1"/></svg>),
     table:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="4" x2="9" y2="20"/></svg>),
+    image:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
   return icons[name] || null
@@ -57,8 +59,8 @@ function LoginScreen({ onLogin }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(145deg, #18181B 0%, #2c1a08 60%, #1a1005 100%)', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' }}>
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        <div style={{ position: 'absolute', top: '-20%', right: '-10%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(244,121,32,.15) 0%, transparent 70%)' }}/>
-        <div style={{ position: 'absolute', bottom: '-10%', left: '-10%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(244,121,32,.08) 0%, transparent 70%)' }}/>
+        <div style={{ position: 'absolute', top: '-20%', right: '-10%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(219,153,43,.15) 0%, transparent 70%)' }}/>
+        <div style={{ position: 'absolute', bottom: '-10%', left: '-10%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(219,153,43,.08) 0%, transparent 70%)' }}/>
       </div>
       <div style={{ background: 'rgba(255,255,255,.97)', borderRadius: 20, padding: '40px 32px', width: '100%', maxWidth: 380, boxShadow: '0 30px 80px rgba(0,0,0,.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
         <div style={{ marginBottom: 28, textAlign: 'center' }}>
@@ -90,6 +92,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'instalaciones') return <PlanillaSection onVerCotizacion={verCotizacion} />
   if (section === 'estadisticas') return <EstadisticasSection onVerCotizacion={verCotizacion} />
   if (section === 'horarios')     return <HorariosSection />
+  if (section === 'web')          return <FotosWebSection />
   return null
 }
 
@@ -213,7 +216,7 @@ export default function AdminApp() {
                 display: 'flex', alignItems: 'center', gap: 11, width: '100%',
                 padding: '10px 14px', marginBottom: 2,
                 border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: 10, transition: 'all .15s',
-                background: active ? 'rgba(244,121,32,.18)' : 'transparent',
+                background: active ? 'rgba(219,153,43,.18)' : 'transparent',
                 color: active ? C.orange : '#9CA3AF',
                 fontSize: 14, fontWeight: active ? 700 : 400,
               }}>

@@ -35,7 +35,7 @@ try {
 
   // La pagina publica no se instala como el panel.
   const publica = await browser.newPage()
-  await publica.goto(base + '/')
+  await publica.goto(base + '/visita')
   await expect(publica.locator('link[rel=manifest]')).toHaveCount(0)
   console.log(JSON.stringify({ ok: true, evidence }))
 } finally { await browser.close() }
