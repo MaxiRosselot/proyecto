@@ -9,6 +9,7 @@ import { ErrorCotizacionWeb, procesarCotizacionWeb } from './lib/cotizacion-web.
 import { enviarCorreoGmail } from './lib/correo.mjs'
 import { leerTablaPrecios } from './lib/precios-planilla.mjs'
 import { subirPdfCotizacion } from './lib/drive-pdf.mjs'
+import { linkAgenda } from './lib/mercadopago.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +49,8 @@ export async function handler(event) {
       subirPdf: datos => subirPdfCotizacion(drive, datos),
       enviarCorreo: correo => enviarCorreoGmail(gmail, correo),
       avisoA: process.env.NOTIFY_EMAIL || 'repisas@donmaxi.cl',
+      // El link para que el cliente agende su instalacion (solo agenda; el pago se coordina aparte).
+      linkAgenda: cotNum => linkAgenda(cotNum),
     })
     return responder(200, { ok: true, ...resultado })
   } catch (err) {

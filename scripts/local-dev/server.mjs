@@ -23,8 +23,9 @@ import { eventoParaVista } from '../../netlify/functions/lib/calendario.mjs'
 import { anotarBoleta, borrarPago, registrarPago } from '../../netlify/functions/lib/pagos.mjs'
 import { armarCorreo } from '../../netlify/functions/lib/correo.mjs'
 import { generateQuotePdf } from '../../netlify/functions/lib/quote-pdf.mjs'
-import { configPago, conLinkPago, linkPagoCotizacion } from '../../netlify/functions/lib/mercadopago.mjs'
+import { configPago, conLinkPago, linkAgenda, linkPagoCotizacion } from '../../netlify/functions/lib/mercadopago.mjs'
 import { atenderAvisoMercadoPago, atenderReservaGet, atenderReservaPost } from '../../netlify/functions/lib/reserva-cliente.mjs'
+import { atenderAgendaGet, atenderAgendaPost } from '../../netlify/functions/lib/agenda-cliente.mjs'
 import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netlify/functions/lib/reservas-admin.mjs'
 import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from '../../netlify/functions/lib/planilla.mjs'
 import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
@@ -173,7 +174,7 @@ function depsReserva() {
 }
 
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar'])
 
 // Los PDF y correos de las cotizaciones web quedan en disco: nada sale a Google ni a un correo real.
 function guardarPdfLocal(bytes) {
@@ -242,7 +243,7 @@ const routes = {
   },
   'save-quote': async (body) => {
     const { estado, respuesta } = body.crear ? await crearCotizacion(cotizaciones, body) : await actualizarCotizacion(cotizaciones, body)
-    return { status: estado, ...respuesta, ...(respuesta.ok ? { linkPago: linkPagoCotizacion(respuesta.cotNum ?? body.cotNum) } : {}) }
+    return { status: estado, ...respuesta, ...(respuesta.ok ? { linkPago: linkPagoCotizacion(respuesta.cotNum ?? body.cotNum), linkAgenda: linkAgenda(respuesta.cotNum ?? body.cotNum) } : {}) }
   },
   'delete-quote': async (body) => {
     const { estado, respuesta } = await borrarCotizacion(cotizaciones, body.cotNum)
@@ -257,6 +258,7 @@ const routes = {
       enviarCorreo: async correo => guardarCorreoLocal(correo),
       avisoA: 'admin-local@example.com',
       linkPago: cotNum => linkPagoCotizacion(cotNum),
+      linkAgenda: cotNum => linkAgenda(cotNum),
     })
     return { ok: true, ...resultado }
   },
@@ -398,6 +400,14 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(result.statusCode, { ...CORS, ...(result.headers || {}) })
       // El PDF viaja en base64: Netlify lo decodifica en produccion, aca hay que hacerlo.
       return res.end(result.isBase64Encoded ? Buffer.from(result.body, 'base64') : (result.body || ''))
+    }
+
+    // Pagina /agendar del cliente: mismas reglas que netlify/functions/agendar.mjs.
+    if (name === 'agendar') {
+      try {
+        const r = req.method === 'POST' ? await atenderAgendaPost(raw ? JSON.parse(raw) : {}, depsReserva()) : await atenderAgendaGet(Object.fromEntries(url.searchParams), depsReserva())
+        res.writeHead(r.statusCode, { ...CORS, ...r.headers }); return res.end(r.body)
+      } catch (e) { if (!(e.estado < 500)) console.error('[local-api] agendar failed:', e); return send(res, e.estado || 500, { ok: false, error: e.message }) }
     }
 
     // Pagina /reserva del cliente: mismas reglas que netlify/functions/reserva.mjs.

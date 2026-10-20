@@ -44,8 +44,16 @@ export function linkReserva(cotNum, config = configPago()) {
 // El link que va en el PDF y los mensajes: el fijo de Mercado Pago, o el de reserva si esta activa.
 export const linkPagoCotizacion = (cotNum, config = configPago()) => (config?.reserva && linkReserva(cotNum, config)) || MARCA.linkPago
 
-// Para el panel: cada cotizacion con su link, que el navegador no puede firmar.
-export const conLinkPago = (cotizacion, config = configPago()) => ({ ...cotizacion, linkPago: linkPagoCotizacion(cotizacion.cotNum, config) })
+// El link para que el cliente agende su instalacion (solo agenda, sin pago): /agendar.
+export function linkAgenda(cotNum, config = configPago()) {
+  if (!config || !cotNum) return ''
+  return `${config.base}/agendar?c=${encodeURIComponent(cotNum)}&t=${firmaPago(cotNum, config.secreto)}`
+}
+
+// Para el panel: cada cotizacion con sus links (pago y agendar), que el navegador no puede firmar.
+export const conLinkPago = (cotizacion, config = configPago()) => ({
+  ...cotizacion, linkPago: linkPagoCotizacion(cotizacion.cotNum, config), linkAgenda: linkAgenda(cotizacion.cotNum, config),
+})
 
 // Lo que el cliente puede pagar hoy con un medio. Sin pagos previos: el total o un abono del 50%,
 // con el descuento si paga por transferencia (y la cotizacion no tiene ya otro). Con pagos: el saldo.

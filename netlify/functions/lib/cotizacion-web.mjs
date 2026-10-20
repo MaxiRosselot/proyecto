@@ -80,7 +80,7 @@ const escapar = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&
 const linkWhatsapp = texto => `https://wa.me/${WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(texto)}`
 
 // El cliente ya midio: el correo empuja a cerrar ahora (pago o WhatsApp), no a agendar una visita.
-export function correoCliente({ cliente, cotNum, total, modulos, avisoA, linkPago = MARCA.linkPago }) {
+export function correoCliente({ cliente, cotNum, total, modulos, avisoA, linkPago = MARCA.linkPago, linkAgenda = '' }) {
   const nombre = cliente.nombre.split(' ')[0]
   const lineas = [
     `Hola ${nombre}:`,
@@ -90,6 +90,7 @@ export function correoCliente({ cliente, cotNum, total, modulos, avisoA, linkPag
     `${TEXTO_OFERTA}.`,
     '',
     'Para reservar tu instalación:',
+    ...(linkAgenda ? [`• Agenda tu instalación aquí (elige día y hora; el pago es al terminar): ${linkAgenda}`] : []),
     /\/reserva\?/.test(linkPago)
       ? `• Elige tu día y paga aquí (transferencia con ${OFERTA.descuento}% de descuento, o Mercado Pago): ${linkPago}`
       : `• Paga en línea aquí: ${linkPago}`,
@@ -123,7 +124,7 @@ export function correoAviso({ cliente, cotNum, total, modulos, pdfUrl, avisoA })
 
 export async function procesarCotizacionWeb(body, deps) {
   // linkPago: el link de pago de cada cotizacion (lib/mercadopago.mjs); sin el, el link fijo.
-  const { tabla, almacen, generarPdf, subirPdf, enviarCorreo, avisoA, ahora = new Date(), linkPago: linkDe = () => MARCA.linkPago } = deps
+  const { tabla, almacen, generarPdf, subirPdf, enviarCorreo, avisoA, ahora = new Date(), linkPago: linkDe = () => MARCA.linkPago, linkAgenda: agendaDe = () => '' } = deps
   const { cliente, modulos, proyecto3d, vistas } = validarSolicitud(body)
   const repisas = filasConPrecio(modulos, tabla)
 
@@ -156,7 +157,8 @@ export async function procesarCotizacionWeb(body, deps) {
 
   const adjunto = { nombre: nombreArchivo, tipo: 'application/pdf', contenido: pdf.bytes }
   const linkPago = linkDe(numero)
-  const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, avisoA, linkPago }
+  const linkAgenda = agendaDe(numero)
+  const datos = { cliente, cotNum: numero, total: pdf.total, modulos: repisas.length, pdfUrl, avisoA, linkPago, linkAgenda }
   let correoEnviado = true
   try { await enviarCorreo({ ...correoCliente(datos), adjuntos: [adjunto] }) }
   catch (e) {
@@ -177,6 +179,7 @@ export async function procesarCotizacionWeb(body, deps) {
     // El PDF va en la respuesta para verlo en la pantalla final aunque el correo o Drive fallen.
     pdfBase64: Buffer.from(pdf.bytes).toString('base64'), pdfUrl,
     oferta: { descuento: OFERTA.descuento, medio: OFERTA.medio },
+    agenda: linkAgenda,
     pago: { link: linkPago, razonSocial: MARCA.razonSocial, rut: MARCA.rut, banco: MARCA.banco, tipoCuenta: MARCA.tipoCuenta, numeroCuenta: MARCA.numeroCuenta },
     whatsapp: WHATSAPP,
   }

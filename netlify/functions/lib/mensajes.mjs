@@ -1,6 +1,6 @@
 // Textos para el cliente: envio de la cotizacion, confirmacion de la instalacion y recordatorios.
 // Sin dependencias de Node: los usan el cron de recordatorios y el panel admin.
-import { MARCA, OFERTA } from './marca.mjs'
+import { MARCA, OFERTA, SERVICIOS } from './marca.mjs'
 
 // Numero chileno en formato internacional sin "+": 9 1234 5678 -> 56912345678.
 export function telefonoWhatsapp(telefono) {
@@ -73,12 +73,13 @@ export function mensajeRecordatorio({ tipo, cliente, fecha, inicio, fin, ubicaci
 const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 
 // Para mandar la cotizacion por WhatsApp: con el link al PDF si ya esta en Drive.
-export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl, linkPago }) {
+export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl, linkPago, linkAgenda }) {
   return [
     `${saludo(nombre)} Le envío su cotización N° ${cotNum} de Repisas Don Maxi 📄`,
     '',
     `Total: ${pesos(total)} con IVA incluido.`,
     ...(pdfUrl ? [`Puede verla aquí: ${pdfUrl}`] : []),
+    ...(linkAgenda ? [`📅 Agende su instalación aquí (elija día y hora): ${linkAgenda}`] : []),
     ...(linkPago ? [/\/reserva\?/.test(linkPago)
       ? `Aquí puede elegir el día de su instalación y pagar (total o abono del 50%): ${linkPago}`
       : `Puede pagar en línea aquí (total o abono del 50%): ${linkPago}`] : []),
@@ -202,6 +203,56 @@ export function correoRecordatorioVisita({ cliente, fecha, inicio, ubicacion }) 
       'Ante cualquier cambio, responde este correo o escríbenos por WhatsApp al +56 9 5102 0367.',
       '',
       'Repisas Don Maxi',
+    ].join('\n'),
+  }
+}
+
+// ── Agendar desde el link del cliente (/agendar) ─────────────────────────────
+
+const lineasServicios = adicionales => SERVICIOS
+  .filter(([clave]) => (Number(adicionales?.[`qty_${clave}`]) || 0) > 0)
+  .map(([clave, nombre]) => `• ${adicionales[`nombre_${clave}`] || nombre}${Number(adicionales[`qty_${clave}`]) > 1 ? ` × ${adicionales[`qty_${clave}`]}` : ''}`)
+
+export function correoAgendaCliente({ nombre, email, cotNum, direccion, adicionales }, instalacion, { reagendada = false, linkAgenda = '' } = {}) {
+  const servicios = lineasServicios(adicionales)
+  return {
+    para: email,
+    asunto: reagendada ? `Tu instalación quedó reagendada — Repisas Don Maxi` : `Tu instalación quedó agendada — Repisas Don Maxi`,
+    texto: [
+      `Hola ${primerNombre(nombre)},`.replace(' ,', ','),
+      '',
+      `${reagendada ? 'Reagendamos' : 'Agendamos'} la instalación de tu cotización N° ${cotNum} ✅`,
+      '',
+      `📅 ${fechaLarga(instalacion.fecha)}`,
+      `🕙 De ${instalacion.inicio} a ${instalacion.fin} hrs (duración aprox. ${duracion(instalacion.inicio, instalacion.fin)})`,
+      ...(direccion ? [`📍 ${direccion}`] : []),
+      ...(servicios.length ? ['', 'Servicios adicionales:', ...servicios] : []),
+      '',
+      'Te escribiremos por WhatsApp para confirmar. El pago es una vez terminada la instalación.',
+      AVISO_RETRASO,
+      ...(linkAgenda ? ['', `Puedes ver o cambiar tu hora (hasta 48 h antes) aquí: ${linkAgenda}`] : []),
+      '',
+      'Repisas Don Maxi',
+    ].join('\n'),
+  }
+}
+
+export function correoAgendaAdmin({ nombre, telefono, cotNum, direccion, adicionales, total }, instalacion, { reagendada = false, anterior = null, linkPanel = '' } = {}) {
+  const servicios = lineasServicios(adicionales)
+  return {
+    asunto: `📅 ${reagendada ? 'Reagendó' : 'Agendó'}: ${nombre} · ${fechaLarga(instalacion.fecha)} ${instalacion.inicio}–${instalacion.fin} (N° ${cotNum})`,
+    texto: [
+      `${nombre} ${reagendada ? 'reagendó' : 'agendó'} su instalación desde el link de su cotización N° ${cotNum}.`,
+      '',
+      `📅 ${fechaLarga(instalacion.fecha)}, de ${instalacion.inicio} a ${instalacion.fin} hrs (${duracion(instalacion.inicio, instalacion.fin)})`,
+      ...(anterior?.fecha ? [`Antes: ${fechaLarga(anterior.fecha)}, ${anterior.inicio}–${anterior.fin}`] : []),
+      ...(direccion ? [`📍 ${direccion}`] : []),
+      ...(telefono ? [`📞 ${telefono}`] : []),
+      ...(servicios.length ? ['', 'Servicios adicionales:', ...servicios] : []),
+      `Total: ${pesos(total)} con IVA`,
+      '',
+      'Quedó en el Calendario y en Instalaciones. Falta confirmarle por WhatsApp.',
+      ...(linkPanel ? [linkPanel] : []),
     ].join('\n'),
   }
 }

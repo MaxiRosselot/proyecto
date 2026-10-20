@@ -3,7 +3,7 @@ import { DEFAULTS_REPISA, C, adminFetch, apiFetch, fmtDate, fmt, styles } from '
 import { precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } from './preciosRepisas.js'
 import './PorCotizar.css'
 import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
-import EnviarCotizacion from './EnviarCotizacion.jsx'
+import EnviarCotizacion, { CopiarLink } from './EnviarCotizacion.jsx'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 
@@ -229,6 +229,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [pdfBlob, setPdfBlob]       = useState(null)
   const [pdfDrive, setPdfDrive]     = useState('')
   const [linkPago, setLinkPago]     = useState('')
+  const [linkAgendaCot, setLinkAgendaCot] = useState('')
   const [totalInfo, setTotalInfo]   = useState(saved?.totalInfo || { subtotal: 0, iva: 0, total: 0 })
   const [autoSaved, setAutoSaved]   = useState(false)
   const [error, setError]           = useState('')
@@ -460,7 +461,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
             ? { ...datos, ...pdf.totales, cotNum: numero }
             : { ...datos, ...pdf.totales, crear: true, cotNum: numero, status: 'por confirmar', notas: '' }),
         })
-        if (guardado.ok) { link = guardado.linkPago || ''; break }
+        if (guardado.ok) { link = guardado.linkPago || ''; setLinkAgendaCot(guardado.linkAgenda || ''); break }
         if (!cotGuardada && guardado.siguiente && intento < 2) { numero = guardado.siguiente; continue }
         throw new Error(guardado.error || 'No se pudo guardar la cotización')
       }
@@ -783,7 +784,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
                 style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
-              {autoSaved && <EnviarCotizacion pdfBlob={pdfBlob} cotizacion={{ nombre: cliente.nombre, telefono: cliente.celular || cliente.telefono, cotNum: cotGuardada?.cotNum, total: totalInfo.total, pdfUrl: pdfDrive, linkPago }} />}
+              {autoSaved && <EnviarCotizacion pdfBlob={pdfBlob} cotizacion={{ nombre: cliente.nombre, telefono: cliente.celular || cliente.telefono, cotNum: cotGuardada?.cotNum, total: totalInfo.total, pdfUrl: pdfDrive, linkPago, linkAgenda: linkAgendaCot }} />}
+              {autoSaved && <CopiarLink link={linkAgendaCot} texto="📅 Copiar link para agendar" />}
             </div>
           </div>
         </div>

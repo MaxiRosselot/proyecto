@@ -4,6 +4,7 @@ import App from './App.jsx'
 import AdminApp from './AdminApp.jsx'
 import CotizaApp from './CotizaApp.jsx'
 import ReservaApp from './ReservaApp.jsx'
+import AgendarApp from './AgendarApp.jsx'
 
 const container = document.getElementById('root')
 const root = createRoot(container)
@@ -12,4 +13,5 @@ const ruta = window.location.pathname
 root.render(ruta.startsWith('/admin') ? <AdminApp />
   : ruta.startsWith('/cotiza') ? <CotizaApp />
   : ruta.startsWith('/reserva') ? <ReservaApp />
+  : ruta.startsWith('/agendar') ? <AgendarApp />
   : <App />)
