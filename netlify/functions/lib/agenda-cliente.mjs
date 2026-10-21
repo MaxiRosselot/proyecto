@@ -142,7 +142,7 @@ async function agendarPost(body, deps) {
   const link = linkAgenda(cotNum, deps.config)
   const correos = []
   if (correoValido(guardada.email)) correos.push(correoAgendaCliente(guardada, instalacion, { reagendada, linkAgenda: link }))
-  if (deps.avisoA) correos.push({ para: deps.avisoA, ...correoAgendaAdmin(guardada, instalacion, { reagendada, anterior, linkPanel: `${deps.config.base}/admin` }) })
+  if (deps.avisoA) correos.push({ para: deps.avisoA, ...correoAgendaAdmin(guardada, instalacion, { reagendada, anterior, linkPanel: `${deps.config.base}/admin`, ahora: new Date(deps.ahora ?? Date.now()) }) })
   for (const correo of correos) await deps.enviarCorreo?.(correo).catch(e => console.warn('agendar: correo no enviado:', e.message))
 
   return json(200, { ok: true, estado: 'agendada', reagendada, correoEnviado: correoValido(guardada.email), cotizacion: vista(guardada, ahora) })

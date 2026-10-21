@@ -237,7 +237,7 @@ export function correoAgendaCliente({ nombre, email, cotNum, direccion, adiciona
   }
 }
 
-export function correoAgendaAdmin({ nombre, telefono, cotNum, direccion, adicionales, total }, instalacion, { reagendada = false, anterior = null, linkPanel = '' } = {}) {
+export function correoAgendaAdmin({ nombre, telefono, cotNum, direccion, adicionales, total }, instalacion, { reagendada = false, anterior = null, linkPanel = '', ahora = new Date() } = {}) {
   const servicios = lineasServicios(adicionales)
   return {
     asunto: `📅 ${reagendada ? 'Reagendó' : 'Agendó'}: ${nombre} · ${fechaLarga(instalacion.fecha)} ${instalacion.inicio}–${instalacion.fin} (N° ${cotNum})`,
@@ -254,9 +254,9 @@ export function correoAgendaAdmin({ nombre, telefono, cotNum, direccion, adicion
       'Quedó en el Calendario y en Instalaciones. Falta confirmarle por WhatsApp:',
       '',
       '———',
-      mensajeConfirmarInstalacion({ nombre, direccion }, instalacion),
+      mensajeConfirmarInstalacion({ nombre, direccion }, instalacion, ahora),
       '———',
-      ...(telefono ? ['', `Abrir el chat con el mensaje: ${linkWhatsapp(telefono, mensajeConfirmarInstalacion({ nombre, direccion }, instalacion))}`] : []),
+      ...(telefono ? ['', `Abrir el chat con el mensaje: ${linkWhatsapp(telefono, mensajeConfirmarInstalacion({ nombre, direccion }, instalacion, ahora))}`] : []),
       ...(linkPanel ? ['', linkPanel] : []),
     ].join('\n'),
   }
@@ -273,5 +273,18 @@ export function mensajeConfirmarInstalacion({ nombre, direccion }, { fecha, inic
     'Por favor considere 1 hora de flexibilidad por un eventual atraso o adelanto.',
     '',
     '¿Nos confirma si estamos ok? 🙏',
+  ].join('\n')
+}
+
+// El mensaje que va junto al PDF de la cotizacion por WhatsApp, con el link para agendar.
+export function mensajeEnvioCotizacion(linkAgenda) {
+  return [
+    '🪜 Te adjunto la cotización de repisas para tu bodega.',
+    '',
+    '🧹 Los servicios adicionales no están incluidos, pero su valor va detallado.',
+    '💳 Puedes pagar hasta en 3 cuotas sin interés. Boleta o factura.',
+    ...(linkAgenda ? ['', '📅 Agenda tu instalación aquí: ves los horarios disponibles y el tiempo de instalación, y puedes sumar servicios adicionales si los necesitas 👇', linkAgenda] : []),
+    '',
+    '¡Cualquier duda me escribes por acá! 😊',
   ].join('\n')
 }

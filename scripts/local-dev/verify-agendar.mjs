@@ -6,7 +6,7 @@
 import { chromium, devices, expect } from '@playwright/test'
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { ahoraEnZona, sumarDias, diaSemana } from '../../netlify/functions/lib/horarios.mjs'
+import { ahoraEnZona, horaLocalAUTC, sumarDias, diaSemana } from '../../netlify/functions/lib/horarios.mjs'
 import { fechaLarga } from '../../netlify/functions/lib/mensajes.mjs'
 
 const base = process.env.LOCAL_PUBLIC_URL || 'http://127.0.0.1:5176'
@@ -38,7 +38,7 @@ try {
   // En Cotizaciones esta junto al de pago.
   await admin.getByRole('navigation').getByRole('button', { name: 'Cotizaciones', exact: true }).click()
   await admin.getByText('Paula Agenda').first().click()
-  await expect(admin.getByRole('button', { name: '📅 Copiar link para agendar' }).first()).toBeVisible()
+  await expect(admin.getByRole('button', { name: '📋 Copiar mensaje + link para agendar' }).first()).toBeVisible()
   await expect(admin.getByRole('button', { name: 'Copiar link de pago' }).first()).toBeVisible()
 
   // Horarios → Instalaciones: se cierra el primer dia habil que viene y el siguiente queda solo en la tarde.
@@ -96,8 +96,8 @@ try {
   await cel.goto(enlace.toString())
   const actual = cel.getByTestId('agenda-actual')
   await expect(actual).toContainText('De 13:00 a 16:00 hrs')
-  const hoy = ahoraEnZona().fecha
-  const lejos = q.instalacion.fecha >= sumarDias(hoy, 3)
+  // Se puede cambiar hasta 48 h antes del inicio.
+  const lejos = horaLocalAUTC(q.instalacion.fecha, q.instalacion.inicio).getTime() - Date.now() >= 48 * 3600e3
   if (lejos) {
     await actual.getByRole('button', { name: 'Cambiar día u hora' }).click()
     await expect(cel.getByRole('heading', { name: 'Cambia tu día u hora' })).toBeVisible()

@@ -3,7 +3,7 @@ import { DEFAULTS_REPISA, C, adminFetch, apiFetch, fmtDate, fmt, styles } from '
 import { precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } from './preciosRepisas.js'
 import './PorCotizar.css'
 import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
-import EnviarCotizacion, { CopiarLink } from './EnviarCotizacion.jsx'
+import EnviarCotizacion, { CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 
@@ -780,12 +780,12 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={handleDescargar} style={styles.btnSecondary}>Descargar</button>
+              {autoSaved && <CopiarMensajeAgenda link={linkAgendaCot} tamano={13} />}
               <a href={pdfUrl} target="_blank" rel="noreferrer"
                 style={{ ...styles.btnSecondary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Ver PDF
               </a>
               {autoSaved && <EnviarCotizacion pdfBlob={pdfBlob} cotizacion={{ nombre: cliente.nombre, telefono: cliente.celular || cliente.telefono, cotNum: cotGuardada?.cotNum, total: totalInfo.total, pdfUrl: pdfDrive, linkPago, linkAgenda: linkAgendaCot }} />}
-              {autoSaved && <CopiarLink link={linkAgendaCot} texto="📅 Copiar link para agendar" />}
             </div>
           </div>
         </div>

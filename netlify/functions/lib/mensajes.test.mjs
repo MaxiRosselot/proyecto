@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mensajeConfirmarInstalacion, linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
+import { mensajeEnvioCotizacion, mensajeConfirmarInstalacion, linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
 
 test('mensaje de la cotizacion: numero, total, link al PDF y la oferta', () => {
   const texto = mensajeCotizacion({ nombre: 'Marta Díaz', cotNum: 1579, total: 303450, pdfUrl: 'https://drive.google.com/file/d/abc/view' })
@@ -39,4 +39,14 @@ test('el mensaje para confirmar la instalacion pide 1 hora de flexibilidad y que
   assert.match(t, /¿Nos confirma si estamos ok\? 🙏$/)
   assert.doesNotMatch(t, /si no puede/)
   assert.match(mensajeConfirmarInstalacion({ nombre: 'Paula' }, inst, new Date('2026-10-10T12:00:00-03:00')), /instalación del miércoles 21 de octubre/)
+})
+
+test('el mensaje para enviar la cotizacion lleva cuotas, servicios y el link para agendar', () => {
+  const t = mensajeEnvioCotizacion('https://repisasdonmaxi.cl/agendar?c=1500&t=abc')
+  assert.match(t, /^🪜 Te adjunto la cotización/)
+  assert.match(t, /3 cuotas sin interés\. Boleta o factura/)
+  assert.match(t, /servicios adicionales no están incluidos/)
+  assert.ok(t.includes('Agenda tu instalación aquí'))
+  assert.ok(t.includes('\nhttps://repisasdonmaxi.cl/agendar?c=1500&t=abc\n'))
+  assert.doesNotMatch(mensajeEnvioCotizacion(''), /Agenda tu instalación/)
 })

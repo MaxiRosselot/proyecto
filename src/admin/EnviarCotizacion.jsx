@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { styles } from './utils.js'
-import { linkWhatsapp, mensajeCotizacion } from '../../netlify/functions/lib/mensajes.mjs'
+import { linkWhatsapp, mensajeCotizacion, mensajeEnvioCotizacion } from '../../netlify/functions/lib/mensajes.mjs'
 
 const VERDE = '#25D366'
 const nombreArchivo = nombre => `Cotizacion ${(nombre || 'cliente').trim()} - Repisas Don Maxi.pdf`
@@ -10,6 +10,22 @@ function archivoCompartible(blob, nombre) {
   if (!blob || typeof File === 'undefined' || !navigator.canShare) return null
   const archivo = new File([blob], nombreArchivo(nombre), { type: 'application/pdf' })
   try { return navigator.canShare({ files: [archivo] }) ? archivo : null } catch { return null }
+}
+
+// El mensaje que acompaña al PDF por WhatsApp (cuotas, servicios y el link para agendar).
+export function CopiarMensajeAgenda({ link, tamano = 12 }) {
+  const [copiado, setCopiado] = useState(false)
+  const texto = mensajeEnvioCotizacion(link)
+  async function copiar() {
+    try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2000) }
+    catch { window.prompt('Copia el mensaje:', texto) }
+  }
+  return (
+    <button type="button" onClick={copiar} title={texto}
+      style={{ ...styles.btnSecondary, fontSize: tamano, padding: tamano < 13 ? '6px 14px' : '8px 16px', borderColor: VERDE, color: '#128C7E', fontWeight: 700 }}>
+      {copiado ? '✓ Mensaje copiado' : link ? '📋 Copiar mensaje + link para agendar' : '📋 Copiar mensaje'}
+    </button>
+  )
 }
 
 // Copia el link de la cotizacion: ahi el cliente elige su dia y paga.
