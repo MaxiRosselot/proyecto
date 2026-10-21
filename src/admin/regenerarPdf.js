@@ -14,11 +14,16 @@ function bytesABase64(buffer) {
   return btoa(binario)
 }
 
-// Las dos vistas del PDF, dibujadas en un visor 3D fuera de pantalla (mismo protocolo que el cotizador).
+// Las dos vistas del PDF.
 function vistasDelProyecto(project) {
   const sala = project.room
   const proporcion = sala ? Math.min(.88, Math.max(.5, sala.backWallCm / Math.min(sala.leftWallCm, sala.rightWallCm))) : .55
-  const views = [{ view: 'isometric', width: 860, height: 1080 }, { view: 'top', width: Math.round(1080 * proporcion), height: 1080 }]
+  return dibujarVistas(project, [{ view: 'isometric', width: 860, height: 1080 }, { view: 'top', width: Math.round(1080 * proporcion), height: 1080 }])
+}
+
+// Vistas de un proyecto, dibujadas en un visor 3D fuera de pantalla (mismo protocolo que el cotizador).
+// Devuelve { isometric: 'data:image/png;base64,…', … }. La usan el PDF y la ficha del maestro.
+export function dibujarVistas(project, views) {
   const url = new URL('/embed', URL_3D)
   url.searchParams.set('mode', 'quote')
   url.searchParams.set('parentOrigin', window.location.origin)

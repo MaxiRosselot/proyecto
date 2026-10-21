@@ -6,6 +6,7 @@ import { fechaLarga } from './whatsappInstalacion.js'
 import { BadgePago, PagosCotizacion } from './PagosCotizacion.jsx'
 import { regenerarPdf } from './regenerarPdf.js'
 import EnviarCotizacion, { CopiarLink, CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
+import FichaMaestro from './FichaMaestro.jsx'
 import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { porcentajeDescuento } from '../../netlify/functions/lib/totales.mjs'
@@ -422,6 +423,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                         <ResumenInstalacion quote={q} onReagendar={() => setAgendandoId(q.cotNum)}
                           onInvitado={cambios => actualizarLocal(q.cotNum, cambios)} />
                       )}
+                      {q.instalacion?.fecha && agendandoId !== q.cotNum && <div style={{ marginTop: 8 }}><FichaMaestro q={q} /></div>}
                       {agendandoId === q.cotNum && (
                         <AgendarInstalacion quote={q} onCancelar={() => setAgendandoId(null)}
                           onListo={cambios => {

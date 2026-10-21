@@ -11,7 +11,7 @@ export const LATERAL_CENTRAL_DESDE_CM = 110
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-const tituloDia = f => { const [y, m, d] = f.split('-').map(Number); return `${DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} de ${MESES[m - 1]}` }
+export const tituloDia = f => { const [y, m, d] = f.split('-').map(Number); return `${DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} de ${MESES[m - 1]}` }
 const cm = metros => Math.round((Number(metros) || 0) * 100)
 
 function sumar(mapa, clave, n) { mapa.set(clave, (mapa.get(clave) || 0) + n) }
@@ -42,7 +42,7 @@ function juntar(lista) {
   return total
 }
 
-const porMedida = mapa => [...mapa].map(([clave, n]) => ({ a: Number(clave.split('|')[0]), b: Number(clave.split('|')[1]), n }))
+export const porMedida = mapa => [...mapa].map(([clave, n]) => ({ a: Number(clave.split('|')[0]), b: Number(clave.split('|')[1]), n }))
   .sort((x, y) => y.a - x.a || y.b - x.b)
 
 function lineas(t) {
