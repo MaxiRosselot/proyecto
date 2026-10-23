@@ -76,6 +76,7 @@ function bytesABase64(buffer) {
 // El proyecto viaja por postMessage: la ventana chica lo muestra, el modal lo edita.
 function Grafica3D({ project, onProject, onModulos, frameRef }) {
   const [ampliado, setAmpliado] = useState(false)
+  const enCelular = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches
   const modalRef = useRef(null)
   const projectRef = useRef(project)
   projectRef.current = project
@@ -177,12 +178,14 @@ function Grafica3D({ project, onProject, onModulos, frameRef }) {
             animation: 'dmFade .18s ease-out',
           }}>
           <style>{'@keyframes dmFade{from{opacity:0}to{opacity:1}}'}</style>
-          <div style={{ position: 'relative', width: '92vw', height: '90vh', background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.35)' }}>
-            <iframe ref={modalRef} src={url3d('/configurador')} title="Configurador Repisas 3D"
+          {/* En el celular ocupa toda la pantalla: el configurador se ordena solo en pestañas. */}
+          <div style={{ position: 'relative', background: 'white', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.35)',
+            ...(enCelular ? { width: '100vw', height: '100dvh', borderRadius: 0, boxSizing: 'border-box', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' } : { width: '92vw', height: '90vh', borderRadius: 14 }) }}>
+            <iframe ref={modalRef} src={url3d('/configurador', enCelular ? { movil: '1' } : {})} title="Configurador Repisas 3D"
               onLoad={() => enviarProyecto(modalRef.current)}
               style={{ width: '100%', height: '100%', border: 0, display: 'block' }} />
             <button type="button" onClick={() => setAmpliado(false)} aria-label="Cerrar"
-              style={{ ...botonEsquina, width: 34, height: 34, padding: 0, borderRadius: '50%', fontSize: 17, lineHeight: '30px' }}>
+              style={{ ...botonEsquina, width: 34, height: 34, padding: 0, borderRadius: '50%', fontSize: 17, lineHeight: '30px', ...(enCelular ? { top: 'calc(env(safe-area-inset-top) + 6px)', right: 6 } : {}) }}>
               x
             </button>
           </div>
