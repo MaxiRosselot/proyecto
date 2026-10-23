@@ -3,6 +3,7 @@
 // viven en el Drive del negocio; aca estan las reglas, sin Google, para probarlas en memoria.
 // Sin imports de Node arriba: el sitio y el panel usan las secciones y categorias de aca.
 import { MARCA, WHATSAPP } from './marca.mjs'
+import { avisoSolicitudFotos } from './telegram.mjs'
 
 export class ErrorSitio extends Error {
   constructor(message, estado = 400) { super(message); this.estado = estado }
@@ -161,6 +162,7 @@ export async function terminarSolicitudFotos(deps, body) {
   const s = carpeta.datos
   await deps.solicitudes.marcarAvisada(carpeta.id)
   await deps.enviarCorreo(correoSolicitudAdmin(s, carpeta, recibidos, deps.avisoA))
+  await deps.avisar?.(avisoSolicitudFotos(s, recibidos.length))
   let acuse = true
   try { await deps.enviarCorreo(correoSolicitudCliente(s)) } catch (e) { acuse = false; console.warn('Acuse al cliente no enviado:', e.message) }
   return { recibidos: recibidos.length, acuse }

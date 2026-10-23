@@ -135,7 +135,7 @@ export async function agendarInstalacion(almacen, calendar, calendarId, datos) {
     ...(datos.repisas !== undefined ? { repisas } : {}),
     instalacion, ...(email && email !== cotizacion.email ? { email } : {}),
   })
-  return { instalacion, totales, email, repisas }
+  return { instalacion, totales, email, repisas, cotizacion }
 }
 
 // Invita al cliente a una instalacion ya agendada, para cuando el correo se consigue despues.

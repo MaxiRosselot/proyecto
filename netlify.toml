@@ -61,6 +61,11 @@
 [functions.send-reminders]
   schedule = "0 13 * * *"
 
+# Seguimiento de las 20:00 en Chile (correos a cotizaciones sin respuesta y Telegram con las
+# instalaciones de mañana). Corre a las 23 y 00 UTC y solo actua la que cae a las 20 h en Chile.
+[functions.seguimiento-diario]
+  schedule = "0 23,0 * * *"
+
 [[headers]]
   for = "/*"
   [headers.values]

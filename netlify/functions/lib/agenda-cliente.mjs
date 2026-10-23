@@ -5,6 +5,7 @@
 // Las reglas de horas viven en agenda-horas.mjs. Lo usan la funcion agendar y el backend local.
 //
 // deps: { almacen, config, calendar, calendarId, leerEventos(desde, hasta), enviarCorreo, avisoA, ahora }
+import { avisoInstalacionAgendada } from './telegram.mjs'
 import { ErrorCotizacion, actualizarCotizacion, listarCotizaciones, obtenerCotizacion } from './cotizaciones.mjs'
 import {
   SERVICIOS_CLIENTE, disponibilidadAgenda, duracionInstalacionMin, ocupadosAgenda, puedeReagendar, rangoAgendaCliente
@@ -144,6 +145,7 @@ async function agendarPost(body, deps) {
   if (correoValido(guardada.email)) correos.push(correoAgendaCliente(guardada, instalacion, { reagendada, linkAgenda: link }))
   if (deps.avisoA) correos.push({ para: deps.avisoA, ...correoAgendaAdmin(guardada, instalacion, { reagendada, anterior, linkPanel: `${deps.config.base}/admin`, ahora: new Date(deps.ahora ?? Date.now()) }) })
   for (const correo of correos) await deps.enviarCorreo?.(correo).catch(e => console.warn('agendar: correo no enviado:', e.message))
+  await deps.avisar?.(avisoInstalacionAgendada(guardada, instalacion, { porCliente: true, reagendada }))
 
   return json(200, { ok: true, estado: 'agendada', reagendada, correoEnviado: correoValido(guardada.email), cotizacion: vista(guardada, ahora) })
 }

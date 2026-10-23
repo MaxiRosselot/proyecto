@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { C, apiFetch, fmt, fmtDate, fmtTime, styles, VISIT_STATUS_LABELS } from './utils.js'
 import { VISITA_VIGENTE } from './listaVisitas.js'
+import AvisosTelegram from './AvisosTelegram.jsx'
 
 function KpiCard({ label, value, sub, color, onClick, alert }) {
   return (
@@ -246,6 +247,7 @@ export default function DashboardSection({ navigateTo }) {
           )}
         </SectionCard>
       </div>
+      <AvisosTelegram />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 // netlify/functions/create_event.mjs
+import { avisar, avisoVisitaAgendada } from './lib/telegram.mjs';
 import { google } from 'googleapis';
 import { almacenHorariosSheets, horaLocalAUTC, horaPermitida, leerHorario, sumarDias } from './lib/horarios.mjs';
 
@@ -175,6 +176,8 @@ Slot: ${fechaISO} ${horaHHmm} (${duration}min)`;
         },
       },
     });
+
+    await avisar(avisoVisitaAgendada({ nombre: `${nombre || ''} ${apellido || ''}`.trim(), fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, comentarios: note }));
 
     console.log('✅ Evento creado correctamente', {
       start: startLocal.toISOString(),

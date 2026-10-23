@@ -33,6 +33,10 @@ import { horasParaReagendar, liberarHoraVisita, reagendarVisita } from '../../ne
 import { almacenFotosMemoria, almacenSolicitudesMemoria } from '../../netlify/functions/lib/sitio.mjs'
 import { atenderSitio } from '../../netlify/functions/sitio.mjs'
 import { atenderWebFotos } from '../../netlify/functions/web-fotos.mjs'
+import { avisar, avisoCotizacionCreada, avisoVisitaAgendada } from '../../netlify/functions/lib/telegram.mjs'
+import { avisarGuardado, avisarInstalacionAgendada } from '../../netlify/functions/lib/avisos.mjs'
+import { ejecutarSeguimiento } from '../../netlify/functions/lib/seguimiento.mjs'
+import { atenderTelegramAdmin, enviarTelegram } from '../../netlify/functions/lib/telegram.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -53,6 +57,11 @@ process.env.PAGO_LINK_SECRET = 'solo-local-links-de-pago'
 // Como en Netlify: la reserva queda apagada salvo que se inicie con RESERVA_ACTIVA=1 (verify-reserva).
 process.env.RESERVA_ACTIVA = process.env.RESERVA_ACTIVA || '0'
 process.env.SITE_URL = PUBLIC_URL
+// Telegram simulado: los avisos del bot quedan en memoria (GET /telegram-mock/mensajes) y no salen a internet.
+process.env.TELEGRAM_BOT_TOKEN = 'local-simulado'
+process.env.TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '1001'
+process.env.TELEGRAM_API_URL = `http://127.0.0.1:${PORT}/telegram-mock`
+const mensajesTelegram = []
 
 function loadData() {
   if (fs.existsSync(DATA_FILE)) {
@@ -177,7 +186,7 @@ function depsReserva() {
   return {
     almacen: cotizaciones, config: configPago(), mp: mpLocal, calendar: calendarLocal, calendarId: 'repisas@donmaxi.cl',
     leerEventos: async (desde, hasta) => eventosLocales().map(ev => eventoParaVista(ev)).filter(e => e.fecha >= desde && e.fecha <= hasta),
-    enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com',
+    enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com', avisar,
     leerHorario: () => leerHorario(horariosInstalaciones, HORARIO_INSTALACIONES),
   }
 }
@@ -189,7 +198,7 @@ const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'co
 const fotosWeb = almacenFotosMemoria()
 const solicitudesWeb = almacenSolicitudesMemoria()
 function depsSitio() {
-  return { fotos: fotosWeb, solicitudes: solicitudesWeb, enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com' }
+  return { fotos: fotosWeb, solicitudes: solicitudesWeb, enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com', avisar }
 }
 
 // Los PDF y correos de las cotizaciones web quedan en disco: nada sale a Google ni a un correo real.
@@ -258,7 +267,9 @@ const routes = {
     return { ok: true }
   },
   'save-quote': async (body) => {
-    const { estado, respuesta } = body.crear ? await crearCotizacion(cotizaciones, body) : await actualizarCotizacion(cotizaciones, body)
+    const resultado = body.crear ? await crearCotizacion(cotizaciones, body) : await actualizarCotizacion(cotizaciones, body)
+    const { estado, respuesta } = resultado
+    await avisarGuardado(body, resultado)
     return { status: estado, ...respuesta, ...(respuesta.ok ? { linkPago: linkPagoCotizacion(respuesta.cotNum ?? body.cotNum), linkAgenda: linkAgenda(respuesta.cotNum ?? body.cotNum) } : {}) }
   },
   'delete-quote': async (body) => {
@@ -275,6 +286,7 @@ const routes = {
       avisoA: 'admin-local@example.com',
       linkPago: cotNum => linkPagoCotizacion(cotNum),
       linkAgenda: cotNum => linkAgenda(cotNum),
+      avisar,
     })
     return { ok: true, ...resultado }
   },
@@ -283,9 +295,21 @@ const routes = {
     const r = body.accion === 'invitar'
       ? await invitarClienteInstalacion(cotizaciones, calendarLocal, 'repisas@donmaxi.cl', body)
       : await agendarInstalacion(cotizaciones, calendarLocal, 'repisas@donmaxi.cl', body)
-    return { ok: true, ...r }
+    if (r.cotizacion) await avisarInstalacionAgendada(r.cotizacion, r.instalacion)
+    const { cotizacion: _c, ...resto } = r
+    return { ok: true, ...resto }
   },
   'eventos-local': () => ({ ok: true, eventos: db.eventos || {} }),
+  // Mismas reglas que netlify/functions/seguimiento-diario.mjs (?hoy=AAAA-MM-DD para probar otro dia).
+  'seguimiento-diario': async (_body, params) => {
+    const { quotes } = await listarCotizaciones(cotizaciones)
+    return { ok: true, ...(await ejecutarSeguimiento({
+      cotizaciones: quotes, hoy: params.get('hoy') || ahoraEnZona().fecha, linkAgenda: cotNum => linkAgenda(cotNum),
+      enviarCorreo: async correo => guardarCorreoLocal(correo), avisoA: 'admin-local@example.com',
+      telegram: (texto, opciones) => enviarTelegram(texto, opciones),
+    })) }
+  },
+  'telegram': async (body, _params, method) => atenderTelegramAdmin(method, body),
   // Mismo contrato que netlify/functions/planilla.mjs
   'planilla': async (body) => {
     const { almacen, calendar, calendarId, leerEventos } = depsReserva()
@@ -356,6 +380,7 @@ const routes = {
       email, celular, direccion, notas: note, nombre: `${nombre} ${apellido}`.trim(), status: 'agendada', slotKey,
     }
     db.visits.push(visita); db.visitStatuses[visita.id] = 'agendada'; saveData(db)
+    await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, comentarios: note }))
     return { ok: true, local: true, slotKey }
   },
 }
@@ -365,6 +390,18 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, 'http://localhost')
   const name = url.pathname.replace('/.netlify/functions/', '')
+  if (url.pathname.startsWith('/telegram-mock/')) {
+    if (url.pathname === '/telegram-mock/mensajes') {
+      if (req.method === 'DELETE') mensajesTelegram.length = 0
+      return send(res, 200, { ok: true, mensajes: mensajesTelegram })
+    }
+    const chunksTg = []
+    for await (const c of req) chunksTg.push(c)
+    const cuerpo = JSON.parse(Buffer.concat(chunksTg).toString('utf8') || '{}')
+    if (url.pathname.endsWith('/getUpdates')) return send(res, 200, { ok: true, result: [{ update_id: 1, message: { chat: { id: 1001, first_name: 'Maxi', last_name: 'Local' }, text: '/start' } }] })
+    mensajesTelegram.push({ chat: cuerpo.chat_id, texto: cuerpo.text, botones: cuerpo.reply_markup?.inline_keyboard?.flat() || [] })
+    return send(res, 200, { ok: true, result: { message_id: mensajesTelegram.length } })
+  }
   if (!url.pathname.startsWith('/.netlify/functions/')) return send(res, 404, { error: 'Ruta local no encontrada' })
 
   // Loopback-only mock downloads; random identifiers, no production or cloud storage.

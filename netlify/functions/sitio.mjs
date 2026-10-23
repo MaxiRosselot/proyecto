@@ -7,6 +7,7 @@
 // Las reglas viven en lib/sitio.mjs.
 import { google } from 'googleapis'
 import { enviarCorreoGmail } from './lib/correo.mjs'
+import { avisar, avisoContacto } from './lib/telegram.mjs'
 import {
   almacenFotosDrive, almacenSolicitudesDrive, correoContacto, fotosPorSeccion, iniciarSolicitudFotos,
   subirTrozoSolicitud, terminarSolicitudFotos, validarContacto,
@@ -21,7 +22,7 @@ function deps(env = process.env) {
   const gmail = google.gmail({ version: 'v1', auth })
   return {
     fotos: almacenFotosDrive(drive), solicitudes: almacenSolicitudesDrive(drive, auth),
-    enviarCorreo: correo => enviarCorreoGmail(gmail, correo), avisoA: env.NOTIFY_EMAIL || 'repisas@donmaxi.cl',
+    enviarCorreo: correo => enviarCorreoGmail(gmail, correo), avisoA: env.NOTIFY_EMAIL || 'repisas@donmaxi.cl', avisar,
   }
 }
 
@@ -34,7 +35,9 @@ export async function atenderSitio(event, d) {
   let body
   try { body = JSON.parse(event.body || '{}') } catch { return json(400, { ok: false, error: 'Solicitud inválida' }) }
   if (body.tipo === 'contacto') {
-    await d.enviarCorreo(correoContacto(validarContacto(body), d.avisoA))
+    const contacto = validarContacto(body)
+    await d.enviarCorreo(correoContacto(contacto, d.avisoA))
+    await d.avisar?.(avisoContacto(contacto))
     return json(200, { ok: true })
   }
   if (body.tipo === 'fotos-iniciar') return json(200, { ok: true, ...(await iniciarSolicitudFotos(d, body)) })

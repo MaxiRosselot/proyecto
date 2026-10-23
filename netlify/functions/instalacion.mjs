@@ -6,6 +6,7 @@ import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { almacenSheets, respuestaDeError } from './lib/cotizaciones.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from './lib/instalaciones.mjs'
+import { avisarInstalacionAgendada } from './lib/avisos.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,11 @@ export async function handler(event) {
     const almacen = almacenSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID)
     const calendar = google.calendar({ version: 'v3', auth })
 
-    if (datos.accion === 'agendar') return responder(200, { ok: true, ...(await agendarInstalacion(almacen, calendar, process.env.CALENDAR_ID, datos)) })
+    if (datos.accion === 'agendar') {
+      const { cotizacion, ...r } = await agendarInstalacion(almacen, calendar, process.env.CALENDAR_ID, datos)
+      await avisarInstalacionAgendada(cotizacion, r.instalacion)
+      return responder(200, { ok: true, ...r })
+    }
     if (datos.accion === 'invitar') return responder(200, { ok: true, ...(await invitarClienteInstalacion(almacen, calendar, process.env.CALENDAR_ID, datos)) })
     return responder(400, { ok: false, error: 'Acción desconocida' })
   } catch (err) {

@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { QUOTE_STATUS_LABELS, C, apiFetch, fmt, fmtDate, styles, DEFAULTS_REPISA, porCreacion } from './utils.js'
+import { diasDesde } from '../../netlify/functions/lib/seguimiento.mjs'
+import { ahoraEnZona } from '../../netlify/functions/lib/horarios.mjs'
 import { hayBorradorSinGuardar } from './PorCotizar.jsx'
 import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx'
 import { fechaLarga } from './whatsappInstalacion.js'
@@ -24,6 +26,17 @@ function driveFileId(url) {
   if (!url) return ''
   const m = url.match(/\/d\/([^/]+)/)
   return m ? m[1] : ''
+}
+
+// Hace cuanto se envio una cotizacion por confirmar, para priorizar: ambar desde los 3 dias, rojo
+// desde los 7. A los 3 y 7 dias el cliente recibe un correo de seguimiento (seguimiento-diario).
+function Antiguedad({ q }) {
+  const dias = diasDesde(q.creadoMs, ahoraEnZona().fecha)
+  if (dias == null) return null
+  const color = dias >= 7 ? C.red : dias >= 3 ? AMBAR : C.green
+  const texto = dias === 0 ? 'Enviada hoy' : `Enviada hace ${dias} ${dias === 1 ? 'día' : 'días'}`
+  const recordatorios = q.email ? (dias >= 7 ? ' · 2 recordatorios' : dias >= 3 ? ' · 1 recordatorio' : '') : ' · sin correo'
+  return <span style={{ ...styles.badge(color), marginLeft: 10 }} data-testid="antiguedad" title="El cliente recibe un correo de seguimiento a los 3 y a los 7 días">{texto}{recordatorios}</span>
 }
 
 // Un bloque de la tarjeta con su titulo: Cliente, Documento, Enviar al cliente.
@@ -77,6 +90,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [deleting, setDeleting]         = useState(null)
   const [confirmDel, setConfirmDel]     = useState(null)
   const [buscar, setBuscar]             = useState('')
+  const [antiguasPrimero, setAntiguasPrimero] = useState(false)
   const [abriendo, setAbriendo]         = useState(null)
   const [probandoCorreo, setProbandoCorreo] = useState(false)
   const [agendandoId, setAgendandoId]   = useState(null)
@@ -218,7 +232,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const filtered = quotes
     .filter(enTab)
     .filter(q => !bq || (q.nombre || '').toLowerCase().includes(bq) || String(q.cotNum).includes(bq))
-    .sort(porCreacion)
+    .sort((a, b) => (tab === 'por confirmar' && antiguasPrimero ? -porCreacion(a, b) : porCreacion(a, b)))
 
   return (
     <div>
@@ -252,6 +266,11 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
             }}>{counts[t.key]}</span>
           </button>
         ))}
+        {tab === 'por confirmar' && (
+          <button type="button" onClick={() => setAntiguasPrimero(v => !v)} style={{ ...styles.tab, marginLeft: 'auto' }} title="Para priorizar a quién hacerle seguimiento">
+            {antiguasPrimero ? '↑ Más antiguas primero' : '↓ Más nuevas primero'}
+          </button>
+        )}
       </div>
 
       {loading && <div style={styles.empty}>Cargando cotizaciones...</div>}
@@ -290,6 +309,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                     <span style={{ fontWeight: 700, color: C.orangeDark }}>{fmt(q.total)}</span>
                     {q.direccion && <span style={{ marginLeft: 10, color: C.textMuted }}>{q.direccion}</span>}
                     {q.creado && <span style={{ marginLeft: 10, color: C.textMuted }}>Creada {String(q.creado).split(/[ ,]/)[0]}</span>}
+                    {q.status === 'por confirmar' && <Antiguedad q={q} />}
                     {q.tieneProyecto3d && <span style={{ ...styles.badge(C.purple), marginLeft: 10 }}>Modelo 3D</span>}
                     <BadgePago quote={q} />
                     {q.instalacion?.fecha && <span style={{ ...styles.badge(C.green), marginLeft: 10 }}>Instalación {fechaLarga(q.instalacion.fecha).split(',')[1]?.trim()} · {q.instalacion.inicio}</span>}

@@ -7,6 +7,7 @@ import { atenderAgendaGet, atenderAgendaPost } from './lib/agenda-cliente.mjs'
 import { HOJA_HORARIOS_INSTALACIONES, HORARIO_INSTALACIONES, almacenHorariosSheets, leerHorario } from './lib/horarios.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
 import { configPago } from './lib/mercadopago.mjs'
+import { avisar } from './lib/telegram.mjs'
 
 const json = (statusCode, body) => ({ statusCode, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(body) })
 
@@ -18,7 +19,7 @@ export async function handler(event) {
     const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
     auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
     const horarios = almacenHorariosSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID, HOJA_HORARIOS_INSTALACIONES)
-    const deps = { ...serviciosGoogle(), config, leerHorario: () => leerHorario(horarios, HORARIO_INSTALACIONES) }
+    const deps = { ...serviciosGoogle(), config, avisar, leerHorario: () => leerHorario(horarios, HORARIO_INSTALACIONES) }
     if (event.httpMethod === 'GET') return await atenderAgendaGet(event.queryStringParameters || {}, deps)
     if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Método no permitido' })
     let body

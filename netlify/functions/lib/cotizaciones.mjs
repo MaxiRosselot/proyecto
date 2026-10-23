@@ -215,7 +215,7 @@ export async function actualizarCotizacion(almacen, datos) {
   const nueva = { ...actual, ...cambios, cotNum, creado: actual.creado }
   await almacen.actualizar(encontrada.fila, cotizacionAFila(nueva))
   await verificarGuardado(almacen, encontrada.fila, nueva)
-  return { estado: 200, respuesta: { ok: true, cotNum: String(cotNum) } }
+  return { estado: 200, respuesta: { ok: true, cotNum: String(cotNum) }, antes: actual }
 }
 
 export async function borrarCotizacion(almacen, cotNum) {

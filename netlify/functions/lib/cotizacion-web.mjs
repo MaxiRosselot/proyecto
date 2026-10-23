@@ -7,6 +7,7 @@
 //
 // Las dependencias (planilla, PDF, Drive, correo) se inyectan: en Netlify son Google, en local y
 // en los tests son falsas. La logica es la misma.
+import { avisoCotizacionCreada } from './telegram.mjs'
 import { precioRepisa } from '../../../src/admin/preciosRepisas.js'
 import { actualizarCotizacion, crearCotizacion, listarCotizaciones, siguienteDisponible } from './cotizaciones.mjs'
 import { MARCA, OFERTA, TEXTO_OFERTA, WHATSAPP } from './marca.mjs'
@@ -172,6 +173,8 @@ export async function procesarCotizacionWeb(body, deps) {
     try { await enviarCorreo({ ...correoAviso(datos), adjuntos: [adjunto] }) }
     catch (e) { console.error(`cotizacion-web: no se envió el aviso de la N° ${numero}:`, e) }
   }
+
+  await deps.avisar?.(avisoCotizacionCreada({ ...cliente, cotNum: numero, total: pdf.total }, { origen: 'web' }))
 
   // Lo que la pagina necesita para cerrar ahi mismo.
   return {

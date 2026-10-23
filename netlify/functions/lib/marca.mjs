@@ -10,6 +10,8 @@ export const CONDICIONES = 'Puede abonar un 50% antes de la instalación, o paga
 export const OFERTA = { descuento: 5, medio: 'transferencia' };
 export const TEXTO_OFERTA = `Paga por transferencia y obtén ${OFERTA.descuento}% de descuento`;
 export const WHATSAPP = '+56951020367';
+// El maestro y la camioneta, para el mensaje de la vispera de cada instalacion.
+export const MAESTRO = { nombre: 'Felipe Chacón', telefono: '+56 9 7468 8362', patente: 'VLZZ79' };
 
 // Servicios adicionales: clave, nombre, precio neto de lista y descripcion para el PDF.
 // Los usan el PDF, el cotizador y el panel para agendar la instalacion.

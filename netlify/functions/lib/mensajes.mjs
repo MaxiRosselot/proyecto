@@ -1,6 +1,6 @@
 // Textos para el cliente: envio de la cotizacion, confirmacion de la instalacion y recordatorios.
 // Sin dependencias de Node: los usan el cron de recordatorios y el panel admin.
-import { MARCA, OFERTA, SERVICIOS } from './marca.mjs'
+import { MAESTRO, MARCA, OFERTA, SERVICIOS, WHATSAPP } from './marca.mjs'
 
 // Numero chileno en formato internacional sin "+": 9 1234 5678 -> 56912345678.
 export function telefonoWhatsapp(telefono) {
@@ -287,4 +287,46 @@ export function mensajeEnvioCotizacion(linkAgenda) {
     '',
     '¡Cualquier duda me escribes por acá! 😊',
   ].join('\n')
+}
+
+// La vispera de cada instalacion (8 pm, por Telegram a Maxi): el mensaje para copiar y mandarle
+// al cliente por WhatsApp. Con retiro y orden contratado no se le pide la bodega despejada.
+export function mensajeInstalacionManana(q, { fecha, inicio }) {
+  const conRetiro = (Number(q.adicionales?.qty_retiro_orden) || 0) > 0
+  const dia = fechaLarga(fecha).replace(',', '').toLowerCase()
+  return [
+    `${saludo(q.nombre)} 👋 Le escribimos de Repisas Don Maxi para confirmar su instalación de mañana ${dia} a las ${inicio} hrs${q.direccion ? ` en ${q.direccion}` : ''}.`,
+    '',
+    conRetiro
+      ? 'Como contrató el retiro y orden, nosotros nos encargamos de sacar y volver a ordenar sus cosas.'
+      : 'Le recordamos tener la bodega despejada para comenzar a tiempo.',
+    'También le pedimos intentar conseguir un estacionamiento lo más cerca posible de la bodega.',
+    '',
+    `El encargado de la instalación es el maestro ${MAESTRO.nombre}, ${MAESTRO.telefono}. La patente de la camioneta es ${MAESTRO.patente} y cabe sin problemas en estacionamientos subterráneos comunes. No necesitamos corriente para la instalación.`,
+    '',
+    'Cualquier cosa me escribe, estaré atento 🙏',
+  ].join('\n')
+}
+
+// Seguimiento de una cotizacion sin respuesta: a los 3 y a los 7 dias de enviada (seguimiento.mjs).
+export function correoSeguimientoCotizacion(q, { dias, linkAgenda = '' }) {
+  const ultimo = dias >= 7
+  return {
+    asunto: ultimo ? `Tu cotización N° ${q.cotNum} sigue disponible — Repisas Don Maxi` : `¿Pudiste revisar tu cotización N° ${q.cotNum}? — Repisas Don Maxi`,
+    texto: [
+      `Hola ${primerNombre(q.nombre)},`.replace(' ,', ','),
+      '',
+      ultimo
+        ? 'Te escribimos para contarte que tu cotización de repisas sigue disponible. Si quieres ajustar medidas, sumar o quitar algo, respóndenos y te la actualizamos.'
+        : 'Hace unos días te enviamos la cotización de tus repisas. ¿Pudiste revisarla? Si tienes cualquier duda, respóndenos este correo o escríbenos por WhatsApp.',
+      '',
+      ...(q.pdfUrl ? [`📄 Tu cotización: ${q.pdfUrl}`] : []),
+      ...(linkAgenda ? [`📅 Agenda tu instalación cuando quieras (eliges día y hora): ${linkAgenda}`] : []),
+      `💬 WhatsApp: https://wa.me/${WHATSAPP.replace(/\D/g, '')}`,
+      '',
+      'Puedes pagar hasta en 3 cuotas sin interés o al terminar la instalación.',
+      '',
+      'Repisas Don Maxi',
+    ].join('\n'),
+  }
 }
