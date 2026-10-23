@@ -2,10 +2,13 @@
 // Se configura con TELEGRAM_BOT_TOKEN (lo entrega @BotFather) y TELEGRAM_CHAT_ID (uno o varios,
 // separados por coma) en Netlify. Sin configurar no hace nada, y un aviso que falla nunca rompe lo
 // que lo disparo (una cotizacion se guarda igual aunque Telegram no responda).
-import { fechaLarga } from './mensajes.mjs'
+import { SERVICIOS } from './marca.mjs'
+import { fechaLarga, linkWhatsapp } from './mensajes.mjs'
+import { resumenPagos } from './pagos-resumen.mjs'
+import { nombreServicio } from './totales.mjs'
 
 const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
-const corto = iso => fechaLarga(iso).replace(/,? de \d{4}$/, '')
+const corto = iso => fechaLarga(iso).replace(/,? de \d{4}$/, '').replace(',', '')
 
 export function configTelegram(env = process.env) {
   const token = String(env.TELEGRAM_BOT_TOKEN || '').trim()
@@ -27,10 +30,13 @@ export async function llamarTelegram(config, metodo, cuerpo, { fetchImpl = fetch
   } finally { clearTimeout(reloj) }
 }
 
-// botones: [{ texto, url }] — van como botones bajo el mensaje (p. ej. "Abrir WhatsApp").
-export async function enviarTelegram(texto, { botones = [], env = process.env, fetchImpl } = {}) {
+// mensaje: el texto, o { texto, botones } (lo que devuelven los avisos de abajo).
+// botones: [{ texto, url }] — van como botones bajo el mensaje (WhatsApp al cliente, PDF, Maps).
+export async function enviarTelegram(mensaje, { botones: extra = [], env = process.env, fetchImpl } = {}) {
   const config = configTelegram(env)
   if (!config || !config.chats.length) return 0
+  const texto = typeof mensaje === 'object' ? mensaje.texto : mensaje
+  const botones = [...(typeof mensaje === 'object' ? mensaje.botones || [] : []), ...extra].filter(b => b?.url)
   const cuerpo = {
     text: String(texto).slice(0, 4000),
     disable_web_page_preview: true,
@@ -45,49 +51,134 @@ export async function enviarTelegram(texto, { botones = [], env = process.env, f
 }
 
 // Para las funciones del panel: avisa y sigue, pase lo que pase.
-export async function avisar(texto, opciones = {}) {
-  try { return await enviarTelegram(texto, opciones) }
+export async function avisar(mensaje, opciones = {}) {
+  try { return await enviarTelegram(mensaje, opciones) }
   catch (e) { console.warn('Aviso de Telegram no enviado:', e.message); return 0 }
 }
 
-// ---------- Textos de los avisos ----------
+// ---------- Ficha de una cotizacion (para los avisos) ----------
 const quien = q => `${q.nombre || 'Sin nombre'}${q.cotNum ? ` · N° ${q.cotNum}` : ''}`
-const telefono = q => (q.telefono ? `\n📞 ${q.telefono}` : '')
+const primer = nombre => String(nombre || '').trim().split(/\s+/)[0] || ''
+const hola = nombre => `¡Hola${primer(nombre) ? ' ' + primer(nombre) : ''}! 👋`
+const cm = m => Math.round((Number(m) || 0) * 100)
+const mapa = dir => (dir ? `https://maps.google.com/?q=${encodeURIComponent(dir)}` : '')
 
+// Cada repisa en una linea corta: "2 × 243×48×200 cm, 4 niveles (con colgador)".
+export function lineasRepisas(repisas = []) {
+  return repisas.map(r => {
+    const u = Number(r.unidades ?? r.u ?? 1) || 1
+    const pre = u > 1 ? `${u} × ` : ''
+    if (r.kind === 'rack' || (!r.largo && !r.l && r.label)) return `${pre}${r.label || 'Repisas'}`
+    const n = Number(r.niveles ?? r.n) || 0
+    return `${pre}${cm(r.largo ?? r.l)}×${cm(r.prof ?? r.p)}×${cm(r.alto ?? r.a)} cm${n ? `, ${n} niveles` : ''}${r.colgador ? ' (con colgador)' : ''}`
+  })
+}
+
+export function serviciosDe(adicionales = {}) {
+  return SERVICIOS.map(([clave]) => [clave, Number(adicionales[`qty_${clave}`]) || 0]).filter(([, n]) => n > 0)
+    .map(([clave, n]) => `${nombreServicio(adicionales, clave)}${n > 1 ? ` × ${n}` : ''}`)
+}
+
+// Contacto, repisas, servicios, montos y pagos. Lo que haga falta para decidir sin abrir el panel.
+export function fichaCotizacion(q) {
+  const repisas = lineasRepisas(q.repisas)
+  const servicios = serviciosDe(q.adicionales)
+  const total = Number(q.total) || 0
+  const pago = total ? resumenPagos(total, q.pagos || []) : null
+  return [
+    `👤 ${quien(q)}`,
+    ...(q.telefono || q.email ? [`📞 ${[q.telefono, q.email].filter(Boolean).join(' · ')}`] : []),
+    ...(q.direccion ? [`📍 ${q.direccion}`] : []),
+    ...(repisas.length ? [`🪵 Repisas:`, ...repisas.map(l => `   • ${l}`)] : []),
+    `➕ Servicios: ${servicios.length ? servicios.join(', ') : 'ninguno'}`,
+    ...(total ? [`💰 ${q.subtotal ? `Neto ${pesos(q.subtotal)} · ` : ''}Total ${pesos(total)} con IVA`] : []),
+    ...(pago && pago.pagado > 0 ? [`💳 Pagado ${pesos(pago.pagado)} · Saldo ${pesos(pago.saldo)}`] : []),
+    ...(q.instalacion?.fecha ? [`🔧 Instalación: ${corto(q.instalacion.fecha)} · ${q.instalacion.inicio}${q.instalacion.fin ? `–${q.instalacion.fin}` : ''} hrs`] : []),
+  ].join('\n')
+}
+
+// Botones: escribirle al cliente con un mensaje corto ya escrito, ver el PDF y la direccion en Maps.
+function botonesCliente(q, mensaje, etiqueta = 'Escribirle por WhatsApp') {
+  return [
+    ...(q.telefono && mensaje ? [{ texto: `💬 ${etiqueta}`, url: linkWhatsapp(q.telefono, mensaje) }] : []),
+    ...(q.pdfUrl ? [{ texto: '📄 Ver cotización (PDF)', url: q.pdfUrl }] : []),
+    ...(q.direccion ? [{ texto: '📍 Ver en Maps', url: mapa(q.direccion) }] : []),
+  ]
+}
+
+// ---------- Avisos ----------
 export function avisoCotizacionCreada(q, { origen = 'panel' } = {}) {
-  const titulo = origen === 'web' ? '🌐 Cotización web nueva' : '🆕 Cotización creada'
-  return `${titulo}\n${quien(q)}${q.total ? `\n💰 ${pesos(q.total)} con IVA` : ''}${telefono(q)}${q.direccion ? `\n📍 ${q.direccion}` : ''}`
+  const titulo = origen === 'web' ? '🌐 Cotización web nueva (la armó el cliente)' : '🆕 Cotización creada'
+  const corta = origen === 'web'
+    ? `${hola(q.nombre)} Le escribo de Repisas Don Maxi. Vi que cotizó sus repisas en nuestra web (N° ${q.cotNum}). ¿Le ayudo con alguna duda o coordinamos la instalación? 🙏`
+    : `${hola(q.nombre)} Le escribo de Repisas Don Maxi. Le envié su cotización N° ${q.cotNum}. ¿Pudo revisarla? Cualquier duda me escribe 🙏`
+  return { texto: `${titulo}\n${fichaCotizacion(q)}`, botones: botonesCliente(q, corta) }
 }
 
-export function avisoCambioEstado(q, estado, motivo = '') {
-  if (estado === 'confirmada') return `✅ Cotización confirmada\n${quien(q)}${q.total ? `\n💰 ${pesos(q.total)}` : ''}`
-  if (estado === 'rechazada') return `❌ Cotización rechazada\n${quien(q)}${motivo ? `\nMotivo: ${motivo}` : ''}`
-  return `🔄 Cotización ${estado}\n${quien(q)}`
+export function avisoCambioEstado(q, estado, motivo = '', { linkAgenda = '' } = {}) {
+  if (estado === 'confirmada') {
+    const corta = `${hola(q.nombre)} ¡Muchas gracias por confirmar su cotización N° ${q.cotNum}! ✅${q.instalacion?.fecha ? '' : linkAgenda ? ` Puede elegir el día y la hora de la instalación aquí: ${linkAgenda}` : ' ¿Coordinamos el día de la instalación?'}`
+    return { texto: `✅ Cotización confirmada\n${fichaCotizacion(q)}`, botones: botonesCliente(q, corta, 'Agradecer y coordinar') }
+  }
+  if (estado === 'rechazada') return { texto: `❌ Cotización rechazada\n${fichaCotizacion(q)}${motivo ? `\n📝 Motivo: ${motivo}` : ''}`, botones: [] }
+  return { texto: `🔄 Cotización ${estado}\n${fichaCotizacion(q)}`, botones: [] }
 }
 
-export function avisoVisitaAgendada({ nombre, fecha, hora, direccion, telefono: tel, comentarios }) {
-  return `📏 Visita agendada\n${nombre || 'Sin nombre'}\n🕐 ${corto(fecha)} · ${hora} hrs${direccion ? `\n📍 ${direccion}` : ''}${tel ? `\n📞 ${tel}` : ''}${comentarios ? `\n💬 ${String(comentarios).slice(0, 300)}` : ''}`
+export function avisoVisitaAgendada({ nombre, fecha, hora, direccion, telefono, email, comentarios }) {
+  const corta = `${hola(nombre)} Le escribo de Repisas Don Maxi para confirmar su visita del ${corto(fecha).toLowerCase()} a las ${hora} hrs${direccion ? ` en ${direccion}` : ''}. ¿Nos confirma? 🙏`
+  const v = { telefono, direccion }
+  return {
+    texto: [`📏 Visita agendada`, `👤 ${nombre || 'Sin nombre'}`, `🕐 ${corto(fecha)} · ${hora} hrs`,
+      ...(telefono || email ? [`📞 ${[telefono, email].filter(Boolean).join(' · ')}`] : []),
+      ...(direccion ? [`📍 ${direccion}`] : []), ...(comentarios ? [`💬 ${String(comentarios).slice(0, 300)}`] : [])].join('\n'),
+    botones: botonesCliente(v, corta, 'Confirmar visita'),
+  }
+}
+
+// Mensaje corto para confirmar una instalacion por WhatsApp.
+export function confirmacionCortaInstalacion(q, inst, { manana = false } = {}) {
+  return `${hola(q.nombre)} Le confirmo su instalación ${manana ? 'de mañana' : `del ${corto(inst.fecha).toLowerCase()}`} a las ${inst.inicio} hrs${q.direccion ? ` en ${q.direccion}` : ''} ✅ ¿Nos confirma? 🙏`
 }
 
 export function avisoInstalacionAgendada(q, inst, { porCliente = false, reagendada = false } = {}) {
   const titulo = reagendada ? '🔁 Instalación reagendada' : porCliente ? '📅 El cliente agendó su instalación' : '📅 Instalación agendada'
-  return `${titulo}\n${quien(q)}\n🕐 ${corto(inst.fecha)} · ${inst.inicio}${inst.fin ? `–${inst.fin}` : ''} hrs${q.direccion ? `\n📍 ${q.direccion}` : ''}`
+  return {
+    texto: `${titulo}\n🕐 ${corto(inst.fecha)} · ${inst.inicio}${inst.fin ? `–${inst.fin}` : ''} hrs\n${fichaCotizacion({ ...q, instalacion: undefined })}`,
+    botones: botonesCliente(q, confirmacionCortaInstalacion(q, inst), 'Confirmar instalación'),
+  }
 }
 
 export function avisoSolicitudFotos(s, archivos) {
-  return `📸 Piden cotizar por fotos\n${s.nombre}${s.comuna ? ` · ${s.comuna}` : ''}\n📞 ${s.telefono}\n${archivos} ${archivos === 1 ? 'archivo' : 'archivos'} en tu Drive${s.medidas ? `\n📐 ${s.medidas}` : ''}`
+  const corta = `${hola(s.nombre)} Le escribo de Repisas Don Maxi. Recibí sus fotos, las reviso y le envío la cotización a su correo 🙏`
+  return {
+    texto: [`📸 Piden cotizar por fotos`, `👤 ${s.nombre}${s.comuna ? ` · ${s.comuna}` : ''}`, `📞 ${[s.telefono, s.email].filter(Boolean).join(' · ')}`,
+      `🗂 ${archivos} ${archivos === 1 ? 'archivo' : 'archivos'} en tu Drive (el link va en el correo)`, ...(s.medidas ? [`📐 ${s.medidas}`] : []),
+      ...(s.comentarios ? [`💬 ${String(s.comentarios).slice(0, 300)}`] : [])].join('\n'),
+    botones: botonesCliente({ telefono: s.telefono }, corta),
+  }
 }
 
 export function avisoContacto(c) {
-  return `✉️ Mensaje desde la web\n${c.nombre}${c.telefono ? ` · ${c.telefono}` : ''}${c.email ? ` · ${c.email}` : ''}\n💬 ${String(c.mensaje).slice(0, 500)}`
+  return {
+    texto: `✉️ Mensaje desde la web\n👤 ${c.nombre}\n📞 ${[c.telefono, c.email].filter(Boolean).join(' · ') || '—'}\n💬 ${String(c.mensaje).slice(0, 800)}`,
+    botones: botonesCliente({ telefono: c.telefono }, `${hola(c.nombre)} Le escribo de Repisas Don Maxi por su mensaje en la web.`, 'Responder por WhatsApp'),
+  }
 }
 
 export function avisoPago(q, monto, medio = '') {
-  return `💳 Pago recibido${medio ? ` (${medio})` : ''}\n${quien(q)}\n💰 ${pesos(monto)}`
+  return { texto: `💳 Pago recibido${medio ? ` (${medio})` : ''}: ${pesos(monto)}\n${fichaCotizacion(q)}`, botones: [] }
 }
 
+// Cotizaciones sin respuesta, con un boton por cliente para escribirle un seguimiento corto.
 export function avisoSinRespuesta(lista) {
-  return [`⏰ Cotizaciones sin respuesta (${lista.length})`, ...lista.map(c => `• ${quien(c)} · hace ${c.dias} días${c.correo ? ' · le mandé recordatorio' : ''}`)].join('\n')
+  return {
+    texto: [`⏰ Cotizaciones sin respuesta (${lista.length})`,
+      ...lista.map(c => `• ${quien(c)} · hace ${c.dias} días${c.total ? ` · ${pesos(c.total)}` : ''}${c.correo ? ' · le mandé recordatorio' : ''}`)].join('\n'),
+    botones: lista.filter(c => c.telefono).slice(0, 8).map(c => ({
+      texto: `💬 ${primer(c.nombre) || 'Cliente'} · N° ${c.cotNum}`,
+      url: linkWhatsapp(c.telefono, `${hola(c.nombre)} Le escribo de Repisas Don Maxi. ¿Pudo revisar la cotización N° ${c.cotNum} que le enviamos? Si quiere ajustar algo, me cuenta 🙏`),
+    })),
+  }
 }
 
 // ---------- Panel: conectar el bot ----------

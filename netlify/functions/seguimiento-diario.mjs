@@ -18,6 +18,11 @@ import { enviarTelegram } from './lib/telegram.mjs'
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': AUTH_HEADERS, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Cache-Control': 'no-store' }
 const responder = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) })
 
+// Netlify invoca las programadas con un POST cuyo cuerpo trae { next_run } (y sin sesion de admin).
+export function esProgramada(event) {
+  try { return Boolean(JSON.parse(event.body || '{}').next_run) } catch { return false }
+}
+
 // Lee las cotizaciones de la planilla y manda correos y avisos (de hoy en Chile).
 export async function correrSeguimiento() {
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
@@ -33,7 +38,7 @@ export async function correrSeguimiento() {
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors }
-  if (event.httpMethod === 'POST') {
+  if (!esProgramada(event)) {
     const denied = requireAdmin(event, cors)
     if (denied) return denied
   } else if (Math.floor(ahoraEnZona().minutos / 60) !== 20) return responder(200, { ok: true, omitido: 'fuera de las 20 h' })

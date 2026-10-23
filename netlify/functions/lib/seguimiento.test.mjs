@@ -53,7 +53,9 @@ test('ejecutar: correos y Telegram, y un envio que falla no corta el resto', asy
   const cotizaciones = [
     cot(1, { creadoMs: ms('2026-10-20T15:00:00Z') }),
     cot(2, { creadoMs: ms('2026-10-20T15:00:00Z'), email: 'falla@example.cl' }),
-    cot(10, { status: 'confirmada', instalacion: { fecha: '2026-10-24', inicio: '10:00' } }),
+    cot(10, { status: 'confirmada', total: 357000, subtotal: 300000, pagos: [{ monto: 100000 }], pdfUrl: 'https://drive/10',
+      repisas: [{ largo: 2.43, prof: 0.48, alto: 2, niveles: 4, unidades: 2 }], adicionales: { qty_cajas: 2 },
+      instalacion: { fecha: '2026-10-24', inicio: '10:00', fin: '12:30' } }),
   ]
   const r = await ejecutarSeguimiento({
     cotizaciones, hoy: '2026-10-23', linkAgenda: () => '', avisoA: 'maxi@example.cl',
@@ -64,9 +66,16 @@ test('ejecutar: correos y Telegram, y un envio que falla no corta el resto', asy
   assert.equal(r.correosFallidos.length, 1)
   assert.equal(correos[0].responderA, 'maxi@example.cl')
   assert.match(telegram[0].texto, /Mañana, sábado 24 de octubre: 1 instalación/)
-  assert.match(telegram[1].texto, /^¡Hola Cliente!/)
-  assert.equal(telegram[1].botones[0].texto, 'Abrir WhatsApp de Cliente')
-  assert.match(telegram[2].texto, /Cotizaciones sin respuesta \(2\)/)
+  // Detalle con botones y, aparte, el mensaje para copiar.
+  assert.match(telegram[1].texto, /^🔧 Mañana 10:00–12:30 hrs\n👤 Cliente 10 · N° 10/)
+  assert.match(telegram[1].texto, /• 2 × 243×48×200 cm, 4 niveles/)
+  assert.match(telegram[1].texto, /Servicios: Cajas organizadoras × 2/)
+  assert.match(telegram[1].texto, /Neto \$300\.000 · Total \$357\.000 con IVA\n💳 Pagado \$100\.000 · Saldo \$257\.000/)
+  assert.deepEqual(telegram[1].botones.map(b => b.texto), ['💬 Enviar este mensaje a Cliente', '✅ Confirmación corta', '📍 Ver en Maps', '📄 Ver cotización (PDF)'])
+  assert.match(decodeURIComponent(telegram[1].botones[1].url), /Le confirmo su instalación de mañana a las 10:00 hrs en Av\. Grecia 1500 ✅/)
+  assert.match(telegram[2].texto, /^¡Hola Cliente!/)
+  assert.match(telegram[3].texto.texto, /Cotizaciones sin respuesta \(2\)/)
+  assert.equal(telegram[3].texto.botones.length, 2)
 
   const vacio = []
   await ejecutarSeguimiento({ cotizaciones: [], hoy: '2026-10-23', enviarCorreo: async () => {}, telegram: async t => { vacio.push(t); return 1 } })
@@ -109,7 +118,7 @@ test('avisos del panel: cotizacion nueva y cambio a confirmada o rechazada', asy
   await avisarGuardado({ cotNum: 1500, status: 'rechazada', motivoRechazo: 'Precio' }, { respuesta: { ok: true }, antes: { cotNum: 1500, nombre: 'Ana', status: 'por confirmar' } }, op)
   await avisarGuardado({ cotNum: 1500, notas: 'x' }, { respuesta: { ok: true }, antes: { cotNum: 1500, status: 'confirmada' } }, op)
   assert.equal(textos.length, 3)
-  assert.match(textos[0], /🆕 Cotización creada\nAna · N° 1500\n💰 \$238\.000/)
+  assert.match(textos[0], /🆕 Cotización creada\n👤 Ana · N° 1500\n➕ Servicios: ninguno\n💰 Total \$238\.000 con IVA/)
   assert.match(textos[1], /✅ Cotización confirmada/)
   assert.match(textos[2], /❌ Cotización rechazada[\s\S]*Motivo: Precio/)
 })

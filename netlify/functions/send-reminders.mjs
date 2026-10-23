@@ -9,6 +9,7 @@ import { eventosEntre } from './lib/calendario.mjs'
 import { ahoraEnZona, sumarDias } from './lib/horarios.mjs'
 import { enviarCorreoGmail, explicarErrorCorreo } from './lib/correo.mjs'
 import { prepararRecordatorios } from './lib/recordatorios.mjs'
+import { esProgramada } from './seguimiento-diario.mjs'
 
 const ADMIN_EMAIL = process.env.NOTIFY_EMAIL || 'repisas@donmaxi.cl'
 
@@ -21,8 +22,8 @@ const corsHeaders = {
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
 
-  // Permitir disparo manual con sesion de admin
-  const isScheduled = !event.httpMethod || event.httpMethod === 'GET'
+  // Netlify la invoca con un POST que trae { next_run }; el disparo manual viene con sesion de admin.
+  const isScheduled = esProgramada(event)
   const denied = isScheduled ? null : requireAdmin(event, corsHeaders)
   if (denied) return denied
 

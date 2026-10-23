@@ -177,7 +177,7 @@ Slot: ${fechaISO} ${horaHHmm} (${duration}min)`;
       },
     });
 
-    await avisar(avisoVisitaAgendada({ nombre: `${nombre || ''} ${apellido || ''}`.trim(), fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, comentarios: note }));
+    await avisar(avisoVisitaAgendada({ nombre: `${nombre || ''} ${apellido || ''}`.trim(), fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, email, comentarios: note }));
 
     console.log('✅ Evento creado correctamente', {
       start: startLocal.toISOString(),

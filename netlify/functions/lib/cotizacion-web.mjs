@@ -174,7 +174,7 @@ export async function procesarCotizacionWeb(body, deps) {
     catch (e) { console.error(`cotizacion-web: no se envió el aviso de la N° ${numero}:`, e) }
   }
 
-  await deps.avisar?.(avisoCotizacionCreada({ ...cliente, cotNum: numero, total: pdf.total }, { origen: 'web' }))
+  await deps.avisar?.(avisoCotizacionCreada({ ...cliente, cotNum: numero, repisas, adicionales: {}, subtotal: pdf.subtotal, total: pdf.total, pdfUrl }, { origen: 'web' }))
 
   // Lo que la pagina necesita para cerrar ahi mismo.
   return {

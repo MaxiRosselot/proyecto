@@ -5,7 +5,7 @@
 // Corre una vez al dia, asi que "hace 3 dias" no se repite: no hay que guardar a quien se le escribio.
 import { correoSeguimientoCotizacion, fechaLarga, linkWhatsapp, mensajeInstalacionManana } from './mensajes.mjs'
 import { sumarDias } from './horarios.mjs'
-import { avisoSinRespuesta } from './telegram.mjs'
+import { avisoSinRespuesta, confirmacionCortaInstalacion, fichaCotizacion } from './telegram.mjs'
 
 export const DIAS_CORREO = [3, 7]
 export const DIAS_AVISO = [3, 7, 14]
@@ -34,7 +34,7 @@ export function planSeguimiento({ cotizaciones = [], hoy, linkAgenda = () => '' 
 
   const sinRespuesta = porConfirmar
     .filter(({ dias }) => DIAS_AVISO.includes(dias))
-    .map(({ q, dias }) => ({ cotNum: q.cotNum, nombre: q.nombre, dias, correo: conCorreo.has(String(q.cotNum)) }))
+    .map(({ q, dias }) => ({ cotNum: q.cotNum, nombre: q.nombre, telefono: q.telefono, total: q.total, dias, correo: conCorreo.has(String(q.cotNum)) }))
     .sort((a, b) => b.dias - a.dias)
 
   const instalaciones = cotizaciones
@@ -44,7 +44,11 @@ export function planSeguimiento({ cotizaciones = [], hoy, linkAgenda = () => '' 
       const mensaje = mensajeInstalacionManana(q, q.instalacion)
       return {
         cotNum: q.cotNum, nombre: q.nombre, inicio: q.instalacion.inicio, fin: q.instalacion.fin,
-        mensaje, whatsapp: q.telefono ? linkWhatsapp(q.telefono, mensaje) : '',
+        ficha: fichaCotizacion({ ...q, instalacion: undefined }), mensaje,
+        whatsapp: q.telefono ? linkWhatsapp(q.telefono, mensaje) : '',
+        whatsappCorto: q.telefono ? linkWhatsapp(q.telefono, confirmacionCortaInstalacion(q, q.instalacion, { manana: true })) : '',
+        maps: q.direccion ? `https://maps.google.com/?q=${encodeURIComponent(q.direccion)}` : '',
+        pdf: q.pdfUrl || '',
       }
     })
 
@@ -67,10 +71,17 @@ export async function ejecutarSeguimiento({ cotizaciones, hoy, linkAgenda, envia
   const dia = fechaLarga(plan.manana).replace(/,? de \d{4}$/, '').replace(',', '').toLowerCase()
   if (plan.instalaciones.length) {
     const lista = plan.instalaciones.map(i => `• ${i.inicio}${i.fin ? '–' + i.fin : ''} · ${i.nombre} · N° ${i.cotNum}`).join('\n')
-    await mandar(`🔧 Mañana, ${dia}: ${plan.instalaciones.length} ${plan.instalaciones.length === 1 ? 'instalación' : 'instalaciones'}.\n${lista}\n\nTe mando un mensaje por cada una para copiar y pegarle al cliente.`)
+    await mandar(`🔧 Mañana, ${dia}: ${plan.instalaciones.length} ${plan.instalaciones.length === 1 ? 'instalación' : 'instalaciones'}.\n${lista}\n\nPor cada una te mando el detalle y el mensaje para copiar y pegarle al cliente.`)
     for (const i of plan.instalaciones) {
       const nombre = String(i.nombre || '').split(' ')[0] || 'cliente'
-      await mandar(i.mensaje, i.whatsapp ? [{ texto: `Abrir WhatsApp de ${nombre}`, url: i.whatsapp }] : [])
+      // El detalle (repisas, servicios, saldo) con los botones, y despues el mensaje solo, para copiarlo.
+      await mandar(`🔧 Mañana ${i.inicio}${i.fin ? '–' + i.fin : ''} hrs\n${i.ficha}`, [
+        ...(i.whatsapp ? [{ texto: `💬 Enviar este mensaje a ${nombre}`, url: i.whatsapp }] : []),
+        ...(i.whatsappCorto ? [{ texto: '✅ Confirmación corta', url: i.whatsappCorto }] : []),
+        ...(i.maps ? [{ texto: '📍 Ver en Maps', url: i.maps }] : []),
+        ...(i.pdf ? [{ texto: '📄 Ver cotización (PDF)', url: i.pdf }] : []),
+      ])
+      await mandar(i.mensaje)
     }
   } else {
     await mandar(`🌙 Mañana, ${dia}, no hay instalaciones agendadas.`)

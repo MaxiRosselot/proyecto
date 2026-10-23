@@ -380,7 +380,7 @@ const routes = {
       email, celular, direccion, notas: note, nombre: `${nombre} ${apellido}`.trim(), status: 'agendada', slotKey,
     }
     db.visits.push(visita); db.visitStatuses[visita.id] = 'agendada'; saveData(db)
-    await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, comentarios: note }))
+    await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, email, comentarios: note }))
     return { ok: true, local: true, slotKey }
   },
 }
