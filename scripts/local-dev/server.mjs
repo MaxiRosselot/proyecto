@@ -309,7 +309,7 @@ const routes = {
       telegram: (texto, opciones) => enviarTelegram(texto, opciones),
     })) }
   },
-  'telegram': async (body, _params, method) => atenderTelegramAdmin(method, body),
+  'telegram': async (body, params, method) => (method === 'POST' && body.accion === 'resumen' ? routes['seguimiento-diario'](body, params) : atenderTelegramAdmin(method, body)),
   // Mismo contrato que netlify/functions/planilla.mjs
   'planilla': async (body) => {
     const { almacen, calendar, calendarId, leerEventos } = depsReserva()

@@ -17,7 +17,7 @@ export default function AvisosTelegram() {
   async function correr(ruta, cuerpo, exito) {
     setOcupado(true); setAviso('')
     try {
-      const r = await apiFetch(ruta, { method: 'POST', body: JSON.stringify(cuerpo) })
+      const r = await apiFetch(ruta, { method: 'POST', body: JSON.stringify(cuerpo) }).catch(() => ({ ok: false, error: 'El servidor no respondió. Intenta de nuevo en un momento.' }))
       setAviso(r.ok ? exito(r) : '⚠️ ' + (r.error || 'No se pudo'))
     } catch (e) { setAviso('⚠️ ' + e.message) }
     finally { setOcupado(false) }
@@ -56,7 +56,7 @@ export default function AvisosTelegram() {
             {listo && <button type="button" style={styles.btnSecondary} disabled={ocupado}
               onClick={() => correr('/.netlify/functions/telegram', { accion: 'probar' }, () => '✅ Mensaje de prueba enviado')}>Enviar prueba</button>}
             {listo && <button type="button" style={styles.btnSecondary} disabled={ocupado}
-              onClick={() => correr('/.netlify/functions/seguimiento-diario', {}, r => `✅ Listo: ${r.telegram} avisos por Telegram y ${r.correos} correos de seguimiento`)}>Enviar el resumen de las 20:00 ahora</button>}
+              onClick={() => correr('/.netlify/functions/telegram', { accion: 'resumen' }, r => `✅ Listo: ${r.telegram} avisos por Telegram y ${r.correos} correos de seguimiento`)}>Enviar el resumen de las 20:00 ahora</button>}
           </div>
         </div>
       )}

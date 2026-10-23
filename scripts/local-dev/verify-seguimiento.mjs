@@ -85,6 +85,8 @@ try {
   await tarjeta.getByRole('button', { name: 'Enviar prueba' }).click()
   await expect(tarjeta.getByRole('status')).toContainText('Mensaje de prueba enviado')
   expect((await telegram()).at(-1).texto).toContain('desde ahora te aviso aquí')
+  await tarjeta.getByRole('button', { name: 'Enviar el resumen de las 20:00 ahora' }).click()
+  await expect(tarjeta.getByRole('status')).toContainText(/✅ Listo: \d+ avisos por Telegram/)
   await tarjeta.scrollIntoViewIfNeeded()
   await page.screenshot({ path: path.join(evidence, 'inicio-telegram.png') })
 
