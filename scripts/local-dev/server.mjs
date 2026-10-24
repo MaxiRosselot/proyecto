@@ -36,6 +36,7 @@ import { atenderWebFotos } from '../../netlify/functions/web-fotos.mjs'
 import { avisar, avisoCotizacionCreada, avisoVisitaAgendada } from '../../netlify/functions/lib/telegram.mjs'
 import { avisarGuardado, avisarInstalacionAgendada } from '../../netlify/functions/lib/avisos.mjs'
 import { ejecutarSeguimiento } from '../../netlify/functions/lib/seguimiento.mjs'
+import { diasParaComuna } from '../../netlify/functions/lib/zonas.mjs'
 import { atenderTelegramAdmin, enviarTelegram } from '../../netlify/functions/lib/telegram.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -192,7 +193,7 @@ function depsReserva() {
 }
 
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto', 'visitas-zona'])
 
 // Sitio publico: fotos de Admin → Web y archivos de "Envíanos fotos" en memoria (en produccion, Drive).
 const fotosWeb = almacenFotosMemoria()
@@ -358,6 +359,12 @@ const routes = {
     return params.get('config') ? { ok: true, config, dias: diasDisponibles(config) } : { ok: true, dias: diasDisponibles(config), duracion: DURACION_MIN }
   },
   // Mismas reglas que get-availability / create_event, con las visitas locales en vez de Calendar.
+  // Mismas reglas que netlify/functions/visitas-zona.mjs, con las visitas locales.
+  'visitas-zona': async (_body, params) => {
+    const visitas = db.visits.filter(v => (db.visitStatuses[v.id] || v.status) !== 'cancelada')
+      .map(v => { const [fecha, hora] = slotDeVisita(v).split('T'); return { fecha, hora, ubicacion: v.direccion || '' } })
+    return { ok: true, dias: diasParaComuna(diasDisponibles(await leerHorario(horarios)), visitas, params.get('comuna') || '') }
+  },
   'get-availability': async (_body, params) => {
     const date = params.get('date') || ''
     const config = await leerHorario(horarios)
@@ -377,7 +384,7 @@ const routes = {
     const visita = {
       id: `visit-local-${randomUUID().slice(0, 8)}`, summary: `Visita — ${nombre} ${apellido} (Repisas Don Maxi)`,
       start: start.toISOString(), end: new Date(start.getTime() + DURACION_MIN * 60000).toISOString(),
-      email, celular, direccion, notas: note, nombre: `${nombre} ${apellido}`.trim(), status: 'agendada', slotKey,
+      email, celular, direccion: [direccion, body.comuna].filter(Boolean).join(', '), notas: note, nombre: `${nombre} ${apellido}`.trim(), status: 'agendada', slotKey,
     }
     db.visits.push(visita); db.visitStatuses[visita.id] = 'agendada'; saveData(db)
     await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, email, comentarios: note }))

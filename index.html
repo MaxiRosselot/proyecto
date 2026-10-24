@@ -146,6 +146,9 @@
       .btn:hover{ transform: translateY(-1px); box-shadow:0 14px 28px rgba(219,153,43,.42) }
       .btn[disabled]{ opacity:.6; cursor:not-allowed; box-shadow:none }
       .note{ font-size:12px; color:var(--muted); margin-top:8px }
+      select{ width:100%; border:1.5px solid var(--border); border-radius:14px; padding:12px 14px; font-size:15px; background:#fff; color:var(--text) }
+      .date-btn.cerca:not(.active), .slot.cerca:not(.active){ border-color:var(--accent); background:#FBF3E4 }
+      .link-btn{ border:none; background:none; color:#8F5D0F; font-weight:700; cursor:pointer; text-decoration:underline; padding:0 }
 
       footer{ text-align:center; margin: 18px 0 calc(10px + var(--safe-bottom)); font-size:12px; color:var(--muted) }
     </style>
@@ -169,7 +172,7 @@
             <div class="bar" id="progress-bar" style="width:33%"></div>
           </div>
           <div class="steps-line" id="steps-line">
-            <span>Fecha</span><span>Hora</span><span>Datos</span>
+            <span>Dirección</span><span>Día y hora</span><span>Datos</span>
           </div>
         </div>
 

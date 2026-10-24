@@ -38,7 +38,7 @@ export async function handler(event) {
 
   try {
     const {
-      nombre, apellido, email, celular, direccion,
+      nombre, apellido, email, celular, direccion: calle = '', comuna = '',
       fechaISO, horaHHmm, tz = 'America/Santiago',
       note = '',
     } = JSON.parse(event.body || '{}');
@@ -46,6 +46,8 @@ export async function handler(event) {
     if (!fechaISO || !horaHHmm) throw new Error('Faltan parámetros de fecha/hora');
     if (!email) throw new Error('Falta email del cliente');
 
+    // La comuna va con la direccion: con ella /visita agrupa las visitas por zona (lib/zonas.mjs).
+    const direccion = [calle, comuna].filter(Boolean).join(', ');
     const duration = Number(process.env.DEFAULT_EVENT_DURATION_MIN || 15);
     const startLocal = buildLocal(fechaISO, horaHHmm);
 
@@ -164,6 +166,7 @@ Slot: ${fechaISO} ${horaHHmm} (${duration}min)`;
       requestBody: {
         summary,
         description,
+        location: direccion,
         start: { dateTime: fmtLocal(startLocal), timeZone: tz },
         end: { dateTime: fmtLocal(endLocal), timeZone: tz },
         attendees,
@@ -171,6 +174,7 @@ Slot: ${fechaISO} ${horaHHmm} (${duration}min)`;
         extendedProperties: {
           shared: {
             slot_key: slotKey,
+            ...(comuna ? { comuna: String(comuna).slice(0, 60) } : {}),
             created_by: 'agendador-netlify',
           },
         },

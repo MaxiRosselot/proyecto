@@ -72,12 +72,20 @@ try {
   // ── Pagina publica ──
   const publica = await browser.newPage({ viewport: { width: 430, height: 932 } })
   publica.on('pageerror', e => errors.push(e.stack || e.message))
-  await publica.goto(base + '/visita')
-  await expect(publica.getByText('Fechas disponibles')).toBeVisible()
+  // Primero la direccion; con la comuna se ofrecen las horas.
+  const direccion = async (calle, comuna) => {
+    await publica.goto(base + '/visita')
+    await expect(publica.getByText('Fechas disponibles')).toHaveCount(0)
+    await publica.getByLabel('Dirección').fill(calle)
+    await publica.getByLabel('Comuna').selectOption(comuna)
+    await publica.getByRole('button', { name: 'Ver días y horarios' }).click()
+    await expect(publica.getByText('Fechas disponibles')).toBeVisible()
+  }
+  await direccion('Av. Grecia 1500', 'Ñuñoa')
   const botonesFecha = publica.locator('.date-btn')
   await expect(botonesFecha).toHaveCount(Object.keys(dias).length)
-  await expect(botonesFecha.first()).toContainText(/sábado/i)
-  await botonesFecha.first().click()
+  const botonSabado = publica.locator('.date-btn', { hasText: /sábado/i })
+  await botonSabado.click()
   await expect(publica.locator('.slot')).toHaveText(['09:00', '09:30', '10:00', '10:30'])
   await expect(publica.locator('.slot:not([disabled])')).toHaveCount(4)
   await publica.screenshot({ path: path.join(evidence, '02-publica-sabado.png'), fullPage: true })
@@ -87,15 +95,21 @@ try {
   await publica.locator('.grid input').nth(1).fill('Prueba Horarios')
   await publica.locator('.grid input').nth(2).fill('cliente.horarios@example.com')
   await publica.locator('.grid input').nth(3).fill('+56 9 1111 2222')
-  await publica.locator('.grid input').nth(4).fill('Calle de prueba 123')
   await publica.getByRole('button', { name: /Agendar visita/ }).click()
   await publica.waitForURL(/confirm\.html/)
 
-  // La hora tomada ya no se ofrece.
-  await publica.goto(base + '/visita')
-  await publica.locator('.date-btn').first().click()
-  await expect(publica.getByRole('button', { name: '09:30' })).toBeDisabled()
-  await expect(publica.locator('.slot:not([disabled])')).toHaveCount(3)
+  // Mismo sector (Providencia): la hora tomada ya no se ofrece y las pegadas se recomiendan.
+  await direccion('Los Leones 100', 'Providencia')
+  await expect(botonSabado).toContainText('⭐')
+  await botonSabado.click()
+  await expect(publica.locator('.slot')).toHaveText(['⭐ 09:00', '⭐ 10:00', '⭐ 10:30'])
+  await publica.screenshot({ path: path.join(evidence, '02b-publica-cerca.png'), fullPage: true })
+
+  // Lejos (Maipu): ese sabado no se ofrece (todas sus horas quedan a menos de 2 h de Ñuñoa).
+  await direccion('Pajaritos 2000', 'Maipú')
+  await expect(publica.locator('.date-btn')).toHaveCount(Object.keys(dias).length - 1)
+  await expect(botonSabado).toHaveCount(0)
+  await expect(publica.locator('.date-btn.cerca')).toHaveCount(0)
 
   // El servidor rechaza horas fuera del horario aunque se salten la pagina.
   const reservar = (fechaISO, horaHHmm) => page.request.post(base + '/.netlify/functions/create_event', {
