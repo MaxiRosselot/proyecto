@@ -176,6 +176,14 @@ test('07:00: fichas al maestro y el dia a Maxi', async () => {
   const { deps, llamadas } = crearDeps([venta(1450)])
   const r = await enviarMananaDelBot(deps)
   assert.equal(r.enviados, 3)
-  assert.deepEqual(llamadas.map(l => l.chat_id), ['2', '2', '1'])
-  assert.match(llamadas[2].text, /Buenos días Maxi/)
+  assert.deepEqual(llamadas.map(l => l.chat_id), ['1', '2', '2'])
+  assert.match(llamadas[0].text, /Buenos días Maxi/)
+
+  // Sin maestro conectado, las fichas le llegan a Maxi para probarlas.
+  const solo = crearDeps([venta(1450)])
+  solo.deps.roles.maestros = []
+  await enviarMananaDelBot(solo.deps)
+  assert.deepEqual(solo.llamadas.map(l => l.chat_id), ['1', '1', '1', '1'])
+  assert.match(solo.llamadas[1].text, /Así le llegarán las fichas al maestro/)
+  assert.ok(botones(solo.llamadas[3]).some(x => x.callback_data === 't|1450'))
 })

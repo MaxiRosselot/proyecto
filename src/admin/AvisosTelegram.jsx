@@ -59,7 +59,7 @@ export default function AvisosTelegram() {
               </div>
               <p style={{ ...paso, color: C.textSub }}>Con el menú activo le escribes <code>/menu</code> al bot: hoy, mañana, semana, visitas, horas libres, materiales, por cobrar, sin respuesta y buscar cliente. En cada instalación: marcar instalada, registrar pago y cambiar día u hora (mueve el calendario).</p>
               {estado.webhook?.ultimoError && <div style={styles.errorBox}>Último error de Telegram: {estado.webhook.ultimoError}</div>}
-              <p style={paso}><strong>Maestro:</strong> {estado.maestros?.length ? `conectado (${estado.maestros.join(', ')}).` : 'que le escriba /start al bot; el bot le responde su número y te avisa. Guárdalo en Netlify como TELEGRAM_MAESTRO_CHAT_ID y vuelve a publicar.'} Recibe sus fichas a las 07:00, manda fotos (quedan en Drive por venta y tú eliges cuáles van a la web) y aprieta ✅ Terminada.</p>
+              <p style={paso}><strong>Maestro:</strong> {estado.maestros?.length ? `conectado (${estado.maestros.join(', ')}). Recibe sus fichas a las 07:00, manda fotos (quedan en Drive por venta y tú eliges cuáles van a la web) y aprieta ✅ Terminada.` : 'sin conectar: por ahora sus fichas de las 07:00 te llegan a ti para probarlas (también en el menú: “👷 Vista del maestro”). Tú mismo puedes mandar fotos y apretar ✅ Terminada. Cuando quieras sumarlo: que le escriba /start al bot y guarda su número en Netlify como TELEGRAM_MAESTRO_CHAT_ID.'}</p>
             </div>
           )}
           {estado.error && <div style={styles.errorBox}>{estado.error}</div>}

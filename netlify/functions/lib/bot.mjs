@@ -207,6 +207,7 @@ export function menuAdmin() {
       [b('📏 Visitas', 'vi'), b('🕐 Disponibilidad', 'h')],
       [b('💰 Por cobrar', 'c'), b('⏰ Sin respuesta', 'n')],
       [b('🪵 Materiales', 'mt'), b('🔎 Buscar cliente', 'q')],
+      [b('👷 Vista del maestro (hoy)', 'mh|0')],
     ],
   }
 }
@@ -563,16 +564,19 @@ export async function enviarMananaDelBot(deps) {
   const { hoy } = datosHoy(deps)
   const [quotes, eventos] = await Promise.all([deps.listar(), deps.leerEventos(hoy, hoy)])
   let enviados = 0
-  for (const chat_id of deps.roles.maestros) {
-    for (const f of fichasDelDia(quotes, hoy, hoy)) {
-      await deps.tg('sendMessage', { chat_id, text: f.texto, disable_web_page_preview: true, ...(f.filas.length ? { reply_markup: teclado(f.filas) } : {}) })
-      enviados++
-    }
-  }
   const dia = vistaDia(hoy, { quotes, eventos, hoy })
   for (const chat_id of deps.roles.admins) {
     await deps.tg('sendMessage', { chat_id, text: `☀️ Buenos días Maxi\n\n${dia.texto}`, disable_web_page_preview: true, reply_markup: teclado(dia.filas) })
     enviados++
+  }
+  // Mientras no haya maestro conectado, sus fichas le llegan a Maxi (para probarlas).
+  const sinMaestro = !deps.roles.maestros.length
+  for (const chat_id of sinMaestro ? deps.roles.admins : deps.roles.maestros) {
+    if (sinMaestro) await deps.tg('sendMessage', { chat_id, text: '👷 Así le llegarán las fichas al maestro cuando lo conectes:' })
+    for (const f of fichasDelDia(quotes, hoy, hoy)) {
+      await deps.tg('sendMessage', { chat_id, text: f.texto, disable_web_page_preview: true, ...(f.filas.length ? { reply_markup: teclado(f.filas) } : {}) })
+      enviados++
+    }
   }
   return { enviados, maestros: deps.roles.maestros.length }
 }
