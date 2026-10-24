@@ -208,7 +208,7 @@ export default function AgendarApp() {
   const cot = datos?.cotizacion
   const isometrica = useIsometrica(cot?.proyecto3d)
   const adicionales = useMemo(() => (cot ? conElegidos(cot.adicionales, cot.servicios, elegidos) : {}), [cot, elegidos])
-  const duracion = cot ? duracionInstalacionMin(cot.repisas, adicionales) : 0
+  const duracion = cot ? duracionInstalacionMin(cot, adicionales) : 0
   const total = cot ? totalesCotizacion(cot.repisas, adicionales).total : 0
   const dias = useMemo(() => (datos?.ocupados ? disponibilidadAgenda(datos.ocupados, duracion, new Date(), datos.horario || undefined) : []), [datos, duracion])
   // Si cambia la duracion (otro servicio), la hora elegida puede dejar de calzar.

@@ -14,6 +14,8 @@ async function preparar(eventos = []) {
   await crearCotizacion(almacen, {
     crear: true, cotNum: 1500, nombre: 'Marta Díaz', email: 'marta@example.cl', telefono: '9 7777 8888', direccion: 'Av. Grecia 1500',
     repisas: [{ unidades: 1, valor: 200000 }], adicionales: {}, subtotal: 200000, iva: 38000, total: 238000,
+    // Bodega de 2 × 2,5 m (5 m²) con repisas en L: 2 h de instalacion.
+    proyecto3d: { room: { backWallCm: 200, leftWallCm: 250, rightWallCm: 250, heightCm: 250 }, shelving: { layout: 'manual', heightCm: 200, depthCm: 48, runs: [{ id: 'a', wall: 'back', startCm: 0, lengthCm: 200 }, { id: 'b', wall: 'right', startCm: 48, lengthCm: 150 }] } },
   }, new Date(AHORA))
   const correos = [], insertados = []
   const calendar = { events: {
@@ -36,12 +38,12 @@ test('el link firmado abre la cotizacion; uno alterado no', async () => {
 })
 
 test('agenda con un servicio: duracion, calendario, total y correos al cliente y a Don Maxi', async () => {
-  // El miercoles 21 hay otra instalacion de 10:00 a 12:30.
-  const { almacen, deps, correos, insertados } = await preparar([{ tipo: 'instalacion', id: 'otra', cotNum: '9', fecha: '2026-10-21', minutoInicio: 600, minutoFin: 750, todoElDia: false }])
-  // 200.000 + retiro y orden: 2,2 + 0,5 = 2,7 h → 3 h. Pegada a la otra: 12:30-15:30.
-  const r = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-21', inicio: '12:30', servicios: { retiro_orden: 1 } }, deps))
+  // El miercoles 21 hay otra instalacion de 10:00 a 13:00.
+  const { almacen, deps, correos, insertados } = await preparar([{ tipo: 'instalacion', id: 'otra', cotNum: '9', fecha: '2026-10-21', minutoInicio: 600, minutoFin: 780, todoElDia: false }])
+  // L de 5 m² (2 h) + retiro y orden en bodega de menos de 7,5 m² (1 h) = 3 h: de 13:00 a 16:00.
+  const r = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-21', inicio: '13:00', servicios: { retiro_orden: 1 } }, deps))
   assert.equal(r.ok, true, r.error)
-  assert.deepEqual(r.cotizacion.instalacion, { fecha: '2026-10-21', inicio: '12:30', fin: '15:30' })
+  assert.deepEqual(r.cotizacion.instalacion, { fecha: '2026-10-21', inicio: '13:00', fin: '16:00' })
   const q = await obtenerCotizacion(almacen, 1500)
   assert.equal(q.adicionales.qty_retiro_orden, 1)
   assert.equal(Number(q.total), (200000 + 40000) * 1.19)
@@ -49,12 +51,12 @@ test('agenda con un servicio: duracion, calendario, total y correos al cliente y
   assert.equal(insertados.length, 1)
   assert.equal(correos.length, 2)
   assert.match(correos[0].asunto, /quedó agendada/)
-  assert.match(correos[0].texto, /De 12:30 a 15:30 hrs[\s\S]*Retiro y orden de artículos[\s\S]*pago es una vez terminada/)
+  assert.match(correos[0].texto, /De 13:00 a 16:00 hrs[\s\S]*Retiro y orden de artículos[\s\S]*pago es una vez terminada/)
   assert.match(correos[0].texto, /agendar\?c=1500/)
   assert.equal(correos[1].para, 'admin@example.cl')
   assert.match(correos[1].asunto, /Agendó: Marta Díaz · Miércoles/)
   // Trae el mensaje para confirmarle por WhatsApp, listo para copiar y con el link al chat.
-  assert.match(correos[1].texto, /Falta confirmarle por WhatsApp[\s\S]*confirmar su instalación de mañana miércoles 21 de octubre, de 12:30 a 15:30[\s\S]*wa\.me\/56977778888/)
+  assert.match(correos[1].texto, /Falta confirmarle por WhatsApp[\s\S]*confirmar su instalación de mañana miércoles 21 de octubre, de 13:00 a 16:00[\s\S]*wa\.me\/56977778888/)
   // Al volver a entrar ve su hora.
   const g = await leer(await atenderAgendaGet({ c: '1500', t: T }, deps))
   assert.equal(g.estado, 'agendada')
@@ -64,17 +66,17 @@ test('agenda con un servicio: duracion, calendario, total y correos al cliente y
 
 test('solo horas que calzan; reagendar hasta 48 h antes', async () => {
   const { deps, correos } = await preparar()
-  // 2 h 30 min: a las 11:00 no se ofrece (no queda pegada a nada).
+  // 2 h: a las 11:00 no se ofrece (dejaria 1 h suelta antes).
   const mal = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-21', inicio: '11:00', servicios: {} }, deps))
   assert.equal(mal.status, 409)
   // Sabado no.
   assert.equal((await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-24', inicio: '10:00', servicios: {} }, deps))).status, 409)
   assert.equal((await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-23', inicio: '10:00', servicios: {} }, deps))).ok, true)
   // Reagenda al lunes 26 (faltan mas de 48 h para el viernes 23 a las 10).
-  const re = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-26', inicio: '13:30', servicios: {} }, deps))
+  const re = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-26', inicio: '14:00', servicios: {} }, deps))
   assert.equal(re.ok, true, re.error)
   assert.equal(re.reagendada, true)
-  assert.match(correos.at(-1).texto, /Antes: Viernes,? 23 de octubre, 10:00–12:30/)
+  assert.match(correos.at(-1).texto, /Antes: Viernes,? 23 de octubre, 10:00–12:00/)
   // A menos de 48 h ya no se puede.
   const tarde = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-27', inicio: '10:00', servicios: {} }, { ...deps, ahora: Date.parse('2026-10-25T15:00:00Z') }))
   assert.equal(tarde.status, 409)

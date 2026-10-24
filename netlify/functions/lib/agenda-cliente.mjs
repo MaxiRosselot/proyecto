@@ -79,7 +79,7 @@ function vista(cotizacion, ahora) {
     netoRepisas: t.repisas, total: Number(cotizacion.total) || t.total,
     // Para recalcular el total al sumar servicios: lo que no son servicios del link queda fijo.
     adicionales: cotizacion.adicionales || {},
-    repisas: (cotizacion.repisas || []).map(r => ({ unidades: Number(r.unidades ?? r.u ?? 1) || 0, valor: Number(r.valor ?? r.v) || 0 })),
+    repisas: (cotizacion.repisas || []).map(r => ({ unidades: Number(r.unidades ?? r.u ?? 1) || 0, valor: Number(r.valor ?? r.v) || 0, alto: Number(r.alto ?? r.a) || 0, ...(r.kind ? { kind: r.kind } : {}) })),
     servicios: serviciosDe(cotizacion.adicionales || {}),
     instalacion: i?.fecha ? { fecha: i.fecha, inicio: i.inicio, fin: i.fin } : null,
     puedeReagendar: puedeReagendar(i, ahora),
@@ -125,7 +125,7 @@ async function agendarPost(body, deps) {
     falla('Faltan menos de 48 horas para tu instalación: para cambiarla escríbenos directamente por WhatsApp.', 409)
 
   const adicionales = conServiciosElegidos(cotizacion.adicionales || {}, body.servicios || {})
-  const duracion = duracionInstalacionMin(cotizacion.repisas || [], adicionales)
+  const duracion = duracionInstalacionMin(cotizacion, adicionales)
   const horario = await horarioDe(deps)
   const dias = disponibilidadAgenda(await ocupadosPara(cotizacion, deps, horario), duracion, ahora, horario)
   const hora = dias.find(d => d.fecha === body.fecha)?.horas.find(h => h.inicio === body.inicio)

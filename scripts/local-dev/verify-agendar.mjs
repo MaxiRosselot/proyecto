@@ -27,9 +27,10 @@ try {
   const token = await admin.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
   const api = async (ruta, body) => (await admin.request[body ? 'post' : 'get'](base + '/.netlify/functions/' + ruta, { headers: { Authorization: 'Bearer ' + token }, ...(body ? { data: body } : {}) })).json()
 
-  // Una cotizacion por confirmar de $200.000 netos (2 h 30 min de instalacion).
+  // Una cotizacion por confirmar de $200.000 netos: bodega de 2 x 2,5 m (5 m2) en L, 2 h de instalacion.
   const { siguiente } = await api('get-quotes')
-  const guardada = await api('save-quote', { crear: true, cotNum: siguiente, nombre: 'Paula Agenda', email: 'paula@example.cl', telefono: '9 5555 4444', direccion: 'Los Leones 123', status: 'por confirmar', repisas: [{ largo: 2.43, prof: 0.48, alto: 2, niveles: 4, unidades: 1, valor: 200000 }], adicionales: {}, subtotal: 200000, iva: 38000, total: 238000 })
+  const guardada = await api('save-quote', { crear: true, cotNum: siguiente, nombre: 'Paula Agenda', email: 'paula@example.cl', telefono: '9 5555 4444', direccion: 'Los Leones 123', status: 'por confirmar', repisas: [{ largo: 2.43, prof: 0.48, alto: 2, niveles: 4, unidades: 1, valor: 200000 }], adicionales: {}, subtotal: 200000, iva: 38000, total: 238000,
+    proyecto3d: { room: { backWallCm: 200, leftWallCm: 250, rightWallCm: 250, heightCm: 250, door: { wall: 'front', fromLeftCornerCm: 60, toRightCornerCm: 60 } }, shelving: { layout: 'manual', heightCm: 200, depthCm: 48, runs: [{ id: 'a', wall: 'back', startCm: 0, lengthCm: 200 }, { id: 'b', wall: 'right', startCm: 48, lengthCm: 150 }] } } })
   expect(guardada.ok).toBe(true)
   expect(guardada.linkAgenda).toMatch(new RegExp(`/agendar\\?c=${guardada.cotNum}&t=`))
   // El link de pago sigue siendo el fijo de Mercado Pago.
@@ -43,7 +44,7 @@ try {
 
   // Horarios → Instalaciones: se cierra el primer dia habil que viene y el siguiente queda solo en la tarde.
   const { disponibilidadAgenda } = await import('../../netlify/functions/lib/agenda-horas.mjs')
-  const [cerrado, soloTarde] = disponibilidadAgenda({}, 150, new Date()).map(d => d.fecha)
+  const [cerrado, soloTarde] = disponibilidadAgenda({}, 120, new Date()).map(d => d.fecha)
   await admin.getByRole('navigation').getByRole('button', { name: 'Horarios', exact: true }).click()
   await admin.getByRole('tab', { name: 'Instalaciones' }).click()
   const editor = admin.getByTestId('horarios-instalaciones')
@@ -65,13 +66,13 @@ try {
   const enlace = new URL(guardada.linkAgenda); enlace.host = new URL(base).host; enlace.protocol = new URL(base).protocol
   await cel.goto(enlace.toString())
   await expect(cel.getByRole('heading', { name: /agenda tu instalación/ })).toBeVisible()
-  await expect(cel.getByTestId('agenda-duracion')).toContainText('2 h 30 min')
+  await expect(cel.getByTestId('agenda-duracion')).toContainText('aprox. 2 h.')
   await expect(cel.getByTestId('agenda-total')).toContainText('$238.000')
-  // Suma retiro y orden: +$40.000 neto y la instalacion pasa a 3 h.
+  // Suma retiro y orden (bodega de menos de 7,5 m2: +1 h): +$40.000 neto y la instalacion pasa a 3 h.
   await cel.getByRole('checkbox', { name: 'Retiro y orden de artículos' }).check()
   await expect(cel.getByTestId('agenda-total')).toContainText('$285.600')
   await expect(cel.getByTestId('agenda-duracion')).toContainText('3 h')
-  // El dia cerrado no aparece; el de solo tarde ofrece 13:00 (pegada al inicio y al final).
+  // El dia cerrado no aparece; el de solo tarde (13 a 16) calza justo con 3 h.
   await expect(cel.getByRole('button', { name: new RegExp(`^${fechaLarga(cerrado)} de`) })).toHaveCount(0)
   const primerDia = cel.getByTestId('dia-agenda').first()
   await expect(primerDia.getByRole('button')).toHaveText(['13:00a 16:00'])

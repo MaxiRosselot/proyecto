@@ -1,28 +1,60 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { disponibilidadAgenda, duracionInstalacionMin, horasDelDia, ocupadosAgenda, puedeReagendar } from './agenda-horas.mjs'
+import { disponibilidadAgenda, duracionInstalacionMin, horasDelDia, ocupadosAgenda, perfilBodega, puedeReagendar } from './agenda-horas.mjs'
 
-const repisas = neto => [{ unidades: 1, valor: neto }]
-
-test('duracion segun el trabajo, redondeada hacia arriba a la media hora', () => {
-  assert.equal(duracionInstalacionMin(repisas(100000)), 120)       // 1,4 + 0,4 = 1,8 h → 2 h
-  assert.equal(duracionInstalacionMin(repisas(200000)), 150)       // 2,2 h → 2 h 30
-  assert.equal(duracionInstalacionMin(repisas(200000), { qty_retiro_orden: 1 }), 180) // 2,7 h → 3 h
-  assert.equal(duracionInstalacionMin(repisas(40000)), 120)        // 1,56 h → 2 h
-  assert.equal(duracionInstalacionMin([]), 90)                     // solo servicios: 1,4 h → 1 h 30
-  assert.equal(duracionInstalacionMin(repisas(2000000)), 360)      // tope: la jornada completa
+// Bodega de ancho × fondo (cm) con repisas de 200 cm en los muros dados.
+const bodega = (ancho, fondo, muros, { alto = 200, largo = 200 } = {}) => ({
+  proyecto3d: { room: { backWallCm: ancho, leftWallCm: fondo, rightWallCm: fondo }, shelving: { heightCm: alto, runs: muros.map((wall, i) => ({ id: `r${i}`, wall, lengthCm: largo, heightCm: alto })) } },
 })
 
-test('solo horas pegadas a las 10, a las 16 o a otra instalacion', () => {
-  assert.deepEqual(horasDelDia([], 120).map(h => h.inicio), ['10:00', '14:00'])
-  // Ocupado 10:00-12:30: el hueco 12:30-16:00 permite empezar pegado (12:30) o terminar a las 16 (14:00).
-  assert.deepEqual(horasDelDia([{ desde: 600, hasta: 750 }], 120).map(h => `${h.inicio}-${h.fin}`), ['12:30-14:30', '14:00-16:00'])
-  // Hueco justo: una sola hora.
-  assert.deepEqual(horasDelDia([{ desde: 600, hasta: 720 }, { desde: 840, hasta: 960 }], 120).map(h => h.inicio), ['12:00'])
+test('duracion en L segun los m² de la bodega', () => {
+  assert.equal(duracionInstalacionMin(bodega(150, 120, ['back', 'right'])), 60)   // 1,8 m²
+  assert.equal(duracionInstalacionMin(bodega(200, 250, ['back', 'right'])), 120)  // 5 m²
+  assert.equal(duracionInstalacionMin(bodega(300, 300, ['back', 'left'])), 150)   // 9 m²
+  assert.equal(duracionInstalacionMin(bodega(300, 400, ['back', 'left'])), 180)   // 12 m²
+  assert.equal(duracionInstalacionMin(bodega(400, 400, ['back', 'left'])), 240)   // 16 m²
+})
+
+test('en U suma lo que corresponde; la altura y los servicios suman; minimo 1 h', () => {
+  const U = ['back', 'left', 'right']
+  assert.equal(duracionInstalacionMin(bodega(150, 120, U)), 120)  // 1 h → 2 h
+  assert.equal(duracionInstalacionMin(bodega(200, 250, U)), 120)  // 2 h se queda
+  assert.equal(duracionInstalacionMin(bodega(300, 300, U)), 180)  // 2 h 30 → 3 h
+  assert.equal(duracionInstalacionMin(bodega(300, 400, U)), 240)  // 3 h → 4 h
+  assert.equal(duracionInstalacionMin(bodega(300, 400, ['back', 'left'], { alto: 250 })), 210)
+  assert.equal(duracionInstalacionMin(bodega(300, 400, ['back', 'left'], { alto: 300 })), 240)
+  // Retiro y orden segun el tamaño de la bodega; basura 30 min; bicicleta 15 min c/u; cajas nada.
+  assert.equal(duracionInstalacionMin(bodega(150, 120, ['back', 'right']), { qty_retiro_orden: 1 }), 90)
+  assert.equal(duracionInstalacionMin(bodega(200, 250, ['back', 'right']), { qty_retiro_orden: 1 }), 180)
+  assert.equal(duracionInstalacionMin(bodega(300, 300, ['back', 'left']), { qty_retiro_orden: 1 }), 240)
+  assert.equal(duracionInstalacionMin(bodega(200, 250, ['back', 'right']), { qty_retiro_basura: 1, qty_bici: 2, qty_cajas: 5 }), 180)
+})
+
+test('una sola muralla: 30 min por modulo de hasta 243 cm; sin modelo, los modulos de la cotizacion', () => {
+  assert.equal(duracionInstalacionMin(bodega(300, 200, ['back'], { largo: 243 })), 60)   // 1 modulo → minimo 1 h
+  assert.equal(duracionInstalacionMin(bodega(500, 200, ['back'], { largo: 486 })), 60)   // 2 modulos
+  assert.equal(duracionInstalacionMin(bodega(700, 200, ['back'], { largo: 600 })), 90)   // 3 modulos
+  assert.deepEqual(perfilBodega(null, [{ unidades: 4, alto: 2.5 }]), { m2: null, muros: 1, modulos: 4, altoCm: 250 })
+  assert.equal(duracionInstalacionMin({ repisas: [{ unidades: 4, alto: 2.5 }] }), 150)   // 4 × 30 + 30 por el alto
+  assert.equal(duracionInstalacionMin({ repisas: [{ unidades: 1 }] }, { qty_retiro_orden: 1 }), 90)
+  assert.equal(duracionInstalacionMin({ repisas: Array(20).fill({ unidades: 1 }) }), 360) // tope: la jornada
+})
+
+test('solo horas que dejan libre 0 o al menos 2 h: no se corta el dia', () => {
+  const inicios = (d, ocupados = []) => horasDelDia(ocupados, d).map(h => h.inicio)
+  assert.deepEqual(inicios(180), ['10:00', '13:00'])
+  assert.deepEqual(inicios(120), ['10:00', '12:00', '14:00'])
+  assert.deepEqual(inicios(150), ['10:00', '13:30'])
+  assert.deepEqual(inicios(240), ['10:00', '12:00'])
+  assert.deepEqual(inicios(360), ['10:00'])
+  assert.deepEqual(inicios(60), ['10:00', '12:00', '12:30', '13:00', '15:00'])
+  // Con 10-12 ocupado, una de 3 h dejaria 1 h suelta: no se ofrece; una de 2 h si.
+  assert.deepEqual(inicios(180, [{ desde: 600, hasta: 720 }]), [])
+  assert.deepEqual(horasDelDia([{ desde: 600, hasta: 720 }], 120).map(h => `${h.inicio}-${h.fin}`), ['12:00-14:00', '14:00-16:00'])
+  // Hueco justo.
+  assert.deepEqual(inicios(120, [{ desde: 600, hasta: 720 }, { desde: 840, hasta: 960 }]), ['12:00'])
   // No cabe.
-  assert.deepEqual(horasDelDia([{ desde: 600, hasta: 780 }, { desde: 840, hasta: 960 }], 120), [])
-  // Jornada completa: solo 10:00.
-  assert.deepEqual(horasDelDia([], 360).map(h => h.inicio), ['10:00'])
+  assert.deepEqual(inicios(120, [{ desde: 600, hasta: 780 }, { desde: 840, hasta: 960 }]), [])
 })
 
 test('lunes a viernes por defecto, el mismo dia solo hasta las 8:00, y con el horario editable', () => {
@@ -39,7 +71,9 @@ test('lunes a viernes por defecto, el mismo dia solo hasta las 8:00, y con el ho
   const horario = { semanal: { 1: rango, 2: rango, 3: rango, 4: rango, 5: rango },
     fechas: { '2026-10-21': [], '2026-10-22': [{ desde: '13:00', hasta: '16:00' }] }, semanas: 1 }
   const editado = disponibilidadAgenda({}, 120, new Date('2026-10-20T09:00:00-03:00'), horario)
-  assert.deepEqual(editado.slice(0, 2).map(d => [d.fecha, d.horas.map(h => h.inicio)]), [['2026-10-22', ['13:00', '14:00']], ['2026-10-23', ['10:00', '14:00']]])
+  assert.deepEqual(editado.slice(0, 2).map(d => [d.fecha, d.horas.map(h => h.inicio)]), [['2026-10-23', ['10:00', '12:00', '14:00']], ['2026-10-26', ['10:00', '12:00', '14:00']]])
+  // El jueves 22 solo en la tarde (13 a 16): una de 2 h dejaria 1 h suelta; una de 3 h calza justo.
+  assert.deepEqual(disponibilidadAgenda({}, 180, new Date('2026-10-20T09:00:00-03:00'), horario)[0], { fecha: '2026-10-22', horas: [{ inicio: '13:00', fin: '16:00' }] })
   assert.equal(editado.at(-1).fecha, '2026-10-27') // 1 semana
 })
 
