@@ -13,7 +13,7 @@ import { enviarCorreoGmail } from './lib/correo.mjs'
 import { ahoraEnZona } from './lib/horarios.mjs'
 import { linkAgenda } from './lib/mercadopago.mjs'
 import { ejecutarSeguimiento } from './lib/seguimiento.mjs'
-import { enviarTelegram } from './lib/telegram.mjs'
+import { alertarError, enviarTelegram } from './lib/telegram.mjs'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': AUTH_HEADERS, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Cache-Control': 'no-store' }
 const responder = (statusCode, body) => ({ statusCode, headers: cors, body: JSON.stringify(body) })
@@ -47,6 +47,7 @@ export async function handler(event) {
     return responder(200, { ok: true, ...(await correrSeguimiento()) })
   } catch (err) {
     console.error('seguimiento-diario error:', err)
+    await alertarError('el seguimiento de las 20:00', err)
     return responder(500, { ok: false, error: String(err?.message || err) })
   }
 }

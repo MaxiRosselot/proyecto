@@ -66,6 +66,11 @@
 [functions.seguimiento-diario]
   schedule = "0 23,0 * * *"
 
+# Fichas del dia al maestro y resumen a Maxi por Telegram a las 07:00 de Chile (10 y 11 UTC; actua
+# la que cae a las 7 h en Chile).
+[functions.bot-manana]
+  schedule = "0 10,11 * * *"
+
 [[headers]]
   for = "/*"
   [headers.values]

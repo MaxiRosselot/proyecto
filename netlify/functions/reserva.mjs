@@ -5,6 +5,7 @@
 import { clienteMercadoPago, configPago } from './lib/mercadopago.mjs'
 import { atenderReservaGet, atenderReservaPost } from './lib/reserva-cliente.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
+import { alertarError } from './lib/telegram.mjs'
 
 const json = (statusCode, body) => ({ statusCode, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(body) })
 
@@ -21,6 +22,7 @@ export async function handler(event) {
   } catch (err) {
     if (err?.estado && err.estado < 500) return json(err.estado, { ok: false, error: err.message })
     console.error('reserva error:', err)
+    await alertarError('la página de reserva y pago del cliente', err)
     return json(500, { ok: false, error: 'No pudimos completar la reserva. Intenta de nuevo en un momento o escríbenos por WhatsApp.' })
   }
 }

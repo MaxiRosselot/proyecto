@@ -7,7 +7,7 @@ import { atenderAgendaGet, atenderAgendaPost } from './lib/agenda-cliente.mjs'
 import { HOJA_HORARIOS_INSTALACIONES, HORARIO_INSTALACIONES, almacenHorariosSheets, leerHorario } from './lib/horarios.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
 import { configPago } from './lib/mercadopago.mjs'
-import { avisar } from './lib/telegram.mjs'
+import { alertarError, avisar } from './lib/telegram.mjs'
 
 const json = (statusCode, body) => ({ statusCode, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(body) })
 
@@ -28,6 +28,7 @@ export async function handler(event) {
   } catch (err) {
     if (err?.estado && err.estado < 500) return json(err.estado, { ok: false, error: err.message })
     console.error('agendar error:', err)
+    await alertarError('el link del cliente para agendar su instalación', err)
     return json(500, { ok: false, error: 'No pudimos agendar. Intenta de nuevo en un momento o escríbenos por WhatsApp.' })
   }
 }

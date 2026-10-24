@@ -10,7 +10,7 @@ import { enviarCorreoGmail } from './lib/correo.mjs'
 import { leerTablaPrecios } from './lib/precios-planilla.mjs'
 import { subirPdfCotizacion } from './lib/drive-pdf.mjs'
 import { linkAgenda } from './lib/mercadopago.mjs'
-import { avisar } from './lib/telegram.mjs'
+import { alertarError, avisar } from './lib/telegram.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,6 +58,7 @@ export async function handler(event) {
   } catch (err) {
     if (err instanceof ErrorCotizacionWeb || err?.estado) return responder(err.estado, { ok: false, error: err.message })
     console.error('cotizacion-web error:', err)
+    await alertarError('la cotización automática de la web', err)
     return responder(500, { ok: false, error: 'No pudimos procesar la cotización. Intenta de nuevo en un momento.' })
   }
 }

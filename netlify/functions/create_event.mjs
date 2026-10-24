@@ -1,5 +1,5 @@
 // netlify/functions/create_event.mjs
-import { avisar, avisoVisitaAgendada } from './lib/telegram.mjs';
+import { alertarError, avisar, avisoVisitaAgendada } from './lib/telegram.mjs';
 import { google } from 'googleapis';
 import { almacenHorariosSheets, horaLocalAUTC, horaPermitida, leerHorario, sumarDias } from './lib/horarios.mjs';
 
@@ -196,6 +196,7 @@ Slot: ${fechaISO} ${horaHHmm} (${duration}min)`;
     };
   } catch (err) {
     console.error('Calendar error:', err.response?.data || err);
+    await alertarError('agendar una visita desde la web', err);
     return {
       statusCode: 500,
       headers: corsHeaders,

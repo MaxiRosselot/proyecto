@@ -56,6 +56,15 @@ export async function avisar(mensaje, opciones = {}) {
   catch (e) { console.warn('Aviso de Telegram no enviado:', e.message); return 0 }
 }
 
+// Algo fallo en el servidor (no un dato mal escrito por el cliente): aviso para enterarse antes que
+// el cliente. Los errores 4xx (validaciones) no avisan.
+export async function alertarError(donde, err, opciones = {}) {
+  const estado = Number(err?.estado ?? err?.statusCode ?? err?.response?.status ?? err?.code)
+  if (estado >= 400 && estado < 500 && estado !== 429) return 0
+  const detalle = String(err?.message || err || 'sin detalle').slice(0, 600)
+  return avisar(`🚨 Falló ${donde}\n${detalle}${estado === 429 ? '\n(Google pidió esperar: suele pasar solo)' : ''}`, opciones)
+}
+
 // ---------- Ficha de una cotizacion (para los avisos) ----------
 const quien = q => `${q.nombre || 'Sin nombre'}${q.cotNum ? ` · N° ${q.cotNum}` : ''}`
 const primer = nombre => String(nombre || '').trim().split(/\s+/)[0] || ''
@@ -194,14 +203,22 @@ export async function atenderTelegramAdmin(metodo, body = {}, { env = process.en
       return { ok: true, enviados: config.chats.length }
     } catch (e) { return { ok: false, error: 'Telegram no aceptó el mensaje: ' + e.message } }
   }
+  const maestros = String(env.TELEGRAM_MAESTRO_CHAT_ID || '').split(',').map(s => s.trim()).filter(Boolean)
   try {
+    // Con el menu del bot activo (webhook), Telegram no deja leer los mensajes con getUpdates: el bot
+    // mismo le dice su numero a quien le escribe.
+    const info = await llamarTelegram(config, 'getWebhookInfo', {}, { fetchImpl }).catch(() => null)
+    if (info?.url) {
+      const webhook = { activo: true, pendientes: info.pending_update_count || 0, ...(info.last_error_message ? { ultimoError: info.last_error_message, fechaError: info.last_error_date ? new Date(info.last_error_date * 1000).toISOString() : '' } : {}) }
+      return { ok: true, configurado: true, chats: config.chats, maestros, webhook, detectados: [] }
+    }
     const updates = await llamarTelegram(config, 'getUpdates', { limit: 50 }, { fetchImpl })
     const vistos = new Map()
     for (const u of updates || []) {
       const chat = (u.message || u.edited_message || u.my_chat_member)?.chat
       if (chat) vistos.set(String(chat.id), [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.title || chat.username || 'Chat')
     }
-    return { ok: true, configurado: true, chats: config.chats, detectados: [...vistos].map(([id, nombre]) => ({ id, nombre })) }
+    return { ok: true, configurado: true, chats: config.chats, maestros, webhook: { activo: false }, detectados: [...vistos].map(([id, nombre]) => ({ id, nombre })) }
   } catch (e) {
     return { ok: false, configurado: true, chats: config.chats, detectados: [], error: 'No pude hablar con el bot: ' + e.message }
   }

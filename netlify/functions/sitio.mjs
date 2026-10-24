@@ -7,7 +7,7 @@
 // Las reglas viven en lib/sitio.mjs.
 import { google } from 'googleapis'
 import { enviarCorreoGmail } from './lib/correo.mjs'
-import { avisar, avisoContacto } from './lib/telegram.mjs'
+import { alertarError, avisar, avisoContacto } from './lib/telegram.mjs'
 import {
   almacenFotosDrive, almacenSolicitudesDrive, correoContacto, fotosPorSeccion, iniciarSolicitudFotos,
   subirTrozoSolicitud, terminarSolicitudFotos, validarContacto,
@@ -52,6 +52,7 @@ export async function handler(event) {
   } catch (err) {
     if (err?.estado && err.estado < 500) return json(err.estado, { ok: false, error: err.message })
     console.error('sitio error:', err)
+    await alertarError('el sitio web (contacto o envío de fotos)', err)
     return json(500, { ok: false, error: 'Algo falló de nuestro lado. Intenta de nuevo o escríbenos por WhatsApp.' })
   }
 }

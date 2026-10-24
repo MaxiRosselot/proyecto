@@ -10,6 +10,7 @@ import { ahoraEnZona, sumarDias } from './lib/horarios.mjs'
 import { enviarCorreoGmail, explicarErrorCorreo } from './lib/correo.mjs'
 import { prepararRecordatorios } from './lib/recordatorios.mjs'
 import { esProgramada } from './seguimiento-diario.mjs'
+import { alertarError } from './lib/telegram.mjs'
 
 const ADMIN_EMAIL = process.env.NOTIFY_EMAIL || 'repisas@donmaxi.cl'
 
@@ -54,6 +55,7 @@ export async function handler(event) {
     return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, manana, enviados, fallidos }) }
   } catch (err) {
     console.error('send-reminders error:', err)
+    await alertarError('los recordatorios de las 10:00', err)
     return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ ok: false, error: String(err) }) }
   }
 }

@@ -6,6 +6,7 @@ import { clienteMercadoPago, configPago } from './lib/mercadopago.mjs'
 import { atenderAvisoMercadoPago } from './lib/reserva-cliente.mjs'
 import { serviciosGoogle } from './lib/google-servicios.mjs'
 import { fechaLarga } from './lib/mensajes.mjs'
+import { alertarError } from './lib/telegram.mjs'
 
 const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
 
@@ -32,6 +33,7 @@ export async function handler(event) {
     })
   } catch (err) {
     console.error('mp-webhook error:', err)
+    await alertarError('el aviso de pago de Mercado Pago', err)
     return { statusCode: err.estado && err.estado < 500 ? err.estado : 500, body: JSON.stringify({ ok: false, error: err.message }) }
   }
 }

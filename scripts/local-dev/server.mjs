@@ -30,14 +30,16 @@ import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netl
 import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from '../../netlify/functions/lib/planilla.mjs'
 import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
 import { horasParaReagendar, liberarHoraVisita, reagendarVisita } from '../../netlify/functions/lib/visitas.mjs'
-import { almacenFotosMemoria, almacenSolicitudesMemoria } from '../../netlify/functions/lib/sitio.mjs'
+import { almacenFotosMemoria, almacenSolicitudesMemoria, subirFotoWeb } from '../../netlify/functions/lib/sitio.mjs'
 import { atenderSitio } from '../../netlify/functions/sitio.mjs'
 import { atenderWebFotos } from '../../netlify/functions/web-fotos.mjs'
 import { avisar, avisoCotizacionCreada, avisoVisitaAgendada } from '../../netlify/functions/lib/telegram.mjs'
 import { avisarGuardado, avisarInstalacionAgendada } from '../../netlify/functions/lib/avisos.mjs'
 import { ejecutarSeguimiento } from '../../netlify/functions/lib/seguimiento.mjs'
 import { diasParaComuna } from '../../netlify/functions/lib/zonas.mjs'
-import { atenderTelegramAdmin, enviarTelegram } from '../../netlify/functions/lib/telegram.mjs'
+import { atenderTelegramAdmin, configTelegram, enviarTelegram } from '../../netlify/functions/lib/telegram.mjs'
+import { atenderUpdate, conectarBot, enviarMananaDelBot, rolesTelegram, secretoWebhook } from '../../netlify/functions/lib/bot.mjs'
+import { depsTelegram } from '../../netlify/functions/lib/bot-servicios.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -61,8 +63,10 @@ process.env.SITE_URL = PUBLIC_URL
 // Telegram simulado: los avisos del bot quedan en memoria (GET /telegram-mock/mensajes) y no salen a internet.
 process.env.TELEGRAM_BOT_TOKEN = 'local-simulado'
 process.env.TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '1001'
+process.env.TELEGRAM_MAESTRO_CHAT_ID = process.env.TELEGRAM_MAESTRO_CHAT_ID || '2002'
 process.env.TELEGRAM_API_URL = `http://127.0.0.1:${PORT}/telegram-mock`
 const mensajesTelegram = []
+let webhookTelegram = ''
 
 function loadData() {
   if (fs.existsSync(DATA_FILE)) {
@@ -192,8 +196,29 @@ function depsReserva() {
   }
 }
 
+// El bot (lib/bot.mjs) con la planilla y el calendario locales; las fotos de instalaciones en memoria.
+const fotosVenta = new Map()
+function depsBotLocal() {
+  const r = depsReserva()
+  return {
+    ...depsTelegram(), roles: rolesTelegram(),
+    listar: async () => (await listarCotizaciones(cotizaciones)).quotes,
+    leerEventos: r.leerEventos, leerHorario: r.leerHorario,
+    actualizarFila: (cotNum, cambios) => actualizarFila(r.almacen, r.calendar, r.calendarId, cotNum, cambios, { leerEventos: r.leerEventos }),
+    registrarPago: datos => registrarPago(cotizaciones, datos),
+    guardarFoto: async ({ cotizacion, datos, tipo }) => {
+      const id = 'fotoventa-' + randomUUID().slice(0, 8)
+      fotosVenta.set(id, { datos, tipo, titulo: `Bodega N° ${cotizacion.cotNum}` })
+      return { id, carpetaUrl: '' }
+    },
+    leerFoto: async id => fotosVenta.get(id) || null,
+    publicarFoto: ({ datos, tipo, titulo }) => subirFotoWeb(fotosWeb, { seccion: 'galeria', categoria: 'bodegas', tipo, titulo, datos: datos.toString('base64') }),
+    linkPago: cotNum => linkPagoCotizacion(cotNum),
+  }
+}
+
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto', 'visitas-zona'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto', 'visitas-zona', 'telegram-bot'])
 
 // Sitio publico: fotos de Admin → Web y archivos de "Envíanos fotos" en memoria (en produccion, Drive).
 const fotosWeb = almacenFotosMemoria()
@@ -310,7 +335,19 @@ const routes = {
       telegram: (texto, opciones) => enviarTelegram(texto, opciones),
     })) }
   },
-  'telegram': async (body, params, method) => (method === 'POST' && body.accion === 'resumen' ? routes['seguimiento-diario'](body, params) : atenderTelegramAdmin(method, body)),
+  'telegram': async (body, params, method) => {
+    if (method === 'POST' && body.accion === 'resumen') return routes['seguimiento-diario'](body, params)
+    // Telegram exige https: localmente la direccion es solo de mentira (nadie la llama).
+    if (method === 'POST' && body.accion === 'webhook') return { ok: true, ...(await conectarBot({ tg: depsTelegram().tg, token: configTelegram().token, base: `https://${new URL(PUBLIC_URL).host}`, roles: rolesTelegram() })) }
+    if (method === 'POST' && body.accion === 'fichas') return { ok: true, ...(await enviarMananaDelBot(depsBotLocal())) }
+    return atenderTelegramAdmin(method, body)
+  },
+  // Mismo contrato que netlify/functions/telegram-bot.mjs (el webhook): POST con el update de Telegram.
+  'telegram-bot': async (body, _params, _method, event) => {
+    if (event.headers['x-telegram-bot-api-secret-token'] !== secretoWebhook(configTelegram().token)) return { status: 401, ok: false }
+    await atenderUpdate(body, depsBotLocal())
+    return { ok: true }
+  },
   // Mismo contrato que netlify/functions/planilla.mjs
   'planilla': async (body) => {
     const { almacen, calendar, calendarId, leerEventos } = depsReserva()
@@ -402,11 +439,19 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'DELETE') mensajesTelegram.length = 0
       return send(res, 200, { ok: true, mensajes: mensajesTelegram })
     }
+    // Descarga de una foto (getFile → /file/bot<token>/<ruta>): unos bytes de JPEG cualquiera.
+    if (url.pathname.includes('/telegram-mock/file/')) { res.writeHead(200, { 'Content-Type': 'image/jpeg' }); return res.end(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(400, 1)])) }
     const chunksTg = []
     for await (const c of req) chunksTg.push(c)
     const cuerpo = JSON.parse(Buffer.concat(chunksTg).toString('utf8') || '{}')
-    if (url.pathname.endsWith('/getUpdates')) return send(res, 200, { ok: true, result: [{ update_id: 1, message: { chat: { id: 1001, first_name: 'Maxi', last_name: 'Local' }, text: '/start' } }] })
-    mensajesTelegram.push({ chat: cuerpo.chat_id, texto: cuerpo.text, botones: cuerpo.reply_markup?.inline_keyboard?.flat() || [] })
+    const metodo = url.pathname.split('/').at(-1)
+    if (metodo === 'getUpdates') return send(res, 200, webhookTelegram ? { ok: false, description: "Conflict: can't use getUpdates method while webhook is active" } : { ok: true, result: [{ update_id: 1, message: { chat: { id: 1001, first_name: 'Maxi', last_name: 'Local' }, text: '/start' } }] })
+    if (metodo === 'getWebhookInfo') return send(res, 200, { ok: true, result: { url: webhookTelegram, pending_update_count: 0 } })
+    if (metodo === 'setWebhook') webhookTelegram = cuerpo.url || ''
+    if (metodo === 'getFile') return send(res, 200, { ok: true, result: { file_path: `photos/${cuerpo.file_id}.jpg` } })
+    if (['sendMessage', 'editMessageText', 'sendPhoto', 'editMessageReplyMarkup', 'answerCallbackQuery'].includes(metodo)) {
+      mensajesTelegram.push({ metodo, chat: cuerpo.chat_id, texto: cuerpo.text ?? cuerpo.caption, botones: cuerpo.reply_markup?.inline_keyboard?.flat() || [], ...(metodo === 'answerCallbackQuery' ? { aviso: cuerpo.text || '' } : {}) })
+    }
     return send(res, 200, { ok: true, result: { message_id: mensajesTelegram.length } })
   }
   if (!url.pathname.startsWith('/.netlify/functions/')) return send(res, 404, { error: 'Ruta local no encontrada' })
@@ -500,7 +545,7 @@ const server = http.createServer(async (req, res) => {
     if (!route) return send(res, 404, { ok: false, error: `Sin backend local para ${name}` })
     if (name === 'update-precio' && req.method !== 'POST') return send(res, 405, { error: 'Método no permitido' })
     const body = raw ? JSON.parse(raw) : {}
-    const { status = 200, ...result } = await route(body, url.searchParams, req.method)
+    const { status = 200, ...result } = await route(body, url.searchParams, req.method, event)
     return send(res, status, result)
   } catch (error) {
     const status = error.status || error.estado || 500

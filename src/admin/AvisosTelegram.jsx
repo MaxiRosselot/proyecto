@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { C, apiFetch, styles } from './utils.js'
 
 // Admin → Inicio: conectar el bot de Telegram que avisa todo lo que pasa en el panel
-// (netlify/functions/telegram.mjs) y correr el seguimiento de las 20:00 a mano.
+// (netlify/functions/telegram.mjs), activar su menu (telegram-bot.mjs), sumar al maestro y correr
+// a mano el seguimiento de las 20:00 y las fichas de las 07:00.
 export default function AvisosTelegram() {
   const [estado, setEstado] = useState(null)
   const [aviso, setAviso] = useState('')
@@ -49,14 +50,29 @@ export default function AvisosTelegram() {
               ))}
             </div>
           )}
-          {listo && <p style={{ ...paso, color: C.textSub }}>Te aviso: cotizaciones nuevas, confirmadas y rechazadas, visitas e instalaciones agendadas, fotos y mensajes de la web. Todos los días a las 20:00, las instalaciones de mañana (un mensaje por cada una para copiar al cliente) y las cotizaciones sin respuesta.</p>}
+          {listo && <p style={{ ...paso, color: C.textSub }}>Te aviso: cotizaciones nuevas, confirmadas y rechazadas, visitas e instalaciones agendadas, fotos y mensajes de la web, y si algo falla en el servidor. Todos los días a las 07:00 el día (y al maestro sus fichas) y a las 20:00 las instalaciones de mañana y las cotizaciones sin respuesta.</p>}
+          {listo && (
+            <div style={{ borderTop: `1px solid ${C.border}`, margin: '10px 0', paddingTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                <strong style={{ fontSize: 13 }}>Menú del bot</strong>
+                <span style={styles.badge(estado.webhook?.activo ? C.green : C.yellow)}>{estado.webhook?.activo ? 'Activo' : 'Apagado'}</span>
+              </div>
+              <p style={{ ...paso, color: C.textSub }}>Con el menú activo le escribes <code>/menu</code> al bot: hoy, mañana, semana, visitas, horas libres, materiales, por cobrar, sin respuesta y buscar cliente. En cada instalación: marcar instalada, registrar pago y cambiar día u hora (mueve el calendario).</p>
+              {estado.webhook?.ultimoError && <div style={styles.errorBox}>Último error de Telegram: {estado.webhook.ultimoError}</div>}
+              <p style={paso}><strong>Maestro:</strong> {estado.maestros?.length ? `conectado (${estado.maestros.join(', ')}).` : 'que le escriba /start al bot; el bot le responde su número y te avisa. Guárdalo en Netlify como TELEGRAM_MAESTRO_CHAT_ID y vuelve a publicar.'} Recibe sus fichas a las 07:00, manda fotos (quedan en Drive por venta y tú eliges cuáles van a la web) y aprieta ✅ Terminada.</p>
+            </div>
+          )}
           {estado.error && <div style={styles.errorBox}>{estado.error}</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" style={styles.btnSecondary} onClick={cargar} disabled={ocupado}>Buscar mi chat</button>
+            <button type="button" style={styles.btnSecondary} onClick={cargar} disabled={ocupado}>{estado.webhook?.activo ? 'Actualizar' : 'Buscar mi chat'}</button>
+            {listo && <button type="button" style={styles.btnSecondary} disabled={ocupado}
+              onClick={() => correr('/.netlify/functions/telegram', { accion: 'webhook' }, () => { cargar(); return '✅ Menú activado: escríbele /menu al bot' })}>{estado.webhook?.activo ? 'Reconectar menú del bot' : 'Activar menú del bot'}</button>}
             {listo && <button type="button" style={styles.btnSecondary} disabled={ocupado}
               onClick={() => correr('/.netlify/functions/telegram', { accion: 'probar' }, () => '✅ Mensaje de prueba enviado')}>Enviar prueba</button>}
             {listo && <button type="button" style={styles.btnSecondary} disabled={ocupado}
               onClick={() => correr('/.netlify/functions/telegram', { accion: 'resumen' }, r => `✅ Listo: ${r.telegram} avisos por Telegram y ${r.correos} correos de seguimiento`)}>Enviar el resumen de las 20:00 ahora</button>}
+            {listo && <button type="button" style={styles.btnSecondary} disabled={ocupado}
+              onClick={() => correr('/.netlify/functions/telegram', { accion: 'fichas' }, r => `✅ Listo: ${r.enviados} mensajes${r.maestros ? '' : ' (falta conectar al maestro)'}`)}>Enviar las fichas de hoy</button>}
           </div>
         </div>
       )}

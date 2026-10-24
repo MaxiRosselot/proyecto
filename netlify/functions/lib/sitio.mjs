@@ -201,7 +201,7 @@ export function correoSolicitudCliente(s) {
 }
 
 // ---------- Drive ----------
-async function carpetaPorNombre(drive, nombre, padre) {
+export async function carpetaPorNombre(drive, nombre, padre) {
   const q = [`name='${nombre.replace(/'/g, "\\'")}'`, "mimeType='application/vnd.google-apps.folder'", 'trashed=false', ...(padre ? [`'${padre}' in parents`] : [])].join(' and ')
   const r = await drive.files.list({ q, fields: 'files(id)', spaces: 'drive' })
   if (r.data.files?.length) return r.data.files[0].id
