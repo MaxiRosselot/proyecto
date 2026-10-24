@@ -17,7 +17,9 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
    - CALENDAR_ID
    - DEFAULT_EVENT_DURATION_MIN=15
    - NOTIFY_EMAIL=repisas@donmaxi.cl
-   - GOOGLE_SHEET_ID (hoja con la pestaña `Cotizaciones`) y PRECIOS_SHEET_ID
+   - GOOGLE_SHEET_ID: la planilla principal, con las pestañas `Cotizaciones`, `Visitas`, `Horarios` y `precios`
+     (la tabla de precios: columnas Alto, Profundidad, Largo desde, Largo hasta y Precio, en cualquier orden).
+     `PRECIOS_SHEET_ID` ya no se usa.
    - ADMIN_PASSWORD: contraseña del panel `/admin`, **mínimo 12 caracteres**. Sin ella nadie entra.
    - ADMIN_SESSION_SECRET: texto aleatorio de **32 caracteres o más** para firmar las sesiones
      (por ejemplo `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).

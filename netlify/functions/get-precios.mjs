@@ -1,5 +1,5 @@
 // netlify/functions/get-precios.mjs
-// Lee la tabla de precios de repisas desde la planilla de Google que mantiene el cliente.
+// Lee la tabla de precios de repisas desde la hoja "precios" de la planilla principal.
 // Esa planilla es la fuente de verdad: si suben los precios de la madera, el cliente edita
 // ahi y la cotizacion queda al dia sin tocar el codigo.
 import { google } from 'googleapis'
@@ -11,7 +11,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': AUTH_HEADERS,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
-const SHEET_ID = process.env.PRECIOS_SHEET_ID
+// La hoja "precios" de la planilla principal (ver lib/precios-planilla.mjs).
+const SHEET_ID = process.env.GOOGLE_SHEET_ID
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }

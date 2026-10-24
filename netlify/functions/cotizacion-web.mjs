@@ -32,7 +32,7 @@ export async function handler(event) {
     const { sheets, drive, gmail } = google_()
 
     if (event.httpMethod === 'GET') {
-      const tabla = await leerTablaPrecios(sheets, process.env.PRECIOS_SHEET_ID)
+      const tabla = await leerTablaPrecios(sheets, process.env.GOOGLE_SHEET_ID)
       // Sin cache: un precio que se cambia en el panel tiene que verse altiro en /cotiza.
       return responder(200, { ok: true, tabla }, { 'Cache-Control': 'no-store' })
     }
@@ -44,7 +44,7 @@ export async function handler(event) {
     try { body = JSON.parse(event.body || '{}') } catch { return responder(400, { ok: false, error: 'Solicitud inválida' }) }
 
     const resultado = await procesarCotizacionWeb(body, {
-      tabla: await leerTablaPrecios(sheets, process.env.PRECIOS_SHEET_ID),
+      tabla: await leerTablaPrecios(sheets, process.env.GOOGLE_SHEET_ID),
       almacen: almacenSheets(sheets, process.env.GOOGLE_SHEET_ID),
       generarPdf: generateQuotePdf,
       subirPdf: datos => subirPdfCotizacion(drive, datos),
