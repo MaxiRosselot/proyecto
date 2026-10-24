@@ -314,6 +314,78 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
   )
 }
 
+// ── Reagendar ────────────────────────────────────────────────────────────────
+
+const aMin = h => { const [a, b] = String(h || '').split(':').map(Number); return a * 60 + (b || 0) }
+const duracionTexto = (inicio, fin) => { const m = aMin(fin) - aMin(inicio); return m > 0 ? `${Math.floor(m / 60) ? Math.floor(m / 60) + ' h' : ''}${m % 60 ? ' ' + (m % 60) + ' min' : ''}`.trim() : '' }
+
+// Fecha, inicio y fin de una venta como celdas de solo lectura: al tocarlas se abre "Reagendar".
+function CeldaHorario({ valor, etiqueta, onAbrir, vacio = '—' }) {
+  return (
+    <button type="button" aria-label={etiqueta} onClick={onAbrir} className="planilla-celda"
+      style={{ ...celdaBase, textAlign: 'left', cursor: 'pointer', color: valor ? C.text : C.textMuted }}>
+      {valor || vacio}
+    </button>
+  )
+}
+
+// Dia, inicio y fin juntos, y se guardan de una vez (el evento del calendario se mueve con ellos).
+// Muestra lo que ya hay ese dia para no chocar.
+function Reagendar({ q, ventas, onGuardar, onCerrar }) {
+  const inst = q.instalacion || {}
+  const [d, setD] = useState({ fecha: inst.fecha || '', inicio: inst.inicio || '10:00', fin: inst.fin || '12:00' })
+  const [guardando, setGuardando] = useState(false), [error, setError] = useState('')
+  useEffect(() => {
+    const f = e => e.key === 'Escape' && onCerrar()
+    window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f)
+  }, [onCerrar])
+  const delDia = ventas.filter(v => v.cotNum !== q.cotNum && v.status !== 'rechazada' && v.instalacion?.fecha && v.instalacion.fecha === d.fecha)
+    .sort((a, b) => String(a.instalacion.inicio).localeCompare(String(b.instalacion.inicio)))
+  const choca = v => v.instalacion.inicio && v.instalacion.fin && aMin(v.instalacion.inicio) < aMin(d.fin) && aMin(v.instalacion.fin) > aMin(d.inicio)
+  const valido = d.fecha && d.inicio && d.fin && aMin(d.fin) > aMin(d.inicio)
+  const cambio = d.fecha !== (inst.fecha || '') || d.inicio !== (inst.inicio || '') || d.fin !== (inst.fin || '')
+  async function guardar(e) {
+    e.preventDefault(); setError(''); setGuardando(true)
+    try { await onGuardar(d); onCerrar() } catch (err) { setError(err.message) } finally { setGuardando(false) }
+  }
+  const campo = { ...styles.input, padding: '8px 10px', fontSize: 14 }
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onCerrar() }}
+      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.4)', display: 'grid', placeItems: 'center', padding: 12 }}>
+      <form role="dialog" aria-modal="true" aria-label={`Reagendar a ${q.nombre}`} onSubmit={guardar}
+        style={{ ...styles.card, width: 'min(440px, 100%)', display: 'grid', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ ...styles.sectionTitle, fontSize: 17 }}>{inst.fecha ? 'Reagendar' : 'Agendar'} · {q.nombre}</h3>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: C.textMuted }}>✕</button>
+        </div>
+        {inst.fecha && <div style={{ fontSize: 13, color: C.textSub }}>Ahora: {fechaCorta(inst.fecha)} · {inst.inicio}–{inst.fin}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8 }}>
+          <label><span style={styles.detailLabel}>Día</span><input type="date" required aria-label="Nuevo día" value={d.fecha} onChange={e => setD({ ...d, fecha: e.target.value })} style={campo} /></label>
+          <label><span style={styles.detailLabel}>Inicio</span><input type="time" step="1800" required aria-label="Nuevo inicio" value={d.inicio} onChange={e => setD({ ...d, inicio: e.target.value })} style={campo} /></label>
+          <label><span style={styles.detailLabel}>Fin</span><input type="time" step="1800" required aria-label="Nuevo fin" value={d.fin} onChange={e => setD({ ...d, fin: e.target.value })} style={campo} /></label>
+        </div>
+        <div style={{ fontSize: 13, color: valido ? C.text : C.red }} data-testid="reagendar-resumen">
+          {!d.fecha ? 'Elige el día.' : valido ? `${fechaCorta(d.fecha)} · ${d.inicio} a ${d.fin} · ${duracionTexto(d.inicio, d.fin)}` : 'El fin tiene que ser después del inicio.'}
+        </div>
+        {d.fecha && (
+          <div style={{ fontSize: 12.5, display: 'grid', gap: 3 }} data-testid="reagendar-dia">
+            <strong style={{ color: C.textSub }}>Ese día:</strong>
+            {delDia.length ? delDia.map(v => (
+              <span key={v.cotNum} style={{ color: choca(v) ? C.red : C.text }}>{choca(v) ? '⚠️ Choca: ' : '• '}{v.instalacion.inicio}–{v.instalacion.fin} {v.nombre}</span>
+            )) : <span style={{ color: C.textMuted }}>No hay otras instalaciones.</span>}
+          </div>
+        )}
+        {error && <div style={{ ...styles.errorBox, marginBottom: 0 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onCerrar} style={styles.btnSecondary}>Cancelar</button>
+          <button type="submit" disabled={!valido || !cambio || guardando} style={styles.btnPrimary}>{guardando ? 'Guardando…' : 'Guardar cambio'}</button>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.textMuted }}>El evento del calendario se mueve con el cambio.</div>
+      </form>
+    </div>
+  )
+}
+
 // ── Nueva instalacion ────────────────────────────────────────────────────────
 
 function NuevaInstalacion({ onCrear, onCancelar }) {
@@ -431,6 +503,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
   const [filtro, setFiltro] = useState('todas')
   const [buscar, setBuscar] = useState('')
   const [detalle, setDetalle] = useState(null)
+  const [reagendando, setReagendando] = useState(null)
   const [nueva, setNueva] = useState(false)
   const [importar, setImportar] = useState(false)
   const [materiales, setMateriales] = useState(false)
@@ -600,9 +673,9 @@ export default function PlanillaSection({ onVerCotizacion }) {
                         {f.fecha >= hoy && !f.inst.eventId && <span title="Sin evento enlazado en el calendario: ábrela para enlazarlo" aria-label={`Sin evento: ${q.nombre}`} style={{ width: 7, height: 7, borderRadius: '50%', background: C.yellow, flex: 'none' }} />}
                       </div>
                     </td>
-                    <td style={{ ...td, width: 122 }}><Celda tipo="date" valor={f.fecha} etiqueta={`Fecha de ${q.nombre}`} alGuardar={v => actualizar(q.cotNum, { fecha: v })} /></td>
-                    <td style={{ ...td, width: 82 }}><Celda tipo="time" valor={f.inst.inicio} etiqueta={`Inicio de ${q.nombre}`} alGuardar={v => actualizar(q.cotNum, { inicio: v })} /></td>
-                    <td style={{ ...td, width: 82 }}><Celda tipo="time" valor={f.inst.fin} etiqueta={`Fin de ${q.nombre}`} alGuardar={v => actualizar(q.cotNum, { fin: v })} /></td>
+                    <td style={{ ...td, width: 122 }}><CeldaHorario valor={f.fecha ? f.fecha.split('-').reverse().join('-') : ''} vacio="Agendar" etiqueta={`Fecha de ${q.nombre}`} onAbrir={() => setReagendando(q.cotNum)} /></td>
+                    <td style={{ ...td, width: 82 }}><CeldaHorario valor={f.inst.inicio} etiqueta={`Inicio de ${q.nombre}`} onAbrir={() => setReagendando(q.cotNum)} /></td>
+                    <td style={{ ...td, width: 82 }}><CeldaHorario valor={f.inst.fin} etiqueta={`Fin de ${q.nombre}`} onAbrir={() => setReagendando(q.cotNum)} /></td>
                     <td style={{ ...td, width: 82 }}><Documento fila={f} alGuardar={v => actualizar(q.cotNum, { documento: v })} /></td>
                     <td style={{ ...td, width: 64 }}><Pagado fila={f} onRegistrar={(m, medio) => registrarPago(q, m, medio)} onAbrir={() => setDetalle(q.cotNum)} /></td>
                     {['repisas', ...SERV.map(s => s.clave), 'despacho'].map(campo => (
@@ -632,6 +705,14 @@ export default function PlanillaSection({ onVerCotizacion }) {
         </div>
       ))}
 
+      {reagendando && quotes.some(x => x.cotNum === reagendando) && (
+        <Reagendar q={quotes.find(x => x.cotNum === reagendando)} ventas={quotes} onCerrar={() => setReagendando(null)}
+          onGuardar={async cambios => {
+            const r = await apiFetch(API, { method: 'POST', body: JSON.stringify({ accion: 'actualizar', cotNum: reagendando, cambios }) })
+            if (!r.ok) throw new Error(r.error || 'No se pudo reagendar')
+            reemplazar(r.cotizacion)
+          }} />
+      )}
       {abierta && <Detalle q={abierta} onCerrar={() => setDetalle(null)} onActualizar={c => actualizar(abierta.cotNum, c)} onCambioLocal={c => reemplazar({ cotNum: abierta.cotNum, ...c })} onVerCotizacion={onVerCotizacion} />}
       {importar && <ImportarExcel onCerrar={() => setImportar(false)} onListo={() => { setImportar(false); setPeriodo('todo'); cargar() }} />}
     </div>
