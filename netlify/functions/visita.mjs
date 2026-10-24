@@ -1,6 +1,6 @@
 // netlify/functions/visita.mjs — admin. Reagendar o cancelar una visita (Admin → Visitas).
-//   POST { accion: 'horas' }                          dias y horas libres para moverla
-//   POST { accion: 'reagendar', visitId, fecha, hora } mueve el evento del calendario
+//   POST { accion: 'horas', visitId }                 dias y rangos con cupo para moverla
+//   POST { accion: 'reagendar', visitId, fecha, hora } mueve el evento a ese rango (hora: inicio del rango)
 //   POST { accion: 'liberar', visitId }               al cancelar, deja la hora libre para otro cliente
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
@@ -27,7 +27,7 @@ export async function handler(event) {
     auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
     const calendar = google.calendar({ version: 'v3', auth }), calendarId = process.env.CALENDAR_ID
     const horario = () => leerHorario(almacenHorariosSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID))
-    if (datos.accion === 'horas') return responder(200, { ok: true, dias: await horasParaReagendar(calendar, calendarId, await horario()) })
+    if (datos.accion === 'horas') return responder(200, { ok: true, dias: await horasParaReagendar(calendar, calendarId, await horario(), new Date(), { excepto: datos.visitId }) })
     if (datos.accion === 'reagendar') return responder(200, { ok: true, ...(await reagendarVisita(calendar, calendarId, await horario(), datos)) })
     if (datos.accion === 'liberar') return responder(200, { ok: true, ...(await liberarHoraVisita(calendar, calendarId, datos.visitId)) })
     return responder(400, { ok: false, error: 'Acción desconocida' })

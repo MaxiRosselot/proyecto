@@ -1,7 +1,7 @@
 // Eventos del calendario del negocio para la vista Calendario del admin y los recordatorios.
 // Clasifica cada evento (instalacion, visita u otro) y a las instalaciones les suma lo de su
 // cotizacion: telefono, direccion, total y pagos.
-import { ahoraEnZona, aHHMM, horaLocalAUTC, sumarDias } from './horarios.mjs'
+import { ahoraEnZona, aHHMM, horaLocalAUTC, rangoDeHora, sumarDias } from './horarios.mjs'
 import { resumenPagos } from './pagos-resumen.mjs'
 
 export const MAX_DIAS = 62
@@ -55,9 +55,23 @@ export function eventoParaVista(ev, cotizacionesPorNumero = new Map()) {
       telefono: dato(descripcion, 'Celular'),
       ubicacion: base.ubicacion || dato(descripcion, 'Dirección'),
       estado: ev.extendedProperties?.shared?.status || '',
+      ...visitaEnRango(ev.extendedProperties?.shared || {}, base),
     }
   }
   return { ...base, cliente: '' }
+}
+
+// El rango que eligio el cliente y, si ya se armo la ruta, la hora fija. Las visitas antiguas (hora
+// exacta, sin rango) quedan con esa hora fija y el rango que la contiene.
+function visitaEnRango(shared, base) {
+  const [desde, hasta] = String(shared.rango || '').split('-')
+  const rango = desde && hasta ? { desde, hasta } : rangoDeHora(base.inicio)
+  const horaFija = shared.hora_ruta || (shared.rango ? '' : base.inicio)
+  return {
+    rango, horaFija, activa: Boolean(shared.slot_key),
+    horario: horaFija || (rango ? `${rango.desde}–${rango.hasta}` : base.inicio),
+    ...(shared.lat && shared.lng ? { lat: Number(shared.lat), lng: Number(shared.lng) } : {}),
+  }
 }
 
 // Limites UTC de un rango de dias de Chile, inclusivo.

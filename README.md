@@ -26,6 +26,11 @@ La visita dura **15 min**. Se verifica disponibilidad real con Google Calendar.
    - MP_ACCESS_TOKEN: Access Token **de producción** de Mercado Pago (ver "Pago en línea"). Sin él se sigue usando el link fijo.
    - MP_WEBHOOK_SECRET (recomendada): la "clave secreta" de las notificaciones (webhooks) de Mercado Pago.
    - SITE_URL (opcional): dirección pública del sitio para los links de pago. Si falta, se usa la que da Netlify.
+   - VITE_GOOGLE_MAPS_KEY (opcional): clave de Google Maps para autocompletar y validar la dirección en `/visita`
+     (APIs "Maps JavaScript API" y "Places API (New)", restringida a los dominios del sitio). Sin ella, la dirección
+     se escribe a mano con la comuna de una lista.
+   - GOOGLE_MAPS_SERVER_KEY (opcional): otra clave, solo con "Geocoding API", para ubicar en el mapa las visitas
+     escritas a mano al armar la ruta del día. Sin ella, esas visitas se ordenan por comuna.
 3. Sube `logo.png` y `og-cover.png` a `/public`.
 
 ## Cotizador para clientes (/cotiza)
@@ -168,18 +173,27 @@ El panel se instala como app, sin App Store:
 - Todo se puede ver **con IVA o neto**. Si un subtotal se editó a mano, la diferencia aparece como "Ajustes de precio" para que todo cuadre.
 - Lógica y pruebas: `lib/resumen-instalaciones.mjs`. Prueba E2E local: `node scripts/local-dev/verify-instalaciones.mjs`.
 
-## Horarios de visita
+## Horarios de visita y ruta del día
 
+- El cliente, en `/visita`: **dirección** (autocompletada y validada con Google si está `VITE_GOOGLE_MAPS_KEY`)
+  → **día** → **rango** de 3 horas (8–11, 11–14, 14–17 o 17–20) → datos. La hora exacta no la elige.
 - En **Admin → Horarios** se define:
-  - el **horario semanal**, que se repite cada semana (por ejemplo, domingo de 10:00 a 14:00);
-  - las **fechas especiales**: abrir un sábado, cambiar el horario de un domingo o cerrar un día;
-  - cuántas **semanas** hacia adelante ve el cliente (1 a 12).
-- Se guarda en la pestaña **Horarios** de la planilla `GOOGLE_SHEET_ID`. La pestaña se crea sola la primera vez que se guarda.
-- Mientras no exista la pestaña, se usa lo que estaba fijo antes: domingos de 08:00 a 20:00 (último inicio 19:30) y 4 semanas.
-- La página pública muestra solo los días con horarios. El día de hoy ofrece solo horas que parten en una hora o más.
-- `get-availability` y `create_event` validan cada hora contra el horario: una reserva fuera de él se rechaza aunque se arme a mano.
-- Las visitas ya agendadas no se borran al cambiar el horario.
-- Lógica y pruebas: `netlify/functions/lib/horarios.mjs`. Prueba E2E local: `node scripts/local-dev/verify-horarios.mjs`.
+  - el **horario semanal**, que se repite cada semana (por ejemplo, sábado y domingo de 08:00 a 20:00);
+  - las **fechas especiales**: abrir un día, cambiar su horario o cerrarlo;
+  - cuántas **semanas** hacia adelante ve el cliente (1 a 12);
+  - el **cupo**: cuántas visitas caben en cada rango (por defecto 6). Un rango lleno ya no se ofrece.
+- Se ofrecen los rangos que caen al menos 1 hora dentro de lo abierto ese día. Hoy, solo si queda al menos
+  1 hora del rango después de una hora de anticipación.
+- Se guarda en la pestaña **Horarios** de la planilla `GOOGLE_SHEET_ID` (fila `cupo` incluida).
+- La visita queda en el calendario durando todo el rango, con el rango, la comuna y las coordenadas.
+- **Ruta del día** (bot de Telegram → 🗺 Ruta de visitas, o `/ruta`): ordena las visitas del día rango por rango, eligiendo
+  dentro de cada uno el orden con menos manejo, y calcula la hora de llegada a cada una. La ruta parte en la primera visita.
+  Trae el link de Google Maps con la ruta, un botón de WhatsApp por cliente con su hora y
+  **📌 Fijar horas en el calendario**. Ese botón deja cada evento en su hora exacta (15 min), sin avisar al cliente por correo.
+  Los recordatorios del día anterior dicen la hora exacta si ya está fijada, o el rango si no.
+- `visitas-rangos` (público) entrega los días y rangos con cupo; `create_event` vuelve a revisar el rango y el cupo.
+- Lógica y pruebas: `lib/horarios.mjs`, `lib/visitas.mjs` y `lib/ruta-visitas.mjs`. E2E local:
+  `verify-horarios.mjs`, `verify-copiar-visitas.mjs` y `verify-bot.mjs`.
 
 ## Panel admin y cotizaciones
 

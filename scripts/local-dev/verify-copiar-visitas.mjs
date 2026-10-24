@@ -19,14 +19,15 @@ try {
   // Windows devuelve el portapapeles con \r\n.
   const leerPortapapeles = async () => (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')
 
-  // Dos visitas el mismo dia (la primera fecha con 2 horas libres), agendadas como lo hace un cliente.
+  // Dos visitas el mismo dia (la primera fecha con 2 rangos), agendadas como lo hace un cliente.
   const fn = ruta => base + '/.netlify/functions/' + ruta
-  const { dias } = await (await page.request.get(fn('horarios'))).json()
-  const dia = dias.find(d => d.horas.length >= 2)
+  const rangosDe = async () => (await (await page.request.get(fn('visitas-rangos'))).json()).dias
+  const dias = await rangosDe()
+  const dia = dias.find(d => d.rangos.length >= 2)
   for (const [i, [nombre, apellido]] of [['Bruno', 'Tarde'], ['Ana', 'Temprano']].entries()) {
     const r = await page.request.post(fn('create_event'), { data: {
       nombre, apellido, email: `${nombre.toLowerCase()}@example.cl`, celular: '9 1234 567' + i,
-      direccion: `Calle Prueba ${100 + i}, Ñuñoa`, fechaISO: dia.fecha, horaHHmm: dia.horas[i === 0 ? 1 : 0], note: i ? 'Tocar timbre' : '',
+      direccion: `Calle Prueba ${100 + i}, Ñuñoa`, fechaISO: dia.fecha, rango: dia.rangos[i === 0 ? 1 : 0].desde, note: i ? 'Tocar timbre' : '',
     } })
     expect((await r.json()).ok).toBe(true)
   }
@@ -57,7 +58,7 @@ try {
   await expect(grupo.getByRole('button', { name: '✓ Copiado' })).toBeVisible()
   const texto = await leerPortapapeles()
   console.log(texto)
-  expect(texto).toMatch(/^📅 \*.+\* \(1 visita\)\n\n\*1\. \d\d:\d\d · Ana Temprano\*\n📍 Calle Prueba 101, Ñuñoa/)
+  expect(texto).toMatch(/^📅 \*.+\* \(1 visita\)\n\n\*1\. \d\d:\d\d–\d\d:\d\d · Ana Temprano\*\n📍 Calle Prueba 101, Ñuñoa/)
   expect(texto).not.toContain('Bruno')
 
   // Con las dos confirmadas salen en orden de hora.
@@ -75,19 +76,19 @@ try {
   await tarjeta('Bruno Tarde').getByRole('button', { name: 'Deshacer' }).click()
   await expect(copiar).toHaveText('📋 Copiar confirmadas (1/2)')
 
-  // Reagendar: solo ofrece horas libres (no la de Ana) y mueve la visita.
+  // Reagendar: ofrece los rangos con cupo de otro dia y mueve la visita a ese rango.
   await tarjeta('Bruno Tarde').getByRole('button', { name: '📅 Reagendar' }).click()
   const panel = page.getByTestId('reagendar-visita')
-  await expect(panel.getByRole('button', { name: dia.horas[0], exact: true })).toHaveCount(0) // la tiene Ana
   const otroDia = dias.find(d => d.fecha !== dia.fecha)
+  const r0 = otroDia.rangos[0]
   await panel.getByRole('button', { name: new RegExp(` ${Number(otroDia.fecha.slice(8))} `) }).first().click()
-  await panel.getByRole('button', { name: otroDia.horas[0], exact: true }).click()
+  await panel.getByRole('button', { name: `${r0.desde}–${r0.hasta}`, exact: true }).click()
   await panel.getByRole('button', { name: /^Mover al / }).click()
   await expect(panel).toContainText('✓ Reagendada para el')
   await panel.getByRole('button', { name: '📋 Copiar aviso para el cliente' }).click()
   const aviso = await panel.getByTestId('mensaje-copiado').inputValue()
-  expect(aviso).toMatch(/^Hola Bruno! 👋 .*reagendada para el .* a las /)
-  expect(aviso).toContain(otroDia.horas[0])
+  expect(aviso).toMatch(/^Hola Bruno! 👋 .*reagendada para el .* entre las /)
+  expect(aviso).toContain(`entre las ${r0.desde} y las ${r0.hasta}`)
   await page.screenshot({ path: path.join(evidence, '02-reagendar.png') })
   await panel.getByRole('button', { name: 'Listo' }).click()
   const brunoGrupo = page.getByTestId('dia-visitas').filter({ hasText: 'Bruno Tarde' })
@@ -98,14 +99,15 @@ try {
   const bruno = hoyVisitas.find(v => v.nombre === 'Bruno Tarde')
   expect(bruno.status).toBe('agendada')
 
-  // Cancelar: sale de Agendadas, queda en Canceladas y su hora vuelve a estar libre.
+  // Cancelar: sale de Agendadas, queda en Canceladas y su cupo vuelve a estar libre.
+  const libresAntes = (await rangosDe()).find(d => d.fecha === dia.fecha).rangos.find(r => r.desde === dia.rangos[0].desde).libres
   page.once('dialog', d => d.accept())
   await tarjeta('Ana Temprano').getByRole('button', { name: '✕ Cancelar' }).click()
   await expect(page.getByText('Ana Temprano', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: /^Canceladas\s*\d/ }).click()
   await expect(page.getByText('Ana Temprano', { exact: true })).toBeVisible()
-  const libre = await (await page.request.get(fn(`get-availability?date=${dia.fecha}&slots=${dia.horas[0]}`))).json()
-  expect(libre.availability[dia.horas[0]]).toBe(true)
+  const libresDespues = (await rangosDe()).find(d => d.fecha === dia.fecha).rangos.find(r => r.desde === dia.rangos[0].desde).libres
+  expect(libresDespues).toBe(libresAntes + 1)
 
   expect(errors).toEqual([])
   console.log(JSON.stringify({ ok: true }))

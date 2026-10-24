@@ -133,11 +133,13 @@ export function avisoCambioEstado(q, estado, motivo = '', { linkAgenda = '' } = 
   return { texto: `🔄 Cotización ${estado}\n${fichaCotizacion(q)}`, botones: [] }
 }
 
-export function avisoVisitaAgendada({ nombre, fecha, hora, direccion, telefono, email, comentarios }) {
-  const corta = `${hola(nombre)} Le escribo de Repisas Don Maxi para confirmar su visita del ${corto(fecha).toLowerCase()} a las ${hora} hrs${direccion ? ` en ${direccion}` : ''}. ¿Nos confirma? 🙏`
+// hasta: con rango (la visita se agenda por rango y la hora exacta sale de la ruta del dia).
+export function avisoVisitaAgendada({ nombre, fecha, hora, hasta = '', direccion, telefono, email, comentarios }) {
+  const cuando = hasta ? `entre las ${hora} y las ${hasta} hrs` : `a las ${hora} hrs`
+  const corta = `${hola(nombre)} Le escribo de Repisas Don Maxi para confirmar su visita de medición del ${corto(fecha).toLowerCase()} ${cuando}${direccion ? ` en ${direccion}` : ''}.${hasta ? ' El día anterior le confirmo la hora exacta de llegada.' : ''} ¿Nos confirma? 🙏`
   const v = { telefono, direccion }
   return {
-    texto: [`📏 Visita agendada`, `👤 ${nombre || 'Sin nombre'}`, `🕐 ${corto(fecha)} · ${hora} hrs`,
+    texto: [`📏 Visita agendada`, `👤 ${nombre || 'Sin nombre'}`, `🕐 ${corto(fecha)} · ${hasta ? `${hora}–${hasta} hrs (rango)` : `${hora} hrs`}`,
       ...(telefono || email ? [`📞 ${[telefono, email].filter(Boolean).join(' · ')}`] : []),
       ...(direccion ? [`📍 ${direccion}`] : []), ...(comentarios ? [`💬 ${String(comentarios).slice(0, 300)}`] : [])].join('\n'),
     botones: botonesCliente(v, corta, 'Confirmar visita'),

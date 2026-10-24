@@ -174,6 +174,7 @@
       const params    = new URLSearchParams(location.search);
       const dateISO   = params.get('date')       || '';
       const timeHHmm  = params.get('time')       || '';
+      const hastaHHmm = params.get('hasta')      || '';  // con rango: la hora exacta se avisa despues
       const email     = params.get('email')      || '';
       const nombre    = params.get('nombre')     || '';
       const apellido  = params.get('apellido')   || '';
@@ -197,11 +198,11 @@
       function isValidTime(s){ return /^\d{2}:\d{2}$/.test(s); }
 
       const fechaTxt = isValidDateISO(dateISO) ? prettyDate(parseLocalDate(dateISO)) : '—';
-      const horaTxt  = isValidTime(timeHHmm) ? timeHHmm : '—';
+      const horaTxt  = !isValidTime(timeHHmm) ? '—' : isValidTime(hastaHHmm) ? `entre ${timeHHmm} y ${hastaHHmm} (te confirmamos la hora exacta el día anterior)` : timeHHmm;
       const mailTxt  = email || '—';
 
       document.getElementById('pill-fecha').textContent = `📅 Fecha: ${fechaTxt}`;
-      document.getElementById('pill-hora').textContent  = `⏰ Hora: ${horaTxt}`;
+      document.getElementById('pill-hora').textContent  = `⏰ ${isValidTime(hastaHHmm) ? 'Horario' : 'Hora'}: ${horaTxt}`;
       document.getElementById('pill-email').textContent = `✉️ Confirmación enviada a: ${mailTxt}`;
 
       // Clave única para "usar una vez"
@@ -225,7 +226,7 @@
           celular   ? `📱 *Celular:* ${celular}`     : null,
           email     ? `✉️ *Correo:* ${email}`         : null,
           `📅 *Fecha:* ${fechaTxt}`,
-          `⏰ *Hora:* ${horaTxt}`,
+          `⏰ *${isValidTime(hastaHHmm) ? 'Horario' : 'Hora'}:* ${horaTxt}`,
           direccion ? `📍 *Dirección:* ${direccion}`  : null,
           comentarios ? `💬 *Comentarios:* ${comentarios}` : null,
           '',

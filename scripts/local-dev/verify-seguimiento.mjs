@@ -42,13 +42,13 @@ try {
   const confirmar = await crear('Rodrigo Confirma')
   expect((await api('save-quote', { cotNum: confirmar, status: 'confirmada' })).ok).toBe(true)
   const hoy = ahoraEnZona().fecha
-  const { dias } = await (await page.request.get(base + '/.netlify/functions/horarios')).json()
-  const visita = await (await page.request.post(base + '/.netlify/functions/create_event', { data: { nombre: 'Ana', apellido: 'Visita', email: 'ana@example.cl', celular: '9 8765 4321', direccion: 'Los Leones 123', fechaISO: dias[0].fecha, horaHHmm: dias[0].horas.at(-1), note: 'Bodega en L' } })).json()
+  const { dias } = await (await page.request.get(base + '/.netlify/functions/visitas-rangos')).json()
+  const visita = await (await page.request.post(base + '/.netlify/functions/create_event', { data: { nombre: 'Ana', apellido: 'Visita', email: 'ana@example.cl', celular: '9 8765 4321', direccion: 'Los Leones 123', fechaISO: dias[0].fecha, rango: dias[0].rangos.at(-1).desde, note: 'Bodega en L' } })).json()
   expect(visita.ok).toBe(true)
   let mensajes = await telegram()
   expect(mensajes.map(m => m.texto.split('\n')[0])).toEqual(['🆕 Cotización creada', '🆕 Cotización creada', '✅ Cotización confirmada', '📏 Visita agendada'])
   expect(mensajes[0].texto).toContain(`Paula Seguimiento · N° ${sinRespuesta}`)
-  expect(mensajes[3].texto).toMatch(/👤 Ana Visita\n🕐 .* hrs\n📞 9 8765 4321 · ana@example\.cl\n📍 Los Leones 123\n💬 Bodega en L/)
+  expect(mensajes[3].texto).toMatch(/👤 Ana Visita\n🕐 .* hrs \(rango\)\n📞 9 8765 4321 · ana@example\.cl\n📍 Los Leones 123\n💬 Bodega en L/)
   expect(mensajes[3].botones[0].text).toBe('💬 Confirmar visita')
 
   // El resumen de las 20:00, tres dias despues: instalacion "de mañana" con su mensaje y la cotizacion sin respuesta.

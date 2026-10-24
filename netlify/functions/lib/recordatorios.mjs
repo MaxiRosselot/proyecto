@@ -26,7 +26,7 @@ export function prepararRecordatorios({ manana, eventosManana = [], cotizaciones
   const lineas = [`Resumen para mañana, ${fechaLarga(manana).toLowerCase()}`, '']
   const linea = e => {
     const telefono = e.telefono ? '' : ' (sin teléfono)'
-    return `  • ${e.inicio}${e.fin && e.tipo === 'instalacion' ? '–' + e.fin : ''} · ${e.cliente}${e.ubicacion ? ' · ' + e.ubicacion : ''}${telefono}`
+    return `  • ${e.tipo === 'visita' ? e.horario || e.inicio : `${e.inicio}${e.fin ? '–' + e.fin : ''}`} · ${e.cliente}${e.ubicacion ? ' · ' + e.ubicacion : ''}${telefono}`
   }
   if (instalaciones.length) {
     lineas.push(`🔧 INSTALACIONES (${instalaciones.length})`)

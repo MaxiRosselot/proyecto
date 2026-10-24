@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, styles } from './utils.js'
 import {
-  DIAS, PASO_MIN, MAX_SEMANAS, ahoraEnZona, aHHMM, diaSemana, diasDisponibles, rangosDelDia, sumarDias, validarHorario,
+  CUPO_POR_DEFECTO, DIAS, MAX_CUPO, PASO_MIN, MAX_SEMANAS, ahoraEnZona, aHHMM, diaSemana, diasConRangos, rangosDelDia, sumarDias, validarHorario,
 } from '../../netlify/functions/lib/horarios.mjs'
 
 // Horas que se pueden elegir en los selectores: de 06:00 a 23:00, cada media hora.
 const HORAS = Array.from({ length: (23 - 6) * 60 / PASO_MIN + 1 }, (_, i) => aHHMM(6 * 60 + i * PASO_MIN))
 // La semana parte el lunes, como en el calendario chileno.
 const ORDEN_SEMANA = [1, 2, 3, 4, 5, 6, 0]
-const RANGO_VISITA = { desde: '10:00', hasta: '14:00' }
+const RANGO_VISITA = { desde: '08:00', hasta: '20:00' }
 const RANGO_INSTALACION = { desde: '10:00', hasta: '16:00' }
 // Dos agendas: las visitas (la pagina publica) y las instalaciones (el link /agendar del cliente).
 const AGENDAS = {
   visitas: { titulo: 'Horarios de visitas', url: '', rango: RANGO_VISITA,
-    ayuda: `Define cuándo pueden agendar visitas los clientes. Las visitas parten cada ${PASO_MIN} minutos dentro de cada rango. Las visitas ya agendadas no se borran al cambiar el horario.` },
+    ayuda: `Define cuándo pueden agendar visitas los clientes. Se ofrecen los rangos de 3 horas (8–11, 11–14, 14–17, 17–20) que caen al menos 1 hora dentro de lo abierto. Las visitas ya agendadas no se borran al cambiar el horario.` },
   instalaciones: { titulo: 'Horarios de instalaciones', url: '&agenda=instalaciones', rango: RANGO_INSTALACION,
     ayuda: 'Cuándo pueden agendar su instalación los clientes desde su link. Para un día que no trabajan, ciérralo en Fechas especiales; si tienen otra cosa en la mañana, deja ese día solo con la tarde. Las instalaciones ya agendadas no se mueven.' },
 }
@@ -79,7 +79,8 @@ export default function HorariosSection() {
     if (!config) return { previa: [], invalido: '' }
     try {
       const limpio = validarHorario(config, hoy)
-      if (agenda === 'visitas') return { previa: diasDisponibles(limpio), invalido: '' }
+      // Visitas: los rangos que vera el cliente ese dia (sin contar las ya agendadas).
+      if (agenda === 'visitas') return { previa: diasConRangos(limpio, []).map(d => ({ fecha: d.fecha, horas: null, rangos: d.rangos })), invalido: '' }
       const dias = []
       for (let f = hoy; f <= sumarDias(hoy, limpio.semanas * 7); f = sumarDias(f, 1)) if (rangosDelDia(limpio, f).length) dias.push({ fecha: f, horas: null })
       return { previa: dias, invalido: '' }
@@ -222,6 +223,15 @@ export default function HorariosSection() {
           </select>
           semanas
         </label>
+        {agenda === 'visitas' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 12, flexWrap: 'wrap' }}>
+            Hasta
+            <input type="number" min={1} max={MAX_CUPO} value={config.cupo ?? CUPO_POR_DEFECTO} aria-label="Cupo por rango"
+              onChange={e => setConfig(c => ({ ...c, cupo: Number(e.target.value) }))}
+              style={{ width: 64, padding: '6px 8px', border: '1.5px solid ' + C.border, borderRadius: 7, fontSize: 13 }} />
+            visitas por rango de 3 horas (8–11, 11–14, 14–17 y 17–20). El cliente elige el rango; la hora exacta sale de la ruta del día.
+          </label>
+        )}
         {previa.length === 0
           ? <div style={{ fontSize: 13, color: C.red }}>Con este horario los clientes no tienen ninguna fecha para agendar.</div>
           : <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -229,7 +239,7 @@ export default function HorariosSection() {
                 <div key={d.fecha} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0', borderTop: '1px solid ' + C.border }}>
                   <span style={{ fontWeight: 600 }}>{fechaLarga(d.fecha)}</span>
                   <span style={{ color: C.textSub }}>
-                    {textoRangos(rangosDelDia(config, d.fecha))}{d.horas ? ` · ${d.horas.length} ${d.horas.length === 1 ? 'horario' : 'horarios'}` : ''}
+                    {d.rangos ? d.rangos.map(r => `${r.desde.slice(0, 2)}–${r.hasta.slice(0, 2)}`).join(' · ') : textoRangos(rangosDelDia(config, d.fecha))}
                   </span>
                 </div>
               ))}

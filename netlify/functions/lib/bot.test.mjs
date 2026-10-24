@@ -187,3 +187,33 @@ test('07:00: fichas al maestro y el dia a Maxi', async () => {
   assert.match(solo.llamadas[1].text, /Así le llegarán las fichas al maestro/)
   assert.ok(botones(solo.llamadas[3]).some(x => x.callback_data === 't|1450'))
 })
+
+test('admin: ruta de visitas de un dia, con WhatsApp por cliente y horas fijadas en el calendario', async () => {
+  const R1 = { desde: '08:00', hasta: '11:00' }, R2 = { desde: '11:00', hasta: '14:00' }
+  const visita = (id, cliente, rango, punto, ubicacion) => ({ id, tipo: 'visita', fecha: '2026-10-31', inicio: rango.desde, cliente, rango, horario: `${rango.desde}–${rango.hasta}`, telefono: '+56 9 1111 2222', ubicacion, ...punto })
+  const eventos = [
+    visita('pa', 'Pedro Alto', R1, { lat: -33.6117, lng: -70.5758 }, 'Concha y Toro 100, Puente Alto'),
+    visita('lf', 'Lucía Flores', R1, { lat: -33.5227, lng: -70.5986 }, 'Vicuña Mackenna 7000, La Florida'),
+    visita('nu', 'Nora Ñuñez', R2, {}, 'Grecia 1500, Ñuñoa'),
+  ]
+  const { deps, llamadas } = crearDeps([], { eventos })
+  const fijadas = [], buscadas = []
+  deps.fijarHoraVisita = async f => { fijadas.push(f) }
+  deps.geocodificar = async dir => { buscadas.push(dir); return { lat: -33.4569, lng: -70.5976 } }
+  deps.guardarCoordenadas = async () => {}
+
+  await atenderUpdate(boton(1, 'ru'), deps)
+  assert.equal(botones(enviados(llamadas).at(-1))[0].callback_data, 'rv|20261031')
+  await atenderUpdate(boton(1, 'rv|20261031'), deps)
+  const ruta = enviados(llamadas).at(-1)
+  assert.deepEqual(buscadas, ['Grecia 1500, Ñuñoa'])
+  assert.match(ruta.text, /Ruta del sábado 31 de octubre · 3 visitas/)
+  assert.match(ruta.text, /08–11 hrs\n1\. 08:00 · Pedro Alto · Puente Alto[\s\S]*2\. \d\d:\d\d · Lucía Flores[\s\S]*11–14 hrs\n3\. 11:00 · Nora Ñuñez/)
+  const bs = botones(ruta)
+  assert.match(bs[0].url, /^https:\/\/www\.google\.com\/maps\/dir\//)
+  assert.equal(bs.filter(x => /wa\.me/.test(x.url || '')).length, 3)
+  assert.match(decodeURIComponent(bs.find(x => /Nora/.test(x.text)).url), /llegaríamos aprox\. a las 11:00 hrs/)
+  await atenderUpdate(boton(1, 'rf|20261031'), deps)
+  assert.deepEqual(fijadas.map(f => [f.visitId, f.hora]), [['pa', '08:00'], ['lf', fijadas[1].hora], ['nu', '11:00']])
+  assert.match(enviados(llamadas).at(-1).text, /Estas horas ya están en el calendario/)
+})

@@ -15,7 +15,7 @@ import {
   listarCotizaciones, obtenerCotizacion, siguienteDisponible,
 } from '../../netlify/functions/lib/cotizaciones.mjs'
 import {
-  DURACION_MIN, HORARIO_INSTALACIONES, aHHMM, ahoraEnZona, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario,
+  DURACION_MIN, HORARIO_INSTALACIONES, aHHMM, ahoraEnZona, diasConRangos, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario, sumarDias,
 } from '../../netlify/functions/lib/horarios.mjs'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
@@ -29,14 +29,13 @@ import { atenderAgendaGet, atenderAgendaPost } from '../../netlify/functions/lib
 import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netlify/functions/lib/reservas-admin.mjs'
 import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from '../../netlify/functions/lib/planilla.mjs'
 import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
-import { horasParaReagendar, liberarHoraVisita, reagendarVisita } from '../../netlify/functions/lib/visitas.mjs'
+import { crearVisita, fijarHoraVisita, guardarCoordenadas, horasParaReagendar, liberarHoraVisita, reagendarVisita, visitasActivas } from '../../netlify/functions/lib/visitas.mjs'
 import { almacenFotosMemoria, almacenSolicitudesMemoria, subirFotoWeb } from '../../netlify/functions/lib/sitio.mjs'
 import { atenderSitio } from '../../netlify/functions/sitio.mjs'
 import { atenderWebFotos } from '../../netlify/functions/web-fotos.mjs'
 import { avisar, avisoCotizacionCreada, avisoVisitaAgendada } from '../../netlify/functions/lib/telegram.mjs'
 import { avisarGuardado, avisarInstalacionAgendada } from '../../netlify/functions/lib/avisos.mjs'
 import { ejecutarSeguimiento } from '../../netlify/functions/lib/seguimiento.mjs'
-import { diasParaComuna } from '../../netlify/functions/lib/zonas.mjs'
 import { atenderTelegramAdmin, configTelegram, enviarTelegram } from '../../netlify/functions/lib/telegram.mjs'
 import { atenderUpdate, conectarBot, enviarMananaDelBot, rolesTelegram, secretoWebhook } from '../../netlify/functions/lib/bot.mjs'
 import { depsTelegram } from '../../netlify/functions/lib/bot-servicios.mjs'
@@ -109,8 +108,8 @@ function slotDeVisita(v) {
 }
 // Calendar falso para las visitas (db.visits), con lo que usa lib/visitas.mjs.
 const comoEventoDeVisita = v => ({
-  id: v.id, description: v.description || '', start: { dateTime: v.start }, end: { dateTime: v.end },
-  extendedProperties: { shared: { created_by: 'agendador-netlify', slot_key: v.slotKey ?? slotDeVisita(v) } },
+  id: v.id, description: v.description || '', start: { dateTime: v.start }, end: { dateTime: v.end }, location: v.direccion || '',
+  extendedProperties: { shared: { ...(v.shared || {}), created_by: 'agendador-netlify', slot_key: v.slotKey ?? slotDeVisita(v) } },
 })
 const calendarVisitasLocal = {
   events: {
@@ -119,9 +118,23 @@ const calendarVisitasLocal = {
     patch: async ({ eventId, requestBody: b }) => {
       const v = db.visits.find(x => x.id === eventId)
       if (b.start) { v.start = b.start.dateTime; v.end = b.end.dateTime }
-      if (b.extendedProperties) v.slotKey = b.extendedProperties.shared.slot_key
+      if (b.extendedProperties) { const { slot_key, created_by: _, ...resto } = b.extendedProperties.shared; v.slotKey = slot_key; v.shared = resto }
+      if (b.description !== undefined) v.description = b.description
       saveData(db)
       return { data: {} }
+    },
+    // Lo que crea lib/visitas.mjs (crearVisita) al agendar desde /visita.
+    insert: async ({ requestBody: b }) => {
+      const dato = etiqueta => b.description.match(new RegExp(`${etiqueta}: (.*)`))?.[1] || ''
+      const { slot_key, created_by: _, ...shared } = b.extendedProperties.shared
+      const visita = {
+        id: `visit-local-${randomUUID().slice(0, 8)}`, summary: b.summary, description: b.description,
+        start: b.start.dateTime, end: b.end.dateTime, email: b.attendees?.[0]?.email || '', celular: dato('Celular'),
+        direccion: b.location || '', notas: (n => (n === '(sin notas)' ? '' : n))(b.description.split('Notas:\n')[1]?.split('\n')[0] || ''),
+        nombre: dato('Cliente'), status: 'agendada', slotKey: slot_key, shared,
+      }
+      db.visits.push(visita); db.visitStatuses[visita.id] = 'agendada'; saveData(db)
+      return { data: { id: visita.id, htmlLink: `${PUBLIC_URL}/#visita-${visita.id}` } }
     },
   },
 }
@@ -156,7 +169,8 @@ function eventosLocales() {
     id: v.id, summary: `Visita — ${v.nombre} (Repisas Don Maxi)`,
     description: `Cliente: ${v.nombre}\nEmail: ${v.email || ''}\nCelular: ${v.celular || ''}\nDirección: ${v.direccion || ''}`,
     start: { dateTime: v.start }, end: { dateTime: v.end }, attendees: v.email ? [{ email: v.email }] : [],
-    extendedProperties: { shared: { created_by: 'agendador-netlify', status: db.visitStatuses[v.id] || v.status || '' } },
+    location: v.direccion || '',
+    extendedProperties: { shared: { ...(v.shared || {}), created_by: 'agendador-netlify', slot_key: v.slotKey ?? slotDeVisita(v), status: db.visitStatuses[v.id] || v.status || '' } },
   }))
   return [...instalaciones, ...visitas]
 }
@@ -214,11 +228,13 @@ function depsBotLocal() {
     leerFoto: async id => fotosVenta.get(id) || null,
     publicarFoto: ({ datos, tipo, titulo }) => subirFotoWeb(fotosWeb, { seccion: 'galeria', categoria: 'bodegas', tipo, titulo, datos: datos.toString('base64') }),
     linkPago: cotNum => linkPagoCotizacion(cotNum),
+    fijarHoraVisita: datos => fijarHoraVisita(calendarVisitasLocal, 'local', datos),
+    guardarCoordenadas: (visitId, punto) => guardarCoordenadas(calendarVisitasLocal, 'local', visitId, punto),
   }
 }
 
 // Rutas que en produccion no piden sesion: las usa la pagina publica de agendar.
-const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto', 'visitas-zona', 'telegram-bot'])
+const PUBLICAS = new Set(['admin-login', 'get-availability', 'create_event', 'cotizacion-web', 'pagar', 'mp-checkout-local', 'reserva', 'agendar', 'sitio', 'foto', 'visitas-rangos', 'telegram-bot'])
 
 // Sitio publico: fotos de Admin → Web y archivos de "Envíanos fotos" en memoria (en produccion, Drive).
 const fotosWeb = almacenFotosMemoria()
@@ -279,7 +295,7 @@ const routes = {
   'get-sales': () => ({ ok: true, installations: db.installations }),
   // Mismo contrato que netlify/functions/visita.mjs
   'visita': async (body) => {
-    if (body.accion === 'horas') return { ok: true, dias: await horasParaReagendar(calendarVisitasLocal, 'local', await leerHorario(horarios)) }
+    if (body.accion === 'horas') return { ok: true, dias: await horasParaReagendar(calendarVisitasLocal, 'local', await leerHorario(horarios), new Date(), { excepto: body.visitId }) }
     if (body.accion === 'reagendar') return { ok: true, ...(await reagendarVisita(calendarVisitasLocal, 'local', await leerHorario(horarios), body)) }
     if (body.accion === 'liberar') return { ok: true, ...(await liberarHoraVisita(calendarVisitasLocal, 'local', body.visitId)) }
     return { status: 400, ok: false, error: 'Acción desconocida' }
@@ -397,10 +413,10 @@ const routes = {
   },
   // Mismas reglas que get-availability / create_event, con las visitas locales en vez de Calendar.
   // Mismas reglas que netlify/functions/visitas-zona.mjs, con las visitas locales.
-  'visitas-zona': async (_body, params) => {
-    const visitas = db.visits.filter(v => (db.visitStatuses[v.id] || v.status) !== 'cancelada')
-      .map(v => { const [fecha, hora] = slotDeVisita(v).split('T'); return { fecha, hora, ubicacion: v.direccion || '' } })
-    return { ok: true, dias: diasParaComuna(diasDisponibles(await leerHorario(horarios)), visitas, params.get('comuna') || '') }
+  // Mismas reglas que netlify/functions/visitas-rangos.mjs, con las visitas locales.
+  'visitas-rangos': async () => {
+    const config = await leerHorario(horarios), hoy = ahoraEnZona().fecha
+    return { ok: true, dias: diasConRangos(config, await visitasActivas(calendarVisitasLocal, 'local', hoy, sumarDias(hoy, config.semanas * 7))) }
   },
   'get-availability': async (_body, params) => {
     const date = params.get('date') || ''
@@ -410,22 +426,16 @@ const routes = {
       .map(h => [h, horaPermitida(config, date, h) && !tomadas.has(`${date}T${h}`)]))
     return { ok: true, date, availability, mode: 'created-only' }
   },
+  // Mismo contrato que netlify/functions/create_event.mjs (lib/visitas.mjs → crearVisita).
   'create_event': async (body) => {
-    const { nombre = '', apellido = '', email, celular = '', direccion = '', fechaISO, horaHHmm, note = '' } = body
-    if (!email || !fechaISO || !horaHHmm) return { status: 400, ok: false, error: 'Faltan parámetros' }
-    if (!horaPermitida(await leerHorario(horarios), fechaISO, horaHHmm))
-      return { status: 400, ok: false, error: 'INVALID_SLOT', message: 'Ese horario no está disponible para agendar. Elige otro.' }
-    const slotKey = `${fechaISO}T${horaHHmm}`
-    if (db.visits.some(v => slotDeVisita(v) === slotKey)) return { status: 409, ok: false, error: 'SLOT_TAKEN' }
-    const start = horaLocalAUTC(fechaISO, horaHHmm)
-    const visita = {
-      id: `visit-local-${randomUUID().slice(0, 8)}`, summary: `Visita — ${nombre} ${apellido} (Repisas Don Maxi)`,
-      start: start.toISOString(), end: new Date(start.getTime() + DURACION_MIN * 60000).toISOString(),
-      email, celular, direccion: [direccion, body.comuna].filter(Boolean).join(', '), notas: note, nombre: `${nombre} ${apellido}`.trim(), status: 'agendada', slotKey,
+    try {
+      const visita = await crearVisita(calendarVisitasLocal, 'local', await leerHorario(horarios), body)
+      await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: body.fechaISO, hora: visita.rango.desde, hasta: visita.rango.hasta, direccion: visita.direccion, telefono: body.celular, email: body.email, comentarios: body.note }))
+      return { ok: true, local: true, rango: visita.rango }
+    } catch (e) {
+      if (e.estado < 500) return { status: e.estado, ok: false, error: e.estado === 409 ? 'SLOT_TAKEN' : 'INVALID_SLOT', message: e.message }
+      throw e
     }
-    db.visits.push(visita); db.visitStatuses[visita.id] = 'agendada'; saveData(db)
-    await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, email, comentarios: note }))
-    return { ok: true, local: true, slotKey }
   },
 }
 

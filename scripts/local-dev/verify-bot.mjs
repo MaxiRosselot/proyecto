@@ -121,6 +121,30 @@ try {
   expect(desconocido[1].texto).toContain('TELEGRAM_MAESTRO_CHAT_ID')
   await limpiar()
 
+  // Ruta de visitas: dos clientes del mismo rango (con coordenadas, como las deja el autocompletado).
+  const { dias: diasVisita } = await (await page.request.get(base + '/.netlify/functions/visitas-rangos')).json()
+  const diaRuta = diasVisita[0], rangoRuta = diaRuta.rangos[0]
+  for (const [nombre, direccion, comuna, lat, lng] of [['Pedro', 'Concha y Toro 100', 'Puente Alto', -33.6117, -70.5758], ['Lucía', 'Vicuña Mackenna 7000', 'La Florida', -33.5227, -70.5986]]) {
+    const v = await (await page.request.post(base + '/.netlify/functions/create_event', { data: { nombre, apellido: 'Ruta', email: `${nombre.toLowerCase()}@example.cl`, celular: '9 2222 3333', direccion, comuna, lat, lng, fechaISO: diaRuta.fecha, rango: rangoRuta.desde } })).json()
+    expect(v.ok).toBe(true)
+  }
+  await limpiar()
+  await escribe(ADMIN, '/ruta')
+  m = (await telegram()).filter(x => x.metodo !== 'answerCallbackQuery').at(-1)
+  const botonDia = m.botones.find(x => x.callback_data === `rv|${diaRuta.fecha.replaceAll('-', '')}`)
+  expect(botonDia).toBeTruthy()
+  await anotar('Maxi', '/ruta')
+  await aprieta(ADMIN, botonDia.callback_data)
+  m = (await telegram()).filter(x => x.metodo !== 'answerCallbackQuery').at(-1)
+  expect(m.texto).toMatch(new RegExp(`1\\. ${rangoRuta.desde} · (Pedro|Lucía) Ruta[\\s\\S]*2\\. \\d\\d:\\d\\d · (Pedro|Lucía) Ruta[^\\n]*\\(🚗 \\d+ min\\)`))
+  expect(m.botones[0].url).toMatch(/google\.com\/maps\/dir/)
+  await anotar('Maxi', botonDia.text)
+  await aprieta(ADMIN, `rf|${diaRuta.fecha.replaceAll('-', '')}`)
+  expect((await telegram()).find(x => x.metodo === 'answerCallbackQuery').aviso).toBe('📌 Horas fijadas en el calendario')
+  await anotar('Maxi', '📌 Fijar horas en el calendario')
+  const visitasRuta = (await api('get-visits')).visits.filter(v => /Ruta/.test(v.nombre))
+  expect(visitasRuta.every(v => new Date(v.end) - new Date(v.start) === 15 * 60000)).toBe(true)
+
   // Panel: fichas de hoy a mano.
   await tarjeta.getByRole('button', { name: 'Enviar las fichas de hoy' }).click()
   await expect(tarjeta.getByRole('status')).toContainText('✅ Listo: 3 mensajes')

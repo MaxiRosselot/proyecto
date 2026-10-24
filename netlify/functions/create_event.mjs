@@ -1,209 +1,35 @@
-// netlify/functions/create_event.mjs
-import { alertarError, avisar, avisoVisitaAgendada } from './lib/telegram.mjs';
-import { google } from 'googleapis';
-import { almacenHorariosSheets, horaLocalAUTC, horaPermitida, leerHorario, sumarDias } from './lib/horarios.mjs';
+// netlify/functions/create_event.mjs — publico, lo usa /visita para agendar una visita.
+//   POST { nombre, apellido, email, celular, direccion, depto?, comuna?, lat?, lng?, fechaISO, rango, note? }
+// El cliente elige dia y rango (8–11, 11–14, 14–17, 17–20); la hora exacta sale despues de la ruta
+// del dia (bot de Telegram → Ruta de visitas). Las reglas viven en lib/visitas.mjs y lib/horarios.mjs.
+import { google } from 'googleapis'
+import { almacenHorariosSheets, leerHorario } from './lib/horarios.mjs'
+import { alertarError, avisar, avisoVisitaAgendada } from './lib/telegram.mjs'
+import { crearVisita } from './lib/visitas.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-function buildLocal(dateStr, timeHHmm) {
-  const [Y, M, D] = dateStr.split('-').map(Number);
-  const [h, m] = timeHHmm.split(':').map(Number);
-  return new Date(Y, M - 1, D, h, m, 0, 0);
 }
-
-function fmtLocal(d) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-}
-
-// La dejamos por si después quieres reactivar freebusy
-function overlapUTC(aStart, aEnd, bStart, bEnd) {
-  return aStart.getTime() < bEnd.getTime() && bStart.getTime() < aEnd.getTime();
-}
+const responder = (statusCode, body) => ({ statusCode, headers: corsHeaders, body: JSON.stringify(body) })
 
 export async function handler(event) {
-  if (event.httpMethod === 'OPTIONS')
-    return { statusCode: 204, headers: corsHeaders };
-
-  if (event.httpMethod !== 'POST')
-    return {
-      statusCode: 405,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
-
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders }
+  if (event.httpMethod !== 'POST') return responder(405, { ok: false, error: 'Method not allowed' })
+  let datos
+  try { datos = JSON.parse(event.body || '{}') } catch { return responder(400, { ok: false, error: 'Solicitud inválida' }) }
   try {
-    const {
-      nombre, apellido, email, celular, direccion: calle = '', comuna = '',
-      fechaISO, horaHHmm, tz = 'America/Santiago',
-      note = '',
-    } = JSON.parse(event.body || '{}');
-
-    if (!fechaISO || !horaHHmm) throw new Error('Faltan parámetros de fecha/hora');
-    if (!email) throw new Error('Falta email del cliente');
-
-    // La comuna va con la direccion: con ella /visita agrupa las visitas por zona (lib/zonas.mjs).
-    const direccion = [calle, comuna].filter(Boolean).join(', ');
-    const duration = Number(process.env.DEFAULT_EVENT_DURATION_MIN || 15);
-    const startLocal = buildLocal(fechaISO, horaHHmm);
-
-    const endLocal = new Date(startLocal.getTime() + duration * 60000);
-    const slotKey = `${fechaISO}T${horaHHmm}`;
-    const calendarId = process.env.CALENDAR_ID;
-
-    // --- Auth Google API ---
-    const oAuth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
-    oAuth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
-    const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
-
-    // ✅ Seguridad: solo horas que el admin habilitó (pestaña Horarios) y que no hayan pasado.
-    // Antes bastaba con que fuera sábado o domingo, a cualquier hora.
-    const horario = await leerHorario(almacenHorariosSheets(google.sheets({ version: 'v4', auth: oAuth2Client }), process.env.GOOGLE_SHEET_ID));
-    if (!horaPermitida(horario, fechaISO, horaHHmm)) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          ok: false,
-          error: 'INVALID_SLOT',
-          message: 'Ese horario no está disponible para agendar. Elige otro.',
-        }),
-      };
-    }
-
-    // =========================
-    // 1) Chequeo atómico por slot_key
-    //    SOLO considerando eventos creados por el agendador
-    //    (created_by=agendador-netlify)
-    // =========================
-    // El dia de Chile, no el del servidor (UTC): con el dia UTC una visita de la tarde-noche
-    // quedaba fuera de la busqueda y se podia agendar dos veces.
-    const dayStart = horaLocalAUTC(fechaISO, '00:00', tz);
-    const dayEnd = new Date(horaLocalAUTC(sumarDias(fechaISO, 1), '00:00', tz).getTime() - 1);
-
-    const sameDay = await calendar.events.list({
-      calendarId,
-      timeMin: dayStart.toISOString(),
-      timeMax: dayEnd.toISOString(),
-      singleEvents: true,
-      maxResults: 250,
-      sharedExtendedProperty: 'created_by=agendador-netlify',
-    });
-
-    const alreadyTaken = (sameDay.data.items || []).some(
-      (ev) => ev.extendedProperties?.shared?.slot_key === slotKey
-    );
-
-    if (alreadyTaken) {
-      return {
-        statusCode: 409,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          ok: false,
-          error: 'SLOT_TAKEN',
-          message: 'Ese horario ya fue tomado. Elige otra hora.',
-        }),
-      };
-    }
-
-    /*
-    if (process.env.BLOCK_ANY_EVENT === 'true') {
-      const fb = await calendar.freebusy.query({
-        requestBody: {
-          timeMin: dayStart.toISOString(),
-          timeMax: dayEnd.toISOString(),
-          timeZone: tz,
-          items: [{ id: calendarId }],
-        },
-      });
-
-      const busy = fb.data.calendars?.[calendarId]?.busy || [];
-      const hasConflict = busy.some(({ start: bS, end: bE }) =>
-        overlapUTC(startLocal, endLocal, new Date(bS), new Date(bE))
-      );
-
-      if (hasConflict) {
-        console.log('⛔ Conflicto detectado en FreeBusy', { slotKey, busy });
-        return {
-          statusCode: 409,
-          headers: corsHeaders,
-          body: JSON.stringify({
-            ok: false,
-            error: 'SLOT_TAKEN',
-            message: 'Ese horario ya fue tomado. Elige otra hora.',
-          }),
-        };
-      }
-    }
-    */
-
-    // =========================
-    // 3) Crear evento
-    // =========================
-    const summary = `Visita — ${nombre} ${apellido} (Repisas Don Maxi)`;
-    const description = `Cliente: ${nombre} ${apellido}
-Email: ${email}
-Celular: ${celular}
-Dirección: ${direccion}
-
-Notas:
-${note || '(sin notas)'}
-
-Slot: ${fechaISO} ${horaHHmm} (${duration}min)`;
-
-    const attendees = [{ email }];
-
-    const response = await calendar.events.insert({
-      calendarId,
-      sendUpdates: 'all',
-      requestBody: {
-        summary,
-        description,
-        location: direccion,
-        start: { dateTime: fmtLocal(startLocal), timeZone: tz },
-        end: { dateTime: fmtLocal(endLocal), timeZone: tz },
-        attendees,
-        reminders: { useDefault: true },
-        extendedProperties: {
-          shared: {
-            slot_key: slotKey,
-            ...(comuna ? { comuna: String(comuna).slice(0, 60) } : {}),
-            created_by: 'agendador-netlify',
-          },
-        },
-      },
-    });
-
-    await avisar(avisoVisitaAgendada({ nombre: `${nombre || ''} ${apellido || ''}`.trim(), fecha: fechaISO, hora: horaHHmm, direccion, telefono: celular, email, comentarios: note }));
-
-    console.log('✅ Evento creado correctamente', {
-      start: startLocal.toISOString(),
-      end: endLocal.toISOString(),
-      link: response.data.htmlLink,
-    });
-
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ ok: true, link: response.data.htmlLink, slotKey }),
-    };
+    const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+    auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
+    const horario = await leerHorario(almacenHorariosSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID))
+    const visita = await crearVisita(google.calendar({ version: 'v3', auth }), process.env.CALENDAR_ID, horario, datos)
+    await avisar(avisoVisitaAgendada({ nombre: visita.nombre, fecha: datos.fechaISO, hora: visita.rango.desde, hasta: visita.rango.hasta, direccion: visita.direccion, telefono: datos.celular, email: datos.email, comentarios: datos.note }))
+    return responder(200, { ok: true, link: visita.link, rango: visita.rango })
   } catch (err) {
-    console.error('Calendar error:', err.response?.data || err);
-    await alertarError('agendar una visita desde la web', err);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        error: 'Error al crear evento',
-        detail: err.response?.data || String(err),
-      }),
-    };
+    if (err?.estado && err.estado < 500) return responder(err.estado, { ok: false, error: err.estado === 409 ? 'SLOT_TAKEN' : 'INVALID_SLOT', message: err.message })
+    console.error('create_event error:', err.response?.data || err)
+    await alertarError('agendar una visita desde la web', err)
+    return responder(500, { ok: false, error: 'No se pudo agendar. Intenta de nuevo en un momento o escríbenos por WhatsApp.' })
   }
 }

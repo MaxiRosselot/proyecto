@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
-import { VISITA_VIGENTE, mensajeConfirmarVisita, mensajeVisitaReagendada, textoVisitas } from './listaVisitas.js'
+import { VISITA_VIGENTE, horarioVisita, mensajeConfirmarVisita, mensajeVisitaReagendada, textoVisitas } from './listaVisitas.js'
 import CopiarMensaje from './CopiarMensaje.jsx'
 
 function Badge({ status }) {
@@ -35,7 +35,7 @@ const chip = activo => ({
   border: '1.5px solid ' + (activo ? C.orange : C.border), background: activo ? C.orangeLight : C.surface, color: activo ? C.orangeDark : C.textSub,
 })
 
-// Elegir una hora libre del horario (pestaña Horarios) y mover la visita en el calendario.
+// Elegir otro dia y rango con cupo (pestaña Horarios) y mover la visita en el calendario.
 function ReagendarVisita({ visit, movida, onListo, onCerrar }) {
   const [dias, setDias] = useState(null)
   const [fecha, setFecha] = useState('')
@@ -44,7 +44,7 @@ function ReagendarVisita({ visit, movida, onListo, onCerrar }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    apiFetch('/.netlify/functions/visita', { method: 'POST', body: JSON.stringify({ accion: 'horas' }) })
+    apiFetch('/.netlify/functions/visita', { method: 'POST', body: JSON.stringify({ accion: 'horas', visitId: visit.id }) })
       .then(r => { if (!r.ok) throw new Error(r.error); setDias(r.dias); setFecha(r.dias[0]?.fecha || '') })
       .catch(e => setError(e.message || 'No se pudieron cargar las horas'))
   }, [])
@@ -60,34 +60,34 @@ function ReagendarVisita({ visit, movida, onListo, onCerrar }) {
     finally { setEstado('') }
   }
 
-  const horas = dias?.find(d => d.fecha === fecha)?.horas || []
+  const rangos = dias?.find(d => d.fecha === fecha)?.rangos || []
   return (
     <div data-testid="reagendar-visita" style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid ' + C.border, background: '#FAFAFB' }}>
       {movida ? (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>✓ Reagendada para el {fmtDate(movida.start)} a las {fmtTime(movida.start)}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>✓ Reagendada para el {fmtDate(movida.start)}, {horarioVisita(movida)}</span>
           <button onClick={onCerrar} style={{ ...styles.btnSecondary, padding: '6px 12px', fontSize: 12 }}>Listo</button>
           <CopiarMensaje texto={mensajeVisitaReagendada(movida)} etiqueta="📋 Copiar aviso para el cliente" />
         </div>
       ) : (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Mover a otra hora libre</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Mover a otro día u horario</span>
             <button onClick={onCerrar} style={{ background: 'none', border: 'none', fontSize: 12, color: C.textMuted, cursor: 'pointer', textDecoration: 'underline' }}>Cerrar</button>
           </div>
-          {!dias && !error && <div style={{ fontSize: 12, color: C.textMuted }}>Buscando horas libres...</div>}
-          {dias && !dias.length && <div style={{ fontSize: 12, color: C.textMuted }}>No quedan horas libres en el horario. Abre más en la pestaña Horarios.</div>}
+          {!dias && !error && <div style={{ fontSize: 12, color: C.textMuted }}>Buscando horarios con cupo...</div>}
+          {dias && !dias.length && <div style={{ fontSize: 12, color: C.textMuted }}>No quedan horarios con cupo. Abre más días o sube el cupo en la pestaña Horarios.</div>}
           {!!dias?.length && (
             <>
               <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
                 {dias.map(d => <button key={d.fecha} onClick={() => { setFecha(d.fecha); setHora('') }} style={chip(d.fecha === fecha)}>{diaCorto(d.fecha)}</button>)}
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {horas.map(h => <button key={h} onClick={() => setHora(h)} style={chip(h === hora)}>{h}</button>)}
+                {rangos.map(r => <button key={r.desde} onClick={() => setHora(r.desde)} style={chip(r.desde === hora)}>{r.desde}–{r.hasta}</button>)}
               </div>
               <button onClick={mover} disabled={!hora || estado === 'moviendo'}
                 style={{ ...styles.btnPrimary, marginTop: 10, padding: '7px 14px', fontSize: 12, opacity: hora && !estado ? 1 : .5 }}>
-                {estado === 'moviendo' ? 'Moviendo...' : hora ? `Mover al ${diaCorto(fecha)} a las ${hora}` : 'Elige una hora'}
+                {estado === 'moviendo' ? 'Moviendo...' : hora ? `Mover al ${diaCorto(fecha)}, ${hora}–${rangos.find(r => r.desde === hora)?.hasta || ''}` : 'Elige un horario'}
               </button>
             </>
           )}
@@ -135,7 +135,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
         method: 'POST',
         body: JSON.stringify({
           visitId: visit.id, nombre: visit.nombre,
-          fecha: fmtDate(visit.start), hora: fmtTime(visit.start),
+          fecha: fmtDate(visit.start), hora: horarioVisita(visit),
           email: visit.email, celular: visit.celular,
           direccion: visit.direccion, status: newStatus,
           notas: cancelNote[visit.id] || visit.notas || '',
@@ -315,7 +315,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                         </div>
                         <div style={{ fontSize: 13, color: C.textSub }}>
                           {fmtTime(visit.start) && (
-                            <span style={{ fontWeight: 600, color: C.text }}>{fmtTime(visit.start)}</span>
+                            <span style={{ fontWeight: 600, color: C.text }}>{horarioVisita(visit)}</span>
                           )}
                           {visit.direccion && (
                             <span style={{ marginLeft: fmtTime(visit.start) ? 10 : 0, color: C.textMuted }}>{visit.direccion}</span>

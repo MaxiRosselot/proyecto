@@ -4,7 +4,8 @@
 //   semanal : rangos que se repiten cada semana (ej. domingo 10:00-14:00)
 //   fechas  : excepciones para un dia puntual. Con rangos abre ese dia con ese horario
 //             (un sabado, o un domingo con otro horario); vacia cierra el dia.
-// Mas "semanas": cuantas semanas hacia adelante ve el cliente.
+// Mas "semanas": cuantas semanas hacia adelante ve el cliente, y "cupo": cuantas visitas caben en
+// cada rango de 3 horas (el cliente elige un rango; la hora exacta sale de la ruta del dia).
 //
 // Se guarda en la pestaña "Horarios" de la planilla (GOOGLE_SHEET_ID), una fila por rango:
 //   Tipo     | Día o fecha | Desde | Hasta
@@ -12,6 +13,7 @@
 //   fecha    | 2026-10-18  | 09:00 | 13:00
 //   cerrado  | 2026-10-25  |       |
 //   semanas  | 4           |       |
+//   cupo     | 6           |       |
 //
 // Sin imports de Node: el panel admin usa estas mismas funciones para la vista previa.
 
@@ -22,6 +24,11 @@ export const DURACION_MIN = 15      // lo que dura la visita
 // No se ofrecen horarios que parten en menos de esto: nadie llega a una visita en 10 minutos.
 export const ANTICIPACION_MIN = 60
 export const MAX_SEMANAS = 12
+// Rangos que elige el cliente para su visita. Se ofrecen los que caen al menos 1 h dentro del horario
+// abierto de ese dia, con cupo para CUPO_POR_DEFECTO visitas (se cambia en Admin → Horarios).
+export const RANGOS_VISITA = Object.freeze([['08:00', '11:00'], ['11:00', '14:00'], ['14:00', '17:00'], ['17:00', '20:00']].map(([desde, hasta]) => ({ desde, hasta })))
+export const CUPO_POR_DEFECTO = 6
+export const MAX_CUPO = 30
 export const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
 // Lo que habia fijo en el codigo antes de poder editarlo: domingos, 4 semanas.
@@ -29,6 +36,7 @@ export const HORARIO_POR_DEFECTO = Object.freeze({
   semanal: { 0: [{ desde: '08:00', hasta: '20:00' }] },
   fechas: {},
   semanas: 4,
+  cupo: CUPO_POR_DEFECTO,
 })
 
 // Horario de las instalaciones (pestaña "Horarios instalaciones"): lunes a viernes de 10 a 16.
@@ -122,7 +130,10 @@ export function validarHorario(config, hoy = ahoraEnZona().fecha) {
   const semanas = Number(config?.semanas ?? HORARIO_POR_DEFECTO.semanas)
   if (!Number.isInteger(semanas) || semanas < 1 || semanas > MAX_SEMANAS)
     throw new ErrorHorario(`Las semanas visibles deben ser entre 1 y ${MAX_SEMANAS}`)
-  return { semanal, fechas, semanas }
+  const cupo = Number(config?.cupo ?? CUPO_POR_DEFECTO)
+  if (!Number.isInteger(cupo) || cupo < 1 || cupo > MAX_CUPO)
+    throw new ErrorHorario(`El cupo por rango debe ser entre 1 y ${MAX_CUPO} visitas`)
+  return { semanal, fechas, semanas, cupo }
 }
 
 // ── Calculo de horarios ──────────────────────────────────────────────────────
@@ -163,12 +174,60 @@ export function horaPermitida(config, fechaISO, hhmm, ahora = new Date()) {
   return diasDisponibles(config, ahora).some(d => d.fecha === fechaISO && d.horas.includes(hhmm))
 }
 
+// ── Rangos de visita ─────────────────────────────────────────────────────────
+
+// El rango que contiene una hora (las visitas antiguas tienen hora exacta).
+export function rangoDeHora(hhmm) {
+  if (!HHMM.test(hhmm || '')) return null
+  const t = aMinutos(hhmm)
+  return RANGOS_VISITA.find(r => aMinutos(r.desde) <= t && t < aMinutos(r.hasta)) || null
+}
+
+// Rangos que se ofrecen un dia: los que se cruzan al menos 1 h con lo abierto. Hoy, solo si
+// queda al menos 1 h del rango despues de la anticipacion minima.
+export function rangosVisitaDelDia(config, fechaISO, ahora = new Date()) {
+  const abiertos = rangosDelDia(config, fechaISO).map(r => [aMinutos(r.desde), aMinutos(r.hasta)])
+  const { fecha: hoy, minutos } = ahoraEnZona(ahora)
+  if (fechaISO < hoy) return []
+  return RANGOS_VISITA.filter(r => {
+    const a = aMinutos(r.desde), b = aMinutos(r.hasta)
+    const cruce = abiertos.reduce((s, [x, y]) => s + Math.max(0, Math.min(b, y) - Math.max(a, x)), 0)
+    if (cruce < 60) return false
+    return fechaISO !== hoy || b - (minutos + ANTICIPACION_MIN) >= 60
+  })
+}
+
+// Dias y rangos con cupo. visitas: las ya agendadas, [{ fecha, rango: 'HH:MM' }] (el inicio del rango).
+export function diasConRangos(config, visitas = [], ahora = new Date()) {
+  const ocupadas = {}
+  for (const v of visitas) ocupadas[`${v.fecha}R${v.rango}`] = (ocupadas[`${v.fecha}R${v.rango}`] || 0) + 1
+  const cupo = config.cupo ?? CUPO_POR_DEFECTO
+  const { fecha: hoy } = ahoraEnZona(ahora)
+  const dias = []
+  for (let i = 0; i < config.semanas * 7; i++) {
+    const fecha = sumarDias(hoy, i)
+    const rangos = rangosVisitaDelDia(config, fecha, ahora)
+      .map(r => ({ ...r, libres: Math.max(0, cupo - (ocupadas[`${fecha}R${r.desde}`] || 0)) }))
+      .filter(r => r.libres > 0)
+    if (rangos.length) dias.push({ fecha, rangos })
+  }
+  return dias
+}
+
+// El servidor revisa cada reserva: 'ok', 'fuera' (no esta en el horario o ya paso) o 'lleno'.
+export function estadoRango(config, visitas, fechaISO, desde, ahora = new Date()) {
+  if (!fechaValida(fechaISO) || !HHMM.test(desde || '')) return 'fuera'
+  if (!rangosVisitaDelDia(config, fechaISO, ahora).some(r => r.desde === desde)) return 'fuera'
+  const tomadas = visitas.filter(v => v.fecha === fechaISO && v.rango === desde).length
+  return tomadas >= (config.cupo ?? CUPO_POR_DEFECTO) ? 'lleno' : 'ok'
+}
+
 // ── Planilla ─────────────────────────────────────────────────────────────────
 
 export const ENCABEZADOS_HORARIOS = ['Tipo', 'Día o fecha', 'Desde', 'Hasta']
 
 export function horarioAFilas(config) {
-  const filas = [['semanas', String(config.semanas), '', '']]
+  const filas = [['semanas', String(config.semanas), '', ''], ['cupo', String(config.cupo ?? CUPO_POR_DEFECTO), '', '']]
   for (let d = 0; d < 7; d++) for (const r of config.semanal[d] || []) filas.push(['semanal', DIAS[d], r.desde, r.hasta])
   for (const fecha of Object.keys(config.fechas).sort()) {
     const rangos = config.fechas[fecha]
@@ -185,10 +244,11 @@ const sinTilde = s => String(s || '').trim().toLowerCase().normalize('NFD').repl
 export function filasAHorario(filas, porDefecto = HORARIO_POR_DEFECTO) {
   const datos = (filas || []).filter(f => f?.some(c => String(c ?? '').trim()))
   if (!datos.length) return structuredClone(porDefecto)
-  const config = { semanal: {}, fechas: {}, semanas: porDefecto.semanas }
+  const config = { semanal: {}, fechas: {}, semanas: porDefecto.semanas, cupo: porDefecto.cupo ?? CUPO_POR_DEFECTO }
   for (const [tipo, clave, desde, hasta] of datos.map(f => f.map(c => String(c ?? '').trim()))) {
     const t = sinTilde(tipo)
     if (t === 'semanas') config.semanas = Number(clave)
+    else if (t === 'cupo') config.cupo = Number(clave)
     else if (t === 'semanal') {
       const d = DIAS.map(sinTilde).indexOf(sinTilde(clave))
       if (d >= 0) (config.semanal[d] ||= []).push({ desde, hasta })

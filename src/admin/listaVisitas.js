@@ -5,6 +5,11 @@ const fechaLarga = iso => new Intl.DateTimeFormat('es-CL', { weekday: 'long', da
 const hora = iso => new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: ZONA }).format(new Date(iso))
 const diaDe = iso => new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(new Date(iso))
 const mayuscula = s => s.charAt(0).toUpperCase() + s.slice(1)
+// Mientras el cliente solo eligio un rango, el evento dura todo el rango (ej. 11:00–14:00); con la
+// ruta armada pasa a durar la visita, a la hora de llegada.
+const esRango = v => Boolean(v.start && v.end && new Date(v.end) - new Date(v.start) > 30 * 60000)
+export const horarioVisita = v => (!v.start ? '' : esRango(v) ? `${hora(v.start)}–${hora(v.end)}` : hora(v.start))
+const cuando = v => (esRango(v) ? `entre las ${hora(v.start)} y las ${hora(v.end)}` : `a las ${hora(v.start)}`)
 
 export function textoVisitas(visitas) {
   const ordenadas = [...visitas].sort((a, b) => (a.start ? new Date(a.start) : Infinity) - (b.start ? new Date(b.start) : Infinity))
@@ -17,7 +22,7 @@ export function textoVisitas(visitas) {
   return dias.map(d => {
     const lineas = [`📅 *${d.titulo}* (${d.visitas.length} ${d.visitas.length === 1 ? 'visita' : 'visitas'})`]
     d.visitas.forEach((v, i) => {
-      lineas.push('', `*${i + 1}. ${v.start ? hora(v.start) + ' · ' : ''}${(v.nombre || 'Sin nombre').trim()}*`)
+      lineas.push('', `*${i + 1}. ${v.start ? horarioVisita(v) + ' · ' : ''}${(v.nombre || 'Sin nombre').trim()}*`)
       if (v.direccion) lineas.push(`📍 ${v.direccion.trim()}`, `🗺️ https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.direccion.trim())}`)
       if (v.celular) lineas.push(`📞 ${v.celular}`)
       if (v.email) lineas.push(`✉️ ${v.email}`)
@@ -34,9 +39,9 @@ export const VISITA_VIGENTE = ['agendada', 'reagendar', 'confirmada']
 export function mensajeConfirmarVisita(visita, ahora = new Date()) {
   const nombre = (visita.nombre || '').trim().split(/\s+/)[0]
   const manana = diaDe(new Date(ahora.getTime() + 864e5).toISOString()) === diaDe(visita.start)
-  const cuando = `${manana ? 'de mañana ' : 'del '}${fechaLarga(visita.start).replace(',', '')} a las ${hora(visita.start)}`
+  const dia = `${manana ? 'de mañana ' : 'del '}${fechaLarga(visita.start).replace(',', '')} ${cuando(visita)}`
   return [
-    `Hola${nombre ? ' ' + nombre : ''}! 👋 Te escribimos de Repisas Don Maxi para confirmar la visita ${cuando}${visita.direccion ? ` en ${visita.direccion.trim()}` : ''}.`,
+    `Hola${nombre ? ' ' + nombre : ''}! 👋 Te escribimos de Repisas Don Maxi para confirmar la visita ${dia}${visita.direccion ? ` en ${visita.direccion.trim()}` : ''}.`,
     '',
     'Por favor considera 1 hora de flexibilidad por un eventual atraso o adelanto.',
     '',
@@ -48,7 +53,7 @@ export function mensajeConfirmarVisita(visita, ahora = new Date()) {
 export function mensajeVisitaReagendada(visita) {
   const nombre = (visita.nombre || '').trim().split(/\s+/)[0]
   return [
-    `Hola${nombre ? ' ' + nombre : ''}! 👋 Te escribimos de Repisas Don Maxi: tu visita quedó reagendada para el ${fechaLarga(visita.start).replace(',', '')} a las ${hora(visita.start)}${visita.direccion ? ` en ${visita.direccion.trim()}` : ''}.`,
+    `Hola${nombre ? ' ' + nombre : ''}! 👋 Te escribimos de Repisas Don Maxi: tu visita quedó reagendada para el ${fechaLarga(visita.start).replace(',', '')} ${cuando(visita)}${visita.direccion ? ` en ${visita.direccion.trim()}` : ''}.`,
     '',
     'Por favor considera 1 hora de flexibilidad por un eventual atraso o adelanto. Si no puedes, avísanos 🙏',
   ].join('\n')

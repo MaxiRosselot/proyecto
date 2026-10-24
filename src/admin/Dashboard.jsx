@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { C, apiFetch, fmt, fmtDate, fmtTime, styles, VISIT_STATUS_LABELS } from './utils.js'
-import { VISITA_VIGENTE } from './listaVisitas.js'
+import { VISITA_VIGENTE, horarioVisita } from './listaVisitas.js'
 import AvisosTelegram from './AvisosTelegram.jsx'
 
 function KpiCard({ label, value, sub, color, onClick, alert }) {
@@ -180,7 +180,7 @@ export default function DashboardSection({ navigateTo }) {
             : visitasProximas.slice(0, 5).map(v => (
                 <Row key={v.id}
                   left={v.nombre}
-                  right={fmtTime(v.start)}
+                  right={horarioVisita(v)}
                   sub={fmtDate(v.start) + (v.direccion ? ' - ' + v.direccion : '')}
                   accent={C.orange}
                   onClick={() => navigateTo('visitas')}

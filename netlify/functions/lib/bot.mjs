@@ -18,6 +18,7 @@ import { disponibilidadAgenda, duracionInstalacionMin, duracionTexto, horasDelDi
 import { avisoSinRespuesta, confirmacionCortaInstalacion, fichaCotizacion, lineasRepisas, serviciosDe } from './telegram.mjs'
 import { diasDesde } from './seguimiento.mjs'
 import { comunaDe } from './zonas.mjs'
+import { linksRuta, planificarRuta } from './ruta-visitas.mjs'
 import { textoMateriales, tituloDia, ventasPorInstalar } from '../../../src/admin/materiales.js'
 
 export const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
@@ -44,7 +45,7 @@ export const secretoWebhook = token => createHash('sha256').update('donmaxi-webh
 
 export const COMANDOS_ADMIN = [
   ['menu', 'Menú principal'], ['hoy', 'Instalaciones y visitas de hoy'], ['manana', 'Lo de mañana'], ['semana', 'Los próximos 7 días'],
-  ['visitas', 'Visitas de la semana'], ['disponibilidad', 'Horas libres para instalar'], ['materiales', 'Materiales de la semana'],
+  ['visitas', 'Visitas de la semana'], ['ruta', 'Ruta de las visitas de un día'], ['disponibilidad', 'Horas libres para instalar'], ['materiales', 'Materiales de la semana'],
   ['cobrar', 'Saldos por cobrar'], ['pendientes', 'Cotizaciones sin respuesta'], ['buscar', 'Buscar un cliente'],
 ]
 export const COMANDOS_MAESTRO = [['hoy', 'Mis instalaciones de hoy'], ['manana', 'Las de mañana'], ['fotos', 'Cómo mandar fotos']]
@@ -61,7 +62,7 @@ const activa = q => q.status !== 'rechazada' && !q.instalacion?.cancelada
 export const instalacionesDelDia = (quotes, fecha) => quotes
   .filter(q => activa(q) && q.instalacion?.fecha === fecha)
   .sort((a, b) => String(a.instalacion.inicio || '').localeCompare(String(b.instalacion.inicio || '')))
-const visitasDe = eventos => eventos.filter(e => e.tipo === 'visita' && e.estado !== 'cancelada')
+const visitasDe = eventos => eventos.filter(e => e.tipo === 'visita' && e.estado !== 'cancelada' && e.activa !== false)
   .sort((a, b) => (a.fecha + a.inicio).localeCompare(b.fecha + b.inicio))
 const saldoDe = q => resumenPagos(q.total, q.pagos || []).saldo
 const lugar = q => comunaDe(q.direccion) || q.direccion || ''
@@ -114,7 +115,7 @@ export function vistaDia(fecha, { quotes, eventos, hoy }) {
     lineas.push(`${q.instalacion.instalada ? '✅' : '•'} ${horario(q.instalacion)} · ${q.nombre} · N° ${q.cotNum}${lugar(q) ? ` · ${lugar(q)}` : ''}${saldo > 0 ? ` · saldo ${pesos(saldo)}` : ''}`)
   }
   lineas.push('', visitas.length ? `📏 Visitas (${visitas.length}):` : '📏 Sin visitas.')
-  for (const v of visitas) lineas.push(`• ${v.inicio} · ${v.cliente}${v.ubicacion ? ` · ${comunaDe(v.ubicacion) || v.ubicacion}` : ''}${v.telefono ? ` · ${v.telefono}` : ''}`)
+  for (const v of visitas) lineas.push(`• ${v.horario || v.inicio} · ${v.cliente}${v.ubicacion ? ` · ${comunaDe(v.ubicacion) || v.ubicacion}` : ''}${v.telefono ? ` · ${v.telefono}` : ''}`)
   const otro = fecha === hoy ? b('Mañana ➡️', 'd|1') : b('⬅️ Hoy', 'd|0')
   return { texto: lineas.join('\n'), filas: [...inst.map(q => [b(`🔧 ${q.instalacion.inicio || ''} ${primer(q.nombre)} · N° ${q.cotNum}`, `v|${q.cotNum}`)]), [otro, ...MENU]] }
 }
@@ -132,7 +133,7 @@ export function vistaSemana({ quotes, eventos, hoy }) {
       lineas.push(`  🔧 ${horario(q.instalacion)} · ${q.nombre} · N° ${q.cotNum}${lugar(q) ? ` · ${lugar(q)}` : ''}`)
       botones.push(b(`${diaCorto(fecha)} · ${primer(q.nombre)}`, `v|${q.cotNum}`))
     }
-    if (visitas.length) lineas.push(`  📏 ${visitas.length} ${visitas.length === 1 ? 'visita' : 'visitas'}: ${visitas.map(v => `${v.inicio} ${primer(v.cliente)}${comunaDe(v.ubicacion) ? ` (${comunaDe(v.ubicacion)})` : ''}`).join(', ')}`)
+    if (visitas.length) lineas.push(`  📏 ${visitas.length} ${visitas.length === 1 ? 'visita' : 'visitas'}: ${visitas.map(v => `${v.horario || v.inicio} ${primer(v.cliente)}${comunaDe(v.ubicacion) ? ` (${comunaDe(v.ubicacion)})` : ''}`).join(', ')}`)
     lineas.push('')
   }
   if (lineas.length === 2) lineas.push('Nada agendado esta semana.')
@@ -146,7 +147,7 @@ export function vistaVisitas({ eventos, hoy }) {
   let dia = ''
   for (const v of visitas) {
     if (v.fecha !== dia) { dia = v.fecha; lineas.push('', tituloDia(dia)) }
-    lineas.push(`• ${v.inicio} · ${v.cliente}${v.ubicacion ? ` · ${v.ubicacion}` : ''}${v.telefono ? ` · ${v.telefono}` : ''}`)
+    lineas.push(`• ${v.horario || v.inicio} · ${v.cliente}${v.ubicacion ? ` · ${v.ubicacion}` : ''}${v.telefono ? ` · ${v.telefono}` : ''}`)
   }
   return { texto: lineas.join('\n'), filas: [MENU] }
 }
@@ -204,7 +205,8 @@ export function menuAdmin() {
     texto: '👋 Hola Maxi, ¿qué necesitas?',
     filas: [
       [b('📅 Hoy', 'd|0'), b('📅 Mañana', 'd|1'), b('🗓 Semana', 's')],
-      [b('📏 Visitas', 'vi'), b('🕐 Disponibilidad', 'h')],
+      [b('📏 Visitas', 'vi'), b('🗺 Ruta de visitas', 'ru')],
+      [b('🕐 Disponibilidad', 'h')],
       [b('💰 Por cobrar', 'c'), b('⏰ Sin respuesta', 'n')],
       [b('🪵 Materiales', 'mt'), b('🔎 Buscar cliente', 'q')],
       [b('👷 Vista del maestro (hoy)', 'mh|0')],
@@ -357,6 +359,7 @@ async function alMensaje(ctx, m) {
     case 'manana': return alBoton(ctx, 'd|1')
     case 'semana': return alBoton(ctx, 's')
     case 'visitas': return alBoton(ctx, 'vi')
+    case 'ruta': return alBoton(ctx, 'ru')
     case 'disponibilidad': return alBoton(ctx, 'h')
     case 'materiales': return alBoton(ctx, 'mt')
     case 'cobrar': return alBoton(ctx, 'c')
@@ -399,6 +402,25 @@ async function alBoton(ctx, data) {
       return mostrar(ctx, vistaSemana({ quotes, eventos, hoy }))
     }
     case 'vi': return mostrar(ctx, vistaVisitas({ eventos: await eventosDesde(ctx, hoy, 7), hoy }))
+
+    // Ruta de visitas: elegir dia → orden y horas → fijarlas en el calendario.
+    case 'ru': {
+      const visitas = visitasDe(await eventosDesde(ctx, hoy, 14))
+      const dias = [...new Set(visitas.map(v => v.fecha))].sort()
+      if (!dias.length) return mostrar(ctx, { texto: '🗺 No hay visitas agendadas en las próximas 2 semanas.', filas: [MENU] })
+      const cuantas = f => visitas.filter(v => v.fecha === f).length
+      return mostrar(ctx, { texto: '🗺 ¿La ruta de qué día?', filas: [...enFilas(dias.map(f => b(`${diaCorto(f)} · ${cuantas(f)}`, `rv|${compacta(f)}`)), 3), MENU] })
+    }
+    case 'rv': case 'rf': {
+      const fecha = expandir(args[0])
+      const ruta = await rutaDelDia(ctx, fecha)
+      if (accion === 'rf') {
+        for (const p of ruta.paradas) await deps.fijarHoraVisita({ visitId: p.id, fecha, hora: p.llegada })
+        ruta.paradas.forEach(p => { p.horaFija = p.llegada })
+        ctx.toast = '📌 Horas fijadas en el calendario'
+      }
+      return mostrar(ctx, vistaRuta(fecha, ruta))
+    }
     case 'c': return mostrar(ctx, vistaPorCobrar({ quotes: await cotizaciones(ctx), hoy }))
     case 'n': return mostrar(ctx, vistaSinRespuesta({ quotes: await cotizaciones(ctx), hoy }))
     case 'mt': {
@@ -522,6 +544,46 @@ async function alBoton(ctx, data) {
     }
   }
   ctx.toast = 'Botón antiguo: abre el menú de nuevo'
+}
+
+// Las visitas del dia con coordenadas: las que no tienen se buscan (si hay clave de Google) y se guardan.
+async function rutaDelDia(ctx, fecha) {
+  const { deps } = ctx
+  const visitas = visitasDe(await deps.leerEventos(fecha, fecha)).filter(v => v.fecha === fecha && v.rango)
+  for (const v of visitas) {
+    if (v.lat != null || !v.ubicacion || !deps.geocodificar) continue
+    const punto = await deps.geocodificar(v.ubicacion).catch(() => null)
+    if (punto) { Object.assign(v, punto); await deps.guardarCoordenadas?.(v.id, punto).catch(() => {}) }
+  }
+  return planificarRuta(visitas)
+}
+
+export function mensajeHoraVisita(v, fecha) {
+  return `${hola(v.cliente)} Le escribo de Repisas Don Maxi por su visita de medición del ${tituloDia(fecha).toLowerCase()}. Según la ruta del día llegaríamos aprox. a las ${v.llegada} hrs (puede variar unos minutos). ¿Le acomoda? 🙏`
+}
+
+export function vistaRuta(fecha, { paradas, minutosManejo, sinCoordenadas }) {
+  const lineas = [`🗺 Ruta del ${tituloDia(fecha).toLowerCase()} · ${paradas.length} ${paradas.length === 1 ? 'visita' : 'visitas'}`, `🚗 ~${duracionTexto(Math.max(5, minutosManejo)) || '0 min'} de manejo · parte en la primera visita`]
+  let rango = ''
+  paradas.forEach((p, i) => {
+    if (p.rango.desde !== rango) { rango = p.rango.desde; lineas.push('', `${p.rango.desde.slice(0, 2)}–${p.rango.hasta.slice(0, 2)} hrs`) }
+    lineas.push(`${i + 1}. ${p.llegada} · ${p.cliente}${comunaDe(p.ubicacion) ? ` · ${comunaDe(p.ubicacion)}` : ''}${p.trasladoMin ? ` (🚗 ${p.trasladoMin} min)` : ''}${p.fueraDeRango ? ' ⚠️' : ''}`)
+    if (p.ubicacion) lineas.push(`   📍 ${p.ubicacion}`)
+  })
+  const fuera = paradas.filter(p => p.fueraDeRango)
+  if (fuera.length) lineas.push('', `⚠️ No alcanzan a caber en su rango: ${fuera.map(p => primer(p.cliente)).join(', ')}. Muévelas de rango en Admin → Visitas o avísales.`)
+  if (sinCoordenadas) lineas.push('', `ℹ️ ${sinCoordenadas} sin ubicación exacta: se ordenaron por comuna.`)
+  const fijadas = paradas.length && paradas.every(p => p.horaFija === p.llegada)
+  lineas.push('', fijadas ? '📌 Estas horas ya están en el calendario.' : '📌 Cuando la tengas lista, fija las horas en el calendario y avísale a cada cliente con su botón.')
+  return {
+    texto: lineas.join('\n'),
+    filas: [
+      ...linksRuta(paradas).map(l => [u(`🧭 Abrir en Google Maps${paradas.length > 10 ? ` (${l.desde}–${l.hasta})` : ''}`, l.url)]),
+      ...enFilas(paradas.filter(p => p.telefono).map(p => u(`💬 ${p.llegada} ${primer(p.cliente)}`, linkWhatsapp(p.telefono, mensajeHoraVisita(p, fecha)))), 2),
+      ...(fijadas ? [] : [[b('📌 Fijar horas en el calendario', `rf|${compacta(fecha)}`)]]),
+      [b('⬅️ Otro día', 'ru'), ...MENU],
+    ],
+  }
 }
 
 async function elegirMedio(ctx, cotNum, monto) {

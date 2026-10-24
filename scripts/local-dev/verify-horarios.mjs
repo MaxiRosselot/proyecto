@@ -1,4 +1,5 @@
-// Prueba E2E: el admin habilita horarios y la pagina publica de agendar los respeta.
+// Prueba E2E: el admin habilita horarios y cupo, y la pagina publica de agendar los respeta:
+// direccion → dia → rango (8–11, 11–14, 14–17, 17–20) → datos; un rango lleno ya no se ofrece.
 // Corre contra el entorno local (start-native.mjs): no toca Google ni datos reales.
 //   node scripts/local-dev/verify-horarios.mjs
 import { chromium, expect } from '@playwright/test'
@@ -58,6 +59,8 @@ try {
   await expect(page.getByText(/"hasta" debe ser después/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled()
   await filaSabado.getByLabel('Hasta').selectOption('11:00')
+  // Cupo de 1 visita por rango, para probar que un rango lleno desaparece.
+  await page.getByLabel('Cupo por rango').fill('1')
 
   await page.getByRole('button', { name: 'Guardar cambios' }).click()
   await expect(page.getByRole('status')).toContainText('Horarios guardados')
@@ -70,55 +73,48 @@ try {
   expect(dias[domingoCerrado]).toBeUndefined()
 
   // ── Pagina publica ──
+  const rangosPublicos = async () => Object.fromEntries((await (await page.request.get(base + '/.netlify/functions/visitas-rangos')).json()).dias.map(d => [d.fecha, d.rangos.map(r => r.desde)]))
+  const rangos = await rangosPublicos()
+  expect(rangos[sabado]).toEqual(['08:00'])            // abierto 9–11: solo cae en 8–11
+  expect(rangos[domingo]).toEqual(['08:00', '11:00'])  // abierto 10–14
+  expect(rangos[domingoCerrado]).toBeUndefined()
+
   const publica = await browser.newPage({ viewport: { width: 430, height: 932 } })
   publica.on('pageerror', e => errors.push(e.stack || e.message))
-  // Primero la direccion; con la comuna se ofrecen las horas.
-  const direccion = async (calle, comuna) => {
-    await publica.goto(base + '/visita')
-    await expect(publica.getByText('Fechas disponibles')).toHaveCount(0)
-    await publica.getByLabel('Dirección').fill(calle)
-    await publica.getByLabel('Comuna').selectOption(comuna)
-    await publica.getByRole('button', { name: 'Ver días y horarios' }).click()
-    await expect(publica.getByText('Fechas disponibles')).toBeVisible()
-  }
-  await direccion('Av. Grecia 1500', 'Ñuñoa')
-  const botonesFecha = publica.locator('.date-btn')
-  await expect(botonesFecha).toHaveCount(Object.keys(dias).length)
-  const botonSabado = publica.locator('.date-btn', { hasText: /sábado/i })
-  await botonSabado.click()
-  await expect(publica.locator('.slot')).toHaveText(['09:00', '09:30', '10:00', '10:30'])
-  await expect(publica.locator('.slot:not([disabled])')).toHaveCount(4)
+  // Primero la direccion (sin clave de Google, a mano con la comuna).
+  await publica.goto(base + '/visita')
+  await expect(publica.getByText('Fechas disponibles')).toHaveCount(0)
+  await publica.getByLabel('Dirección').fill('Av. Grecia 1500')
+  await publica.getByLabel('Comuna').selectOption('Ñuñoa')
+  await publica.getByLabel(/Depto/).fill('depto 302')
+  await publica.getByRole('button', { name: 'Ver días y horarios' }).click()
+  await expect(publica.getByText('Fechas disponibles')).toBeVisible()
+  await expect(publica.getByText('Av. Grecia 1500, Ñuñoa · depto 302')).toBeVisible()
+  await expect(publica.locator('.date-btn')).toHaveCount(Object.keys(rangos).length)
+  await publica.locator('.date-btn', { hasText: /sábado/i }).click()
+  await expect(publica.locator('.slot')).toHaveText(['08:00 a 11:00Último cupo'])
   await publica.screenshot({ path: path.join(evidence, '02-publica-sabado.png'), fullPage: true })
 
-  await publica.getByRole('button', { name: '09:30' }).click()
+  await publica.locator('.slot').first().click()
   await publica.locator('.grid input').nth(0).fill('Cliente')
   await publica.locator('.grid input').nth(1).fill('Prueba Horarios')
   await publica.locator('.grid input').nth(2).fill('cliente.horarios@example.com')
   await publica.locator('.grid input').nth(3).fill('+56 9 1111 2222')
-  await publica.getByRole('button', { name: /Agendar visita/ }).click()
+  await publica.getByRole('button', { name: /Agendar visita · 08:00 a 11:00/ }).click()
   await publica.waitForURL(/confirm\.html/)
+  await expect(publica.getByText(/Horario: entre 08:00 y 11:00/)).toBeVisible()
 
-  // Mismo sector (Providencia): la hora tomada ya no se ofrece y las pegadas se recomiendan.
-  await direccion('Los Leones 100', 'Providencia')
-  await expect(botonSabado).toContainText('⭐')
-  await botonSabado.click()
-  await expect(publica.locator('.slot')).toHaveText(['⭐ 09:00', '⭐ 10:00', '⭐ 10:30'])
-  await publica.screenshot({ path: path.join(evidence, '02b-publica-cerca.png'), fullPage: true })
+  // Con cupo 1, el sabado se lleno y ya no aparece.
+  expect((await rangosPublicos())[sabado]).toBeUndefined()
 
-  // Lejos (Maipu): ese sabado no se ofrece (todas sus horas quedan a menos de 2 h de Ñuñoa).
-  await direccion('Pajaritos 2000', 'Maipú')
-  await expect(publica.locator('.date-btn')).toHaveCount(Object.keys(dias).length - 1)
-  await expect(botonSabado).toHaveCount(0)
-  await expect(publica.locator('.date-btn.cerca')).toHaveCount(0)
-
-  // El servidor rechaza horas fuera del horario aunque se salten la pagina.
-  const reservar = (fechaISO, horaHHmm) => page.request.post(base + '/.netlify/functions/create_event', {
-    data: { nombre: 'X', apellido: 'Y', email: 'x@example.com', fechaISO, horaHHmm },
+  // El servidor rechaza rangos fuera del horario o llenos aunque se salten la pagina.
+  const reservar = (fechaISO, rango) => page.request.post(base + '/.netlify/functions/create_event', {
+    data: { nombre: 'X', apellido: 'Y', email: 'x@example.com', direccion: 'Calle 1', fechaISO, rango },
   })
-  expect((await reservar(sabado, '15:00')).status()).toBe(400)
-  expect((await reservar(lunes, '10:00')).status()).toBe(400)
-  expect((await reservar(domingoCerrado, '10:00')).status()).toBe(400)
-  expect((await reservar(sabado, '09:30')).status()).toBe(409)
+  expect((await reservar(sabado, '14:00')).status()).toBe(400)
+  expect((await reservar(lunes, '08:00')).status()).toBe(400)
+  expect((await reservar(domingoCerrado, '11:00')).status()).toBe(400)
+  expect((await reservar(sabado, '08:00')).status()).toBe(409)
 
   // La visita aparece en el admin.
   await page.getByRole('navigation').getByRole('button', { name: 'Visitas', exact: true }).click()

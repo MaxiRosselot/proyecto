@@ -11,6 +11,7 @@ import { almacenFotosDrive, carpetaPorNombre, subirFotoWeb } from './sitio.mjs'
 import { rolesTelegram } from './bot.mjs'
 import { configTelegram, llamarTelegram } from './telegram.mjs'
 import { comunaDe } from './zonas.mjs'
+import { fijarHoraVisita, guardarCoordenadas } from './visitas.mjs'
 
 export const CARPETA_FOTOS_INSTALACIONES = 'Fotos instalaciones Don Maxi'
 const MARCA_FOTO_VENTA = 'fotoVentaDonMaxi'
@@ -54,6 +55,16 @@ export function fotosVentaDrive(drive) {
   }
 }
 
+// Coordenadas de una direccion escrita (para la ruta de visitas antiguas o sin autocompletar).
+// Con GOOGLE_MAPS_SERVER_KEY (Geocoding API); sin ella, la ruta ordena esas visitas por comuna.
+export async function geocodificar(direccion, { key = process.env.GOOGLE_MAPS_SERVER_KEY, fetchImpl = fetch } = {}) {
+  if (!key || !direccion) return null
+  const q = new URLSearchParams({ address: direccion, region: 'cl', components: 'country:CL', language: 'es', key })
+  const r = await fetchImpl(`https://maps.googleapis.com/maps/api/geocode/json?${q}`).then(x => x.json()).catch(() => null)
+  const punto = r?.status === 'OK' ? r.results?.[0]?.geometry?.location : null
+  return punto ? { lat: punto.lat, lng: punto.lng } : null
+}
+
 // Todo junto para atenderUpdate / enviarMananaDelBot.
 export function depsBot(env = process.env) {
   const { almacen, calendar, calendarId, leerEventos } = serviciosGoogle(env)
@@ -72,5 +83,8 @@ export function depsBot(env = process.env) {
     registrarPago: datos => registrarPago(almacen, datos),
     publicarFoto: ({ datos, tipo, titulo }) => subirFotoWeb(almacenFotosDrive(drive), { seccion: 'galeria', categoria: 'bodegas', tipo, titulo, datos: datos.toString('base64') }),
     linkPago: cotNum => { try { return linkPagoCotizacion(cotNum) } catch { return '' } },
+    fijarHoraVisita: datos => fijarHoraVisita(calendar, calendarId, datos),
+    guardarCoordenadas: (visitId, punto) => guardarCoordenadas(calendar, calendarId, visitId, punto),
+    ...(env.GOOGLE_MAPS_SERVER_KEY ? { geocodificar: direccion => geocodificar(direccion, { key: env.GOOGLE_MAPS_SERVER_KEY }) } : {}),
   }
 }

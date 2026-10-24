@@ -25,6 +25,10 @@ export function duracion(inicio, fin) {
 }
 
 const primerNombre = nombre => String(nombre || '').trim().split(/\s+/)[0] || ''
+
+// Una visita que todavia es un rango (el evento dura mas de media hora) o ya tiene hora fija.
+const aMin = hhmm => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + (m || 0) }
+export const cuandoVisita = (inicio, fin) => (fin && aMin(fin) - aMin(inicio) > 30 ? `entre las ${inicio} y las ${fin} hrs` : `a las ${inicio} hrs`)
 const saludo = nombre => `¡Hola${primerNombre(nombre) ? ' ' + primerNombre(nombre) : ''}!`
 export const AVISO_RETRASO = 'Puede existir un retraso máximo de 1 hora, pero intentaremos llegar puntual.'
 
@@ -61,7 +65,7 @@ export function mensajeRecordatorio({ tipo, cliente, fecha, inicio, fin, ubicaci
     ].join('\n')
   }
   return [
-    `${saludo(cliente)} Le recordamos su visita de medición mañana, ${dia}, a las ${inicio} hrs 📏`,
+    `${saludo(cliente)} Le recordamos su visita de medición mañana, ${dia}, ${cuandoVisita(inicio, fin)} 📏`,
     ...(ubicacion ? ['', `📍 ${ubicacion}`] : []),
     '',
     'Cualquier cambio, respóndanos por aquí.',
@@ -191,13 +195,13 @@ export function correoRecordatorioInstalacion({ cliente, fecha, inicio, fin, ubi
   }
 }
 
-export function correoRecordatorioVisita({ cliente, fecha, inicio, ubicacion }) {
+export function correoRecordatorioVisita({ cliente, fecha, inicio, fin, ubicacion }) {
   return {
     asunto: `Recordatorio: mañana es tu visita de medición — Repisas Don Maxi`,
     texto: [
       `Hola ${primerNombre(cliente) || ''},`.replace(' ,', ','),
       '',
-      `Te recordamos que mañana, ${fechaLarga(fecha).toLowerCase()}, tenemos tu visita de medición a las ${inicio} hrs.`,
+      `Te recordamos que mañana, ${fechaLarga(fecha).toLowerCase()}, tenemos tu visita de medición ${cuandoVisita(inicio, fin)}.`,
       ...(ubicacion ? [`Dirección: ${ubicacion}`] : []),
       '',
       'Ante cualquier cambio, responde este correo o escríbenos por WhatsApp al +56 9 5102 0367.',

@@ -147,7 +147,17 @@
       .btn[disabled]{ opacity:.6; cursor:not-allowed; box-shadow:none }
       .note{ font-size:12px; color:var(--muted); margin-top:8px }
       select{ width:100%; border:1.5px solid var(--border); border-radius:14px; padding:12px 14px; font-size:15px; background:#fff; color:var(--text) }
-      .date-btn.cerca:not(.active), .slot.cerca:not(.active){ border-color:var(--accent); background:#FBF3E4 }
+      .slots.rangos{ grid-template-columns:repeat(2,1fr) }
+      @media(min-width:720px){ .slots.rangos{ grid-template-columns:repeat(4,1fr) } }
+      .slots.rangos .slot{ padding:14px 10px; font-size:15px; display:flex; flex-direction:column; align-items:center; gap:2px }
+      .slot small{ font-size:11px; font-weight:600; color:#8F5D0F }
+      .slot.active small{ color:var(--accent-ink) }
+      .autocompletar{ position:relative }
+      .sugerencias{ list-style:none; margin:4px 0 0; padding:4px; position:absolute; left:0; right:0; z-index:5; background:#fff; border:1.5px solid var(--border); border-radius:14px; box-shadow:0 12px 28px rgba(0,0,0,.12) }
+      .sugerencias button{ width:100%; text-align:left; border:none; background:none; padding:10px 12px; border-radius:10px; cursor:pointer; display:flex; flex-direction:column; gap:2px; font-size:14px; color:var(--text) }
+      .sugerencias button:hover, .sugerencias button:focus{ background:#FBF3E4; outline:none }
+      .sugerencias span{ font-size:12px; color:var(--muted) }
+      .ok-text{ color:#15803d; font-weight:700 }
       .link-btn{ border:none; background:none; color:#8F5D0F; font-weight:700; cursor:pointer; text-decoration:underline; padding:0 }
 
       footer{ text-align:center; margin: 18px 0 calc(10px + var(--safe-bottom)); font-size:12px; color:var(--muted) }
@@ -172,7 +182,7 @@
             <div class="bar" id="progress-bar" style="width:33%"></div>
           </div>
           <div class="steps-line" id="steps-line">
-            <span>Dirección</span><span>Día y hora</span><span>Datos</span>
+            <span>Dirección</span><span>Día y horario</span><span>Datos</span>
           </div>
         </div>
 
