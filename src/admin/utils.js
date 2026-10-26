@@ -24,6 +24,7 @@ export const VISIT_STATUS_LABELS = {
   realizada_cotizada: { label: 'Realizada y cotizada',  color: '#8B5CF6' },
   cancelada:          { label: 'Cancelada',             color: '#EF4444' },
   reagendar:          { label: 'Reagendar',             color: '#F97316' },
+  por_revisar:        { label: 'Por revisar',           color: '#64748B' }, // importadas de Calendly
 }
 
 export const QUOTE_STATUS_LABELS = {

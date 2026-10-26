@@ -179,3 +179,15 @@ test('cancelar: queda rechazada con motivo y se borra el evento', async () => {
   const q = await obtenerCotizacion(almacen, cotizacion.cotNum)
   assert.deepEqual([q.status, q.motivoRechazo, calendar.eventos.size], ['rechazada', 'Canceló', 0])
 })
+
+test('guarda las ubicaciones de las instalaciones solo en la columna de instalacion', async () => {
+  const { guardarUbicaciones } = await import('./planilla.mjs')
+  const { almacenEnMemoria } = await import('./cotizaciones.mjs')
+  const fila = (n, inst) => { const v = Array(20).fill(''); v[0] = n; v[1] = `Cliente ${n}`; v[16] = 'proyecto-3d'; v[17] = inst ? JSON.stringify(inst) : ''; return v }
+  const almacen = almacenEnMemoria([fila(1450, { fecha: '2026-01-10', instalada: true }), fila(1451, null)])
+  const r = await guardarUbicaciones(almacen, [{ cotNum: 1450, lat: -33.45, lng: -70.6, comuna: 'Ñuñoa' }, { cotNum: 1451, lat: '-', lng: '-' }, { cotNum: 9999, lat: 1, lng: 1 }, { cotNum: 1450, lat: 'x', lng: 1 }])
+  assert.equal(r.guardadas, 2)
+  assert.deepEqual(JSON.parse(almacen.filas[0][17]), { fecha: '2026-01-10', instalada: true, lat: -33.45, lng: -70.6, comuna: 'Ñuñoa' })
+  assert.deepEqual(JSON.parse(almacen.filas[1][17]), { lat: '-', lng: '-' })
+  assert.equal(almacen.filas[0][16], 'proyecto-3d') // el resto de la fila no se toca
+})

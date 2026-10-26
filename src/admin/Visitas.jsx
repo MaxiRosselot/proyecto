@@ -114,6 +114,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [reagendando, setReagendando] = useState(null)
   const [verMapa, setVerMapa] = useState(false)
   const [vista, setVista] = useState('lista') // lista | concentracion
+  const [filtroCalendly, setFiltroCalendly] = useState('por_revisar')
   const [mapaDia, setMapaDia] = useState('') // el dia (de las proximas) con su mapa abierto
   const [movida, setMovida] = useState(null) // la visita recien reagendada (cambia de dia en la lista)
 
@@ -133,7 +134,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
     setUpdating(visit.id)
     try {
       // Al cancelar, la hora queda libre para otro cliente.
-      if (newStatus === 'cancelada') {
+      if (newStatus === 'cancelada' && visit.origen !== 'Calendly') {
         const r = await apiFetch('/.netlify/functions/visita', { method: 'POST', body: JSON.stringify({ accion: 'liberar', visitId: visit.id }) }).catch(() => null)
         if (!r?.ok) console.warn('No se pudo liberar la hora de la visita', visit.id, r?.error)
       }
@@ -169,23 +170,29 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
     return statuses[visit.id] || visit.status || 'agendada'
   }
 
-  const agendadas = visits.filter(v => {
+  // Las importadas de Calendly van solo en su pestaña (se concilian a mano); el resto, como siempre.
+  const propias = visits.filter(v => v.origen !== 'Calendly')
+  const deCalendly = visits.filter(v => v.origen === 'Calendly')
+  const calendly = deCalendly.filter(v => filtroCalendly === 'todas' || getStatus(v) === filtroCalendly)
+    .sort((a, b) => new Date(b.start) - new Date(a.start))
+
+  const agendadas = propias.filter(v => {
     const s = getStatus(v)
     return VISITA_VIGENTE.includes(s) && new Date(v.start) >= now
   }).sort((a, b) => new Date(a.start) - new Date(b.start))
 
-  const pendientes = visits.filter(v => {
+  const pendientes = propias.filter(v => {
     const s = getStatus(v)
     return VISITA_VIGENTE.includes(s) && new Date(v.start) < now
   }).sort((a, b) => new Date(b.start) - new Date(a.start))
 
-  const realizadas = visits.filter(v => getStatus(v) === 'realizada')
+  const realizadas = propias.filter(v => getStatus(v) === 'realizada')
     .sort((a, b) => new Date(b.start) - new Date(a.start))
 
-  const realizadasCotizadas = visits.filter(v => getStatus(v) === 'realizada_cotizada')
+  const realizadasCotizadas = propias.filter(v => getStatus(v) === 'realizada_cotizada')
     .sort((a, b) => new Date(b.start) - new Date(a.start))
 
-  const canceladas = visits.filter(v => getStatus(v) === 'cancelada')
+  const canceladas = propias.filter(v => getStatus(v) === 'cancelada')
     .sort((a, b) => new Date(b.start) - new Date(a.start))
 
   const TABS = [
@@ -194,9 +201,10 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
     { key: 'realizadas',           label: 'Realizadas',            count: realizadas.length,          color: C.green  },
     { key: 'realizadas_cotizadas', label: 'Realizadas y cotizadas',count: realizadasCotizadas.length, color: '#8B5CF6'},
     { key: 'canceladas',           label: 'Canceladas',            count: canceladas.length,          color: C.red    },
+    ...(deCalendly.length ? [{ key: 'calendly', label: 'Calendly', count: deCalendly.filter(v => getStatus(v) === 'por_revisar').length, color: '#64748B' }] : []),
   ]
 
-  const listMap = { agendadas, pendientes, realizadas, realizadas_cotizadas: realizadasCotizadas, canceladas }
+  const listMap = { agendadas, pendientes, realizadas, realizadas_cotizadas: realizadasCotizadas, canceladas, calendly }
   const q    = buscar.trim().toLowerCase()
   const list = (listMap[tab] || []).filter(v => !q || (v.nombre || '').toLowerCase().includes(q))
 
@@ -282,6 +290,20 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
 
       {loading && <div style={styles.empty}>Cargando visitas...</div>}
       {error   && <div style={styles.errorBox}>{error}</div>}
+
+      {tab === 'calendly' && (
+        <div style={{ ...styles.card, padding: 14, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: C.textSub, marginBottom: 10 }}>
+            Visitas antiguas de Calendly: muchas no se hicieron. Marca cada una como corresponda (las que se cotizaron en el cotizador antiguo, como "Realizada y cotizada"). Todas cuentan en el mapa de concentración.
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[['por_revisar', 'Por revisar'], ['realizada', 'Realizadas'], ['realizada_cotizada', 'Realizadas y cotizadas'], ['cancelada', 'No se hicieron / canceladas'], ['todas', 'Todas']].map(([k, n]) => {
+              const cuantas = k === 'todas' ? deCalendly.length : deCalendly.filter(v => getStatus(v) === k).length
+              return <button key={k} onClick={() => setFiltroCalendly(k)} style={{ padding: '6px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + (filtroCalendly === k ? C.orange : C.border), background: filtroCalendly === k ? C.orangeLight : C.surface, color: filtroCalendly === k ? C.orangeDark : C.textSub }}>{n} ({cuantas})</button>
+            })}
+          </div>
+        </div>
+      )}
 
       {tab === 'pendientes' && pendientes.length > 0 && (
         <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#92400E', fontWeight: 600 }}>
@@ -385,6 +407,16 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                         <button onClick={() => cancelar(visit)} disabled={isUpdating}
                           style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: C.surface, color: C.red }}>✕ Cancelar</button>
                         {status !== 'confirmada' && <CopiarMensaje texto={mensajeConfirmarVisita(visit)} etiqueta="📋 Copiar mensaje de confirmación" />}
+                      </div>
+                    )}
+                    {tab === 'calendly' && (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }} data-testid="conciliar-calendly">
+                        <StatusBtn target="realizada" label="Realizada" visit={visit} />
+                        <StatusBtn target="realizada_cotizada" label="Realizada y cotizada" visit={visit} />
+                        <StatusBtn target="cancelada" label="No se hizo" visit={visit} />
+                        {status !== 'por_revisar' && <StatusBtn target="por_revisar" label="Por revisar" visit={visit} />}
+                        {visit.celular && <a href={`https://wa.me/${visit.celular.replace(/\D/g, '').replace(/^(9\d{8})$/, '56$1')}`} target="_blank" rel="noopener" style={{ fontSize: 12, fontWeight: 600, color: C.green }}>💬 WhatsApp</a>}
+                        {/💡/.test(visit.notas || '') && <span style={{ fontSize: 12, color: '#8B5CF6', fontWeight: 600 }}>{visit.notas.match(/💡[^·]*/)[0].trim()}</span>}
                       </div>
                     )}
                     {reagendando === visit.id && (tab === 'agendadas' || tab === 'pendientes') && (

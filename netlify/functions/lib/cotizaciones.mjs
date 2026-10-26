@@ -279,6 +279,12 @@ export function almacenSheets(sheets, spreadsheetId, hoja = HOJA) {
       escribio()
       await sheets.spreadsheets.values.update({ spreadsheetId, range: fila(n), valueInputOption: 'RAW', requestBody: { values: [valores] } })
     },
+    // Una sola columna de muchas filas en una llamada: [{ n, columna: 'R', valor }].
+    async actualizarCeldas(lista) {
+      if (!lista.length) return
+      escribio()
+      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data: lista.map(c => ({ range: rango(`${c.columna}${c.n}`), values: [[c.valor]] })) } })
+    },
     async borrar(n) {
       escribio()
       const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' })
@@ -305,6 +311,7 @@ export function almacenEnMemoria(filasIniciales = [], alCambiar = () => {}) {
     async agregar(valores) { filas.push([...valores]); guardar(); return filas.length + 1 },
     async agregarVarias(lista) { lista.forEach(v => filas.push([...v])); guardar() },
     async actualizar(n, valores) { filas[n - 2] = [...valores]; guardar() },
+    async actualizarCeldas(lista) { for (const c of lista) filas[c.n - 2][c.columna.charCodeAt(0) - 65] = c.valor; guardar() },
     async borrar(n) { filas.splice(n - 2, 1); guardar() },
   }
 }

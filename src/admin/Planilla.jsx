@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
@@ -12,6 +12,8 @@ import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/
 import { PagosCotizacion } from './PagosCotizacion.jsx'
 import ImportarExcel from './ImportarExcel.jsx'
 import { mismoNombre } from '../../netlify/functions/lib/leer-ventas.mjs'
+// El mapa de trabajos realizados (Leaflet) se carga solo al abrirlo.
+const MapaInstalaciones = lazy(() => import('./MapaInstalaciones.jsx'))
 
 // La central de instalaciones: el Excel de Maxi dentro del panel. Una fila por venta, ordenadas por
 // fecha, con lo mismo que la planilla (nota, instalada, fecha y horas, documento, pago, repisas,
@@ -507,6 +509,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
   const [nueva, setNueva] = useState(false)
   const [importar, setImportar] = useState(false)
   const [materiales, setMateriales] = useState(false)
+  const [verMapa, setVerMapa] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -591,11 +594,14 @@ export default function PlanillaSection({ onVerCotizacion }) {
           </div>
           <button onClick={() => setNueva(v => !v)} style={{ ...styles.btnPrimary, fontSize: 12.5, padding: '8px 14px' }}>+ Nueva instalación</button>
           <button onClick={() => setMateriales(v => !v)} aria-pressed={materiales} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>🪵 Materiales</button>
+          <button onClick={() => setVerMapa(v => !v)} aria-pressed={verMapa} style={{ ...styles.btnSecondary, fontSize: 12.5, ...(verMapa ? { borderColor: C.orange, color: C.orangeDark } : {}) }}>🗺 {verMapa ? 'Ocultar mapa' : 'Mapa'}</button>
           <button onClick={() => setImportar(true)} style={{ ...styles.btnSecondary, fontSize: 12.5 }}>Importar Excel</button>
         </div>
       </div>
 
       {materiales && <MaterialesProximos quotes={quotes} hoy={hoy} onCerrar={() => setMateriales(false)} />}
+
+      {verMapa && <Suspense fallback={<div style={styles.empty}>Cargando mapa...</div>}><MapaInstalaciones quotes={quotes} onRecargar={cargar} /></Suspense>}
 
       {nueva && <NuevaInstalacion onCrear={crear} onCancelar={() => setNueva(false)} />}
 

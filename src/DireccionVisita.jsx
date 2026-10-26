@@ -1,31 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { COMUNAS, comunaDe } from '../netlify/functions/lib/zonas.mjs'
+import { CLAVE_MAPS, cargarPlaces, comunaDeLugar, componente } from './googlePlaces.js'
 
 // Direccion de la visita en /visita. Con VITE_GOOGLE_MAPS_KEY (Places API New) autocompleta
 // mientras escriben y valida: hay que elegir una sugerencia y que tenga numero; queda con sus
 // coordenadas para armar la ruta del dia. Sin clave, o si Google falla, se escribe a mano con la
 // comuna de la lista (la ruta ordena esas por comuna).
 export const OTRA_COMUNA = 'Otra (fuera de Santiago)'
-const CLAVE_MAPS = import.meta.env.VITE_GOOGLE_MAPS_KEY || ''
 const SANTIAGO = { center: { lat: -33.45, lng: -70.65 }, radius: 50000 }
-
-let places = null
-function cargarPlaces() {
-  if (!CLAVE_MAPS) return Promise.reject(new Error('Sin clave de Google Maps'))
-  places ||= new Promise((resolve, reject) => {
-    window.gm_authFailure = () => reject(new Error('Google Maps rechazó la clave'))
-    window.__mapsDonMaxi = () => window.google.maps.importLibrary('places').then(resolve, reject)
-    const s = document.createElement('script')
-    s.src = `https://maps.googleapis.com/maps/api/js?${new URLSearchParams({ key: CLAVE_MAPS, v: 'weekly', loading: 'async', language: 'es', region: 'CL', callback: '__mapsDonMaxi' })}`
-    s.async = true
-    s.onerror = () => reject(new Error('No cargó Google Maps'))
-    document.head.appendChild(s)
-    setTimeout(() => reject(new Error('Google Maps no respondió')), 8000)
-  }).catch(e => { places = null; throw e })
-  return places
-}
-
-const componente = (lugar, tipo) => lugar.addressComponents?.find(c => c.types.includes(tipo))?.longText || ''
 
 // valor: { calle, depto, comuna, lat?, lng?, verificada }
 export default function DireccionVisita({ valor, onChange, onListo }) {
@@ -65,7 +47,7 @@ export default function DireccionVisita({ valor, onChange, onListo }) {
       await lugar.fetchFields({ fields: ['formattedAddress', 'location', 'addressComponents'] })
       sesion.current = new lib.current.AutocompleteSessionToken()
       const numero = componente(lugar, 'street_number'), calle = componente(lugar, 'route')
-      const comunaGoogle = componente(lugar, 'administrative_area_level_3') || componente(lugar, 'locality')
+      const comunaGoogle = comunaDeLugar(lugar)
       setTexto(lugar.formattedAddress || prediccion.text?.text || '')
       if (!numero || !calle) { setError('Falta el número de la casa o edificio: escríbelo y elige la dirección de nuevo.'); return }
       onChange({ ...valor, calle: `${calle} ${numero}`, comuna: comunaDe(comunaGoogle) || comunaGoogle || '', lat: lugar.location.lat(), lng: lugar.location.lng(), verificada: true })

@@ -27,7 +27,7 @@ import { configPago, conLinkPago, linkAgenda, linkPagoCotizacion } from '../../n
 import { atenderAvisoMercadoPago, atenderReservaGet, atenderReservaPost } from '../../netlify/functions/lib/reserva-cliente.mjs'
 import { atenderAgendaGet, atenderAgendaPost } from '../../netlify/functions/lib/agenda-cliente.mjs'
 import { confirmarTransferenciaYAvisar, rechazarTransferencia } from '../../netlify/functions/lib/reservas-admin.mjs'
-import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento } from '../../netlify/functions/lib/planilla.mjs'
+import { actualizarFila, cancelarInstalacion, crearInstalacion, enlazarEvento, guardarUbicaciones } from '../../netlify/functions/lib/planilla.mjs'
 import { importarVentas } from '../../netlify/functions/lib/importar-ventas.mjs'
 import { crearVisita, fijarHoraVisita, guardarCoordenadas, horasParaReagendar, liberarHoraVisita, reagendarVisita, visitasActivas } from '../../netlify/functions/lib/visitas.mjs'
 import { almacenFotosMemoria, almacenSolicitudesMemoria, subirFotoWeb } from '../../netlify/functions/lib/sitio.mjs'
@@ -290,7 +290,17 @@ const routes = {
   // Mismo contrato que netlify/functions/importar-visitas.mjs (sin Google: "ubicar" no hay clave local).
   'importar-visitas': async body => {
     const filas = (db.visitasHoja ||= [])
-    if (body.accion === 'ubicar') return { status: 400, ok: false, error: 'Falta GOOGLE_MAPS_SERVER_KEY en Netlify (clave de Google con Geocoding API).' }
+    if (body.accion === 'guardar-ubicaciones') {
+      let guardadas = 0
+      for (const u of (body.ubicaciones || []).slice(0, 200)) {
+        const f = filas.find(x => x[0] === u.id)
+        if (f) { f[11] = u.comuna || f[11] || ''; f[12] = u.lat; f[13] = u.lng; guardadas++; continue }
+        const v = db.visits.find(x => x.id === u.id)
+        if (v && u.lat !== '-') { v.shared = { ...(v.shared || {}), lat: String(u.lat), lng: String(u.lng) }; guardadas++ }
+      }
+      saveData(db)
+      return { ok: true, guardadas }
+    }
     const csv = leerCSV(body.csv || '')
     if (!csv.length || !('Invitee UUID' in csv[0] || 'Event UUID' in csv[0])) return { status: 400, ok: false, error: 'Ese archivo no parece un export de Calendly (Events → Export).' }
     const { quotes } = await listarCotizaciones(cotizaciones)
@@ -388,6 +398,7 @@ const routes = {
     if (body.accion === 'enlazar') return { ok: true, ...(await enlazarEvento(almacen, calendar, calendarId, body)) }
     if (body.accion === 'crear') return { ok: true, ...(await crearInstalacion(almacen, calendar, calendarId, body)) }
     if (body.accion === 'cancelar') return { ok: true, ...(await cancelarInstalacion(almacen, calendar, calendarId, body)) }
+    if (body.accion === 'ubicaciones') return { ok: true, ...(await guardarUbicaciones(almacen, body.ubicaciones)) }
     if (body.accion === 'importar') return { ok: true, reporte: await importarVentas(almacen, body.ventas || [], { simular: body.simular === true, hoy: ahoraEnZona().fecha, calendar, calendarId, leerEventos }) }
     return { status: 400, ok: false, error: 'Acción desconocida' }
   },

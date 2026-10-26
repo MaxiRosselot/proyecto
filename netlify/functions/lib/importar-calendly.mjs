@@ -1,9 +1,10 @@
 // Visitas antiguas de Calendly (Calendly → Events → Export → CSV) a la hoja "Visitas" de la planilla
 // principal, para verlas en el panel, en el mapa de concentracion y hacerles seguimiento.
 //   · ID: "calendly-<Invitee UUID>"; si ya esta en la hoja no se vuelve a agregar.
-//   · Estado: las pasadas quedan "realizada" (o "realizada_cotizada" si el cliente tiene una
-//     cotizacion: mismo correo, telefono o nombre), las marcadas como no-show y las canceladas,
-//     "cancelada"; las futuras, "agendada".
+//   · Estado: las pasadas quedan "por_revisar" (muchas de Calendly no se hicieron: Maxi las concilia
+//     a mano en Admin → Visitas → Calendly), las canceladas en Calendly "cancelada" y las futuras
+//     "agendada". Si el cliente tiene una cotizacion (mismo correo, telefono o nombre) va como pista
+//     en las notas, sin cambiar el estado.
 //   · Fecha y hora en formato AAAA-MM-DD y HH:MM (asi get-visits las puede leer).
 // Sin imports de Node.
 import { comunaAproximada, comunaDe } from './zonas.mjs'
@@ -52,11 +53,16 @@ function direccionDe(r) {
 // filas: lo que devuelve leerCSV. cotizaciones: las de la planilla (para saber si ya se cotizo).
 // existentes: los ID que ya estan en la hoja. ahora: para separar pasadas de futuras.
 export function visitasDesdeCalendly(filas, { cotizaciones = [], existentes = new Set(), ahora = new Date() } = {}) {
-  const porCorreo = new Set(cotizaciones.map(q => normalizar(q.email)).filter(Boolean))
-  const porTelefono = new Set(cotizaciones.map(q => ultimos8(q.telefono)).filter(t => t.length === 8))
-  const porNombre = new Set(cotizaciones.map(q => normalizar(q.nombre)).filter(n => n.split(' ').length >= 2))
+  const indice = (clave, valido) => {
+    const m = new Map()
+    for (const q of cotizaciones) { const k = clave(q); if (valido(k) && !m.has(k)) m.set(k, q.cotNum) }
+    return m
+  }
+  const porCorreo = indice(q => normalizar(q.email), Boolean)
+  const porTelefono = indice(q => ultimos8(q.telefono), t => t.length === 8)
+  const porNombre = indice(q => normalizar(q.nombre), n => n.split(' ').length >= 2)
   const hoy = ahora.toISOString().slice(0, 10)
-  const resumen = { leidas: filas.length, nuevas: 0, repetidas: 0, sinFecha: 0, porEstado: {}, sinComuna: 0 }
+  const resumen = { leidas: filas.length, nuevas: 0, repetidas: 0, sinFecha: 0, porEstado: {}, sinComuna: 0, conCotizacion: 0 }
   const nuevas = []
   for (const r of filas) {
     const uuid = r['Invitee UUID'] || r['Event UUID']
@@ -66,11 +72,12 @@ export function visitasDesdeCalendly(filas, { cotizaciones = [], existentes = ne
     if (existentes.has(id) || nuevas.some(v => v[0] === id)) { resumen.repetidas++; continue }
     const nombre = r['Invitee Name'] || [r['Invitee First Name'], r['Invitee Last Name']].filter(Boolean).join(' ')
     const email = r['Invitee Email'] || '', telefono = telefonoDe(r), direccion = direccionDe(r)
-    const cotizada = porCorreo.has(normalizar(email)) || (ultimos8(telefono).length === 8 && porTelefono.has(ultimos8(telefono))) || porNombre.has(normalizar(nombre))
-    const cancelada = r['Canceled'] === 'true' || r['Marked as No-Show'] === 'Yes'
-    const estado = cancelada ? 'cancelada' : fecha >= hoy ? 'agendada' : cotizada ? 'realizada_cotizada' : 'realizada'
+    const cotizacion = porCorreo.get(normalizar(email)) || (ultimos8(telefono).length === 8 && porTelefono.get(ultimos8(telefono))) || porNombre.get(normalizar(nombre))
+    const estado = r['Canceled'] === 'true' ? 'cancelada' : fecha >= hoy ? 'agendada' : 'por_revisar'
+    if (cotizacion) resumen.conCotizacion++
     const notas = [
       'Importada de Calendly',
+      cotizacion ? `💡 Tiene cotización N° ${cotizacion}` : '',
       r['Marked as No-Show'] === 'Yes' ? 'No se presentó' : '',
       r['Cancellation reason'] ? `Canceló: ${r['Cancellation reason']}` : '',
       r['Meeting Notes'] || '',
@@ -92,7 +99,8 @@ export function visitaDesdeFila(f, horaLocalAUTC) {
   const inicio = horaLocalAUTC(fecha, /^\d{1,2}:\d{2}$/.test(hora) ? hora.padStart(5, '0') : '10:00')
   return {
     id, nombre, summary: `Visita — ${nombre}`, start: inicio.toISOString(), end: new Date(inicio.getTime() + 15 * 60000).toISOString(),
-    email, celular, direccion, notas, status: estado || 'realizada', origen: origen || 'Planilla', comuna: comuna || comunaDe(direccion) || '',
+    email, celular, direccion, notas, status: estado || 'por_revisar', origen: origen || 'Planilla', comuna: comuna || comunaDe(direccion) || '',
     ...(lat && lng && Number.isFinite(Number(lat)) ? { lat: Number(lat), lng: Number(lng) } : {}),
+    ...(lat === '-' ? { ubicacionIntentada: true } : {}), // se busco y no se encontro: no se vuelve a buscar
   }
 }

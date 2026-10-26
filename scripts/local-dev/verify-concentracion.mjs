@@ -1,6 +1,6 @@
 // Prueba E2E de Admin → Visitas → 📊 Concentración (importar un CSV de Calendly inventado, mapa de
-// calor, tablas por comuna y sector) y del "Mapa del día" de las proximas visitas (numerado, solo RM,
-// descargable como imagen). Los centros de las comunas se precargan para no depender de internet.
+// calor, tablas por comuna y sector), la pestaña Calendly (conciliar a mano), el "Mapa del día" de
+// las proximas visitas (numerado, solo RM, descargable) y el mapa de trabajos de Instalaciones. Los centros de las comunas se precargan para no depender de internet.
 // Contra el entorno local (start-native.mjs), con datos limpios.
 //   node scripts/local-dev/verify-concentracion.mjs
 import { chromium, expect } from '@playwright/test'
@@ -63,6 +63,7 @@ try {
   await expect(importar.getByRole('status')).toContainText('7 en el archivo · 7 nuevas · 0 ya estaban · 1 sin comuna')
   await importar.getByRole('button', { name: 'Importar 7' }).click()
   await expect(importar.getByRole('status')).toContainText('✓ 7 visitas agregadas a la hoja Visitas')
+  await expect(importar.getByRole('status')).toContainText('Por revisar: 7')
 
   const conc = page.getByTestId('concentracion')
   await expect(conc.getByTestId('tabla-comunas')).toContainText('Ñuñoa')
@@ -76,17 +77,53 @@ try {
 
   await conc.getByRole('button', { name: '⚪ Por comuna' }).click()
   await expect(conc.locator('.leaflet-tooltip', { hasText: 'Ñuñoa: 3' })).toBeVisible()
-  await conc.getByRole('button', { name: 'Realizadas sin cotizar (potenciales)' }).click()
+  await conc.getByRole('button', { name: 'Calendly por revisar' }).click()
   await expect(conc.getByTestId('tabla-comunas').locator('tr', { hasText: 'Ñuñoa' }).locator('td').nth(2)).toHaveText('2')
   await page.waitForTimeout(600)
   await page.screenshot({ path: path.join(evidence, '03-concentracion-comunas.png'), fullPage: true })
 
-  // Subirlo de nuevo no las repite; y quedan en Realizadas para hacerles seguimiento.
+  // Subirlo de nuevo no las repite.
   await importar.getByRole('button', { name: 'Revisar' }).click()
   await expect(importar.getByRole('status')).toContainText('0 nuevas · 7 ya estaban')
+
+  // Pestaña Calendly: se concilian a mano y no se mezclan con las otras pestañas.
   await page.getByRole('button', { name: '← Volver a la lista' }).click()
   await page.getByRole('button', { name: /^Realizadas\s*\d/ }).first().click()
-  await expect(page.getByText('Prueba Cinco', { exact: true })).toBeVisible()
+  await expect(page.getByText('Prueba Cinco', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: /^Calendly\s*7/ }).click()
+  await expect(page.getByRole('button', { name: 'Por revisar (7)' })).toBeVisible()
+  const cinco = page.getByTestId('conciliar-calendly').filter({ has: page.getByRole('button', { name: 'Realizada y cotizada' }) }).nth(0)
+  const nombrePrimera = await page.getByTestId('dia-visitas').first().locator('strong, span').filter({ hasText: /Prueba/ }).first().innerText()
+  await cinco.getByRole('button', { name: 'Realizada y cotizada' }).click()
+  await expect(page.getByRole('button', { name: 'Por revisar (6)' })).toBeVisible()
+  await page.getByRole('button', { name: 'Realizadas y cotizadas (1)' }).click()
+  await expect(page.getByText(nombrePrimera, { exact: true })).toBeVisible()
+  await page.screenshot({ path: path.join(evidence, '04-pestana-calendly.png') })
+
+  // Instalaciones: trabajos realizados en el mapa, con puntos pequeños y su ficha.
+  const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
+  const api = async (ruta, body) => (await page.request[body ? 'post' : 'get'](base + '/.netlify/functions/' + ruta, { headers: { Authorization: 'Bearer ' + token }, ...(body ? { data: body } : {}) })).json()
+  const crearTrabajo = async (nombre, direccion, total) => {
+    const { siguiente } = await api('get-quotes')
+    const r = await api('save-quote', { crear: true, cotNum: siguiente, nombre, email: 'trabajo@example.cl', telefono: '9 1234 5678', direccion, status: 'confirmada', repisas: [{ largo: 2.43, prof: 0.48, alto: 2, niveles: 4, unidades: 1, valor: total }], adicionales: {}, subtotal: total, iva: 0, total, instalacion: { fecha: '2026-03-10', inicio: '10:00', fin: '13:00', instalada: true } })
+    expect(r.ok).toBe(true)
+    return r.cotNum
+  }
+  const t1 = await crearTrabajo('Trabajo Ñuñoa', 'Grecia 1500, Ñuñoa', 300000)
+  await crearTrabajo('Trabajo Las Condes', 'Apoquindo 3000, Las Condes', 500000)
+  // La ubicacion exacta como la deja "📍 Ubicar en el mapa" (en local no hay clave de Google).
+  expect((await api('planilla', { accion: 'ubicaciones', ubicaciones: [{ cotNum: t1, lat: -33.4559, lng: -70.6012, comuna: 'Ñuñoa' }] })).guardadas).toBe(1)
+  await page.getByRole('navigation').getByRole('button', { name: 'Instalaciones', exact: true }).click()
+  await page.getByRole('button', { name: '🗺 Mapa' }).click()
+  const mapaInst = page.getByTestId('mapa-instalaciones')
+  await expect(mapaInst).toContainText('1 en su dirección')
+  await expect(mapaInst.getByTestId('instalaciones-comunas').locator('tr', { hasText: 'Las Condes' })).toContainText('$500.000')
+  const exacto = mapaInst.locator('path.leaflet-interactive[fill="' + '#A86E14' + '"]')
+  await expect(exacto).toHaveCount(1)
+  await exacto.click({ force: true })
+  await expect(page.locator('.leaflet-popup-content')).toContainText('Trabajo Ñuñoa')
+  await page.waitForTimeout(800)
+  await mapaInst.screenshot({ path: path.join(evidence, '05-instalaciones.png') })
 
   expect(errors).toEqual([])
   console.log(JSON.stringify({ ok: true, evidence }))

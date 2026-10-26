@@ -26,7 +26,7 @@ export default function MapaVisitas({ visitas, estadoDe, numerar = false, descar
   useEffect(() => {
     mapa.current = crearMapa(contenedor.current)
     capa.current = L.layerGroup().addTo(mapa.current)
-    return () => { mapa.current.remove(); mapa.current = null }
+    return () => { mapa.current.stop(); mapa.current.off(); mapa.current.remove(); mapa.current = null }
   }, [])
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function MapaVisitas({ visitas, estadoDe, numerar = false, descar
       marca.addTo(capa.current)
     }
     const puntos = dibujables.map(d => [d.punto.lat, d.punto.lng])
-    if (puntos.length) mapa.current.fitBounds(puntos, { padding: [40, 40], maxZoom: 15 })
+    if (puntos.length) mapa.current.fitBounds(puntos, { padding: [40, 40], maxZoom: 15, animate: false })
   }, [JSON.stringify(dibujables.map(d => [d.v.id, d.punto.lat, d.punto.lng, estadoDe(d.v)]))])
 
   async function descargar() {

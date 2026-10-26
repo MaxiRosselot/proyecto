@@ -1,8 +1,10 @@
 // netlify/functions/importar-visitas.mjs — admin. Visitas antiguas (Calendly) a la hoja "Visitas".
 //   POST { accion: 'simular', csv }  → cuantas entran, repetidas, por estado (no escribe nada)
 //   POST { accion: 'importar', csv } → las agrega a la hoja (las repetidas no)
-//   POST { accion: 'ubicar' }        → busca comuna y coordenadas de hasta 60 visitas de la hoja que no
-//                                      las tienen (con GOOGLE_MAPS_SERVER_KEY); se llama hasta que no queden.
+//   POST { accion: 'guardar-ubicaciones', ubicaciones: [{ id, lat, lng, comuna }] }
+//                                    → guarda las coordenadas que busco el panel (Google Places, con la
+//                                      clave del navegador): en la hoja (L–N) o en el evento del calendario.
+//   POST { accion: 'ubicar' }        → lo mismo, pero buscadas en el servidor (GOOGLE_MAPS_SERVER_KEY).
 // Reglas en lib/importar-calendly.mjs.
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
@@ -10,6 +12,7 @@ import { almacenSheets, listarCotizaciones } from './lib/cotizaciones.mjs'
 import { geocodificar } from './lib/geocodificar.mjs'
 import { ENCABEZADOS_VISITAS, leerCSV, visitasDesdeCalendly } from './lib/importar-calendly.mjs'
 import { comunaAproximada } from './lib/zonas.mjs'
+import { guardarCoordenadas } from './lib/visitas.mjs'
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': AUTH_HEADERS, 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const responder = (statusCode, body) => ({ statusCode, headers: corsHeaders, body: JSON.stringify(body) })
@@ -29,6 +32,22 @@ export async function handler(event) {
     const sheets = google.sheets({ version: 'v4', auth })
     const spreadsheetId = process.env.GOOGLE_SHEET_ID
     const filas = (await sheets.spreadsheets.values.get({ spreadsheetId, range: `${HOJA}!A:N` }).catch(() => ({ data: { values: [] } }))).data.values || []
+
+    if (datos.accion === 'guardar-ubicaciones') {
+      const porId = new Map(filas.map((f, i) => [f[0], i + 1]))
+      const enHoja = [], enCalendario = []
+      for (const u of (Array.isArray(datos.ubicaciones) ? datos.ubicaciones : []).slice(0, 200)) {
+        const sinResultado = u.lat === '-'
+        if (!sinResultado && !(Number.isFinite(Number(u.lat)) && Number.isFinite(Number(u.lng)))) continue
+        const fila = porId.get(u.id)
+        if (fila && filas[fila - 1][10]) enHoja.push({ range: `${HOJA}!L${fila}:N${fila}`, values: [[String(u.comuna || filas[fila - 1][11] || '').slice(0, 60), sinResultado ? '-' : Number(u.lat), sinResultado ? '-' : Number(u.lng)]] })
+        else if (!sinResultado) enCalendario.push(u)
+      }
+      if (enHoja.length) await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data: enHoja } })
+      const calendar = google.calendar({ version: 'v3', auth })
+      for (const u of enCalendario) await guardarCoordenadas(calendar, process.env.CALENDAR_ID, u.id, { lat: Number(u.lat), lng: Number(u.lng) }).catch(e => console.warn('ubicacion de visita no guardada', u.id, e.message))
+      return responder(200, { ok: true, guardadas: enHoja.length + enCalendario.length })
+    }
 
     if (datos.accion === 'ubicar') {
       if (!process.env.GOOGLE_MAPS_SERVER_KEY) return responder(400, { ok: false, error: 'Falta GOOGLE_MAPS_SERVER_KEY en Netlify (clave de Google con Geocoding API).' })

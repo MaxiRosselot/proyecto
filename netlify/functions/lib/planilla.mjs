@@ -135,3 +135,22 @@ export async function cancelarInstalacion(almacen, calendar, calendarId, { cotNu
   await actualizarCotizacion(almacen, { cotNum: cotizacion.cotNum, status: 'rechazada', motivoRechazo: 'Canceló', ...(instalacion ? { instalacion } : {}) })
   return { ok: true }
 }
+
+// Coordenadas y comuna de las instalaciones (para el mapa de Admin → Instalaciones), que el panel
+// busca con Google Places. Van dentro de "instalacion" (columna R), todas en una sola escritura.
+// ubicaciones: [{ cotNum, lat, lng, comuna }]; lat '-' = se busco y no se encontro.
+export async function guardarUbicaciones(almacen, ubicaciones = []) {
+  const filas = await almacen.leerFilas()
+  const cambios = []
+  for (const u of ubicaciones.slice(0, 200)) {
+    const f = filas.find(x => String(x.valores?.[0] ?? '').trim() === String(u.cotNum))
+    if (!f) continue
+    let inst = {}
+    try { inst = JSON.parse(f.valores[17] || '{}') || {} } catch { continue }
+    const lat = u.lat === '-' ? '-' : Number(u.lat), lng = u.lng === '-' ? '-' : Number(u.lng)
+    if (lat !== '-' && !(Number.isFinite(lat) && Number.isFinite(lng))) continue
+    cambios.push({ n: f.fila, columna: 'R', valor: JSON.stringify({ ...inst, lat, lng, ...(u.comuna ? { comuna: texto(u.comuna, 60) } : {}) }) })
+  }
+  await almacen.actualizarCeldas(cambios)
+  return { guardadas: cambios.length }
+}

@@ -21,18 +21,20 @@ test('lee el CSV de Calendly (comillas, comas y saltos de linea)', () => {
 })
 
 test('arma las filas de la hoja Visitas: estado, telefono, comuna y sin repetir', () => {
-  const cotizaciones = [{ nombre: 'Otro Nombre', email: 'ANA@example.cl', telefono: '' }]
+  const cotizaciones = [{ cotNum: 1450, nombre: 'Otro Nombre', email: 'ANA@example.cl', telefono: '' }]
   const { nuevas, resumen } = visitasDesdeCalendly(leerCSV(CSV), { cotizaciones, existentes: new Set(['calendly-u3']), ahora: new Date('2026-10-26T12:00:00Z') })
-  assert.deepEqual(resumen.porEstado, { realizada_cotizada: 1, realizada: 1, agendada: 1 })
+  assert.deepEqual(resumen.porEstado, { por_revisar: 2, agendada: 1 })
+  assert.equal(resumen.conCotizacion, 1)
   assert.equal(resumen.repetidas, 1)
   const [ana, pedro, futura] = nuevas
-  assert.deepEqual(ana.slice(0, 8), ['calendly-u1', 'Ana Soto', '2025-03-08', '10:00', 'ana@example.cl', '+56 9 1111 2222', 'Grecia 1500, depto 302, Ñuñoa', 'realizada_cotizada'])
+  assert.deepEqual(ana.slice(0, 8), ['calendly-u1', 'Ana Soto', '2025-03-08', '10:00', 'ana@example.cl', '+56 9 1111 2222', 'Grecia 1500, depto 302, Ñuñoa', 'por_revisar'])
+  assert.match(ana[8], /Tiene cotización N° 1450/) // pista, sin cambiar el estado
   assert.deepEqual([ana[10], ana[11]], ['Calendly', 'Ñuñoa'])
-  assert.deepEqual([pedro[5], pedro[7], pedro[11]], ['+56 9 3333 4444', 'realizada', 'Vitacura']) // telefono de la pregunta 2, "viracura"
+  assert.deepEqual([pedro[5], pedro[7], pedro[11]], ['+56 9 3333 4444', 'por_revisar', 'Vitacura']) // telefono de la pregunta 2, "viracura"
   assert.equal(futura[7], 'agendada')
-  // El no-show se marca cancelada.
+  // El no-show queda por revisar, con la nota.
   const otra = visitasDesdeCalendly(leerCSV(CSV), { ahora: new Date('2026-10-26T12:00:00Z') }).nuevas.find(v => v[0] === 'calendly-u3')
-  assert.equal(otra[7], 'cancelada')
+  assert.equal(otra[7], 'por_revisar')
   assert.match(otra[8], /No se presentó/)
 })
 

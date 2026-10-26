@@ -4,6 +4,7 @@ import 'leaflet.heat'
 import { C, VISIT_STATUS_LABELS, apiFetch, styles } from './utils.js'
 import { ZONAS, zonaDe } from '../../netlify/functions/lib/zonas.mjs'
 import { comunaDeVisita, crearMapa, descargarMapa, separar, ubicar, useCentrosComunas } from './mapaComun.js'
+import { CLAVE_MAPS, buscarUbicaciones } from '../googlePlaces.js'
 
 // Admin → Visitas → 📊 Concentración: donde se concentran las visitas (todas: las del calendario y
 // las antiguas importadas de Calendly a la hoja Visitas), por comuna y por sector, con filtros.
@@ -13,7 +14,7 @@ const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 const PERIODOS = [['todo', 'Todo'], ['12', 'Últimos 12 meses'], ['6', 'Últimos 6 meses'], ['3', 'Últimos 3 meses'], ['proximas', 'Próximas']]
 const ESTADOS = [
   ['todas', 'Todas'], ['potenciales', 'Realizadas sin cotizar (potenciales)'], ['cotizadas', 'Realizadas y cotizadas'],
-  ['realizadas', 'Realizadas (con y sin cotizar)'], ['vigentes', 'Agendadas / confirmadas'], ['cancelada', 'Canceladas'],
+  ['realizadas', 'Realizadas (con y sin cotizar)'], ['vigentes', 'Agendadas / confirmadas'], ['cancelada', 'Canceladas'], ['por_revisar', 'Calendly por revisar'],
 ]
 const MODOS = [['calor', '🔥 Calor'], ['comunas', '⚪ Por comuna'], ['sectores', '🧭 Por sector']]
 const ZONA_CL = 'America/Santiago'
@@ -79,7 +80,7 @@ function Barras({ titulo, datos }) {
 }
 
 // Importar el CSV de Calendly (Events → Export) y ubicarlas en el mapa.
-function ImportarCalendly({ onListo }) {
+function ImportarCalendly({ visitas, onListo }) {
   const [archivo, setArchivo] = useState(null)
   const [vista, setVista] = useState(null)
   const [estado, setEstado] = useState('')
@@ -97,6 +98,20 @@ function ImportarCalendly({ onListo }) {
     setEstado('ubicar'); setError('')
     let total = 0, sin = 0
     try {
+      // Con la clave del navegador (Places): se buscan aqui y se guardan de a 50.
+      if (CLAVE_MAPS) {
+        const faltan = visitas.filter(v => !Number.isFinite(v.lat) && !v.ubicacionIntentada && v.direccion)
+          .map(v => ({ id: v.id, texto: [v.direccion, v.comuna, 'Región Metropolitana, Chile'].filter(Boolean).join(', ') }))
+        for (let i = 0; i < faltan.length; i += 50) {
+          const tanda = await buscarUbicaciones(faltan.slice(i, i + 50))
+          const r = await apiFetch('/.netlify/functions/importar-visitas', { method: 'POST', body: JSON.stringify({ accion: 'guardar-ubicaciones', ubicaciones: tanda }) })
+          if (!r.ok) throw new Error(r.error)
+          total += tanda.filter(u => u.lat !== '-').length; sin += tanda.filter(u => u.lat === '-').length
+          setVista(v => ({ ...(v || {}), ubicadas: total, sinUbicar: sin, quedan: faltan.length - i - tanda.length }))
+        }
+        if (!faltan.length) setVista(v => ({ ...(v || {}), ubicadas: 0, sinUbicar: 0, quedan: 0 }))
+        onListo(); return
+      }
       for (let vuelta = 0; vuelta < 30; vuelta++) {
         const r = await apiFetch('/.netlify/functions/importar-visitas', { method: 'POST', body: JSON.stringify({ accion: 'ubicar' }) })
         if (!r.ok) throw new Error(r.error)
@@ -117,7 +132,7 @@ function ImportarCalendly({ onListo }) {
           onChange={async e => { const f = e.target.files?.[0]; setVista(null); setArchivo(f ? { nombre: f.name, texto: await f.text() } : null) }} style={{ fontSize: 12 }} />
         <button type="button" style={styles.btnSecondary} disabled={!archivo || !!estado} onClick={() => enviar('simular')}>{estado === 'simular' ? 'Revisando…' : 'Revisar'}</button>
         <button type="button" style={styles.btnPrimary} disabled={!archivo || !vista?.nuevas || !!estado || vista?.importadas != null} onClick={() => enviar('importar')}>{estado === 'importar' ? 'Importando…' : `Importar ${vista?.nuevas || ''}`}</button>
-        <button type="button" style={styles.btnSecondary} disabled={!!estado} onClick={ubicar} title="Busca la ubicación de las visitas importadas (necesita GOOGLE_MAPS_SERVER_KEY en Netlify)">{estado === 'ubicar' ? 'Ubicando…' : '📍 Ubicar en el mapa'}</button>
+        <button type="button" style={styles.btnSecondary} disabled={!!estado} onClick={ubicar} title="Busca en Google la ubicación de las visitas sin coordenadas y la guarda">{estado === 'ubicar' ? 'Ubicando…' : '📍 Ubicar en el mapa'}</button>
       </div>
       {vista && (
         <div role="status" style={{ fontSize: 12.5, marginTop: 10, display: 'grid', gap: 3 }}>
@@ -178,7 +193,7 @@ export default function Concentracion({ visitas, estadoDe, onRecargar }) {
   useEffect(() => {
     mapa.current = crearMapa(contenedor.current)
     capa.current = L.layerGroup().addTo(mapa.current)
-    return () => { mapa.current.remove(); mapa.current = null }
+    return () => { mapa.current.stop(); mapa.current.off(); mapa.current.remove(); mapa.current = null }
   }, [])
 
   // El mapa segun el modo: calor (cada visita), burbujas por comuna o por sector.
@@ -202,7 +217,7 @@ export default function Concentracion({ visitas, estadoDe, onRecargar }) {
         limites.push([lat, lng])
       }
     }
-    if (limites.length) mapa.current.fitBounds(limites, { padding: [40, 40], maxZoom: 13 })
+    if (limites.length) mapa.current.fitBounds(limites, { padding: [40, 40], maxZoom: 13, animate: false })
   }, [filtradas, centros, modo, porComuna, porSector])
 
   const realizadas = filtradas.filter(v => ['realizada', 'realizada_cotizada'].includes(estadoDe(v))).length
@@ -245,7 +260,7 @@ export default function Concentracion({ visitas, estadoDe, onRecargar }) {
       </div>
       <Tabla titulo="Por sector" filas={porSector} testid="tabla-sectores" />
       <Tabla titulo="Por comuna" filas={porComuna} testid="tabla-comunas" />
-      <ImportarCalendly onListo={onRecargar} />
+      <ImportarCalendly visitas={visitas} onListo={onRecargar} />
     </div>
   )
 }
