@@ -226,6 +226,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   // Proyecto que se arma en el configurador 3D. Sus vistas van en la pagina 1 del PDF.
   // Mantener el plano junto al borrador evita perderlo al cambiar entre móvil y escritorio.
   const [project3d, setProject3d] = useState(saved?.project3d || null)
+  // Cuantos soportes tenia el modelo la ultima vez (ver el efecto de soportes3d, mas abajo).
+  const soportesPrevios = useRef(saved?.project3d?.soportes?.length ?? 0)
   const frame3dRef = useRef(null)
   const [generating, setGenerating] = useState(false)
   const [pdfUrl, setPdfUrl]         = useState(null)
@@ -254,6 +256,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setRepisas(q.repisas?.length ? q.repisas.map(filaDesdeProducto) : [repisaPorDefecto(tablaPrecios)])
     setAdicionales({ ...ADICIONALES_INICIALES, ...(q.adicionales || {}) })
     setProject3d(q.proyecto3d || null)
+    soportesPrevios.current = q.proyecto3d?.soportes?.length ?? 0
     setCotGuardada({ cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
     setTotalInfo({ subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
@@ -285,6 +288,15 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     saveState({ mode, manualCliente, repisas, adicionales, totalInfo, project3d, cotGuardada })
   }, [mode, manualCliente, repisas, adicionales, totalInfo, project3d, cotGuardada])
 
+  // Soportes de bici/esquí puestos en el 3D → servicio "Soporte de bicicleta/ski". Solo cuando cambia
+  // la cantidad en el modelo: si se ajusta a mano, no se pisa al abrir la cotización.
+  const soportes3d = project3d?.soportes?.length ?? 0
+  useEffect(() => {
+    if (soportes3d === soportesPrevios.current) return
+    soportesPrevios.current = soportes3d
+    setAdicionales(prev => ({ ...prev, qty_bici: soportes3d }))
+  }, [soportes3d])
+
   function resetCotizador() {
     setMode('visita')
     setManualCliente({ nombre: '', email: '', celular: '', direccion: '' })
@@ -293,6 +305,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setAdicionales(ADICIONALES_INICIALES)
     setTotalInfo({ subtotal: 0, iva: 0, total: 0 })
     setProject3d(null)
+    soportesPrevios.current = 0
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
     setSelectedVisit(null); saveState({})
   }
