@@ -4,6 +4,7 @@ import { VISITA_VIGENTE, horarioVisita, mensajeConfirmarVisita, mensajeVisitaRea
 import CopiarMensaje from './CopiarMensaje.jsx'
 // El mapa (Leaflet) se carga solo al abrirlo.
 const MapaVisitas = lazy(() => import('./MapaVisitas.jsx'))
+const Concentracion = lazy(() => import('./Concentracion.jsx'))
 
 function Badge({ status }) {
   const s = VISIT_STATUS_LABELS[status] || VISIT_STATUS_LABELS.agendada
@@ -112,6 +113,8 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [copiado, setCopiado]   = useState('')
   const [reagendando, setReagendando] = useState(null)
   const [verMapa, setVerMapa] = useState(false)
+  const [vista, setVista] = useState('lista') // lista | concentracion
+  const [mapaDia, setMapaDia] = useState('') // el dia (de las proximas) con su mapa abierto
   const [movida, setMovida] = useState(null) // la visita recien reagendada (cambia de dia en la lista)
 
   const load = useCallback(async () => {
@@ -234,11 +237,22 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
             style={{ ...styles.input, width: 180, padding: '7px 12px', fontSize: 13 }} />
-          <button onClick={() => setVerMapa(m => !m)} style={verMapa ? { ...styles.btnSecondary, borderColor: C.orange, color: C.orangeDark } : styles.btnSecondary} aria-pressed={verMapa}>🗺 {verMapa ? 'Ocultar mapa' : 'Mapa'}</button>
+          <button onClick={() => setVista(v => (v === 'lista' ? 'concentracion' : 'lista'))} aria-pressed={vista === 'concentracion'}
+            style={vista === 'concentracion' ? { ...styles.btnSecondary, borderColor: C.orange, color: C.orangeDark } : styles.btnSecondary}>
+            {vista === 'concentracion' ? '← Volver a la lista' : '📊 Concentración'}
+          </button>
+          {vista === 'lista' && <button onClick={() => setVerMapa(m => !m)} style={verMapa ? { ...styles.btnSecondary, borderColor: C.orange, color: C.orangeDark } : styles.btnSecondary} aria-pressed={verMapa}>🗺 {verMapa ? 'Ocultar mapa' : 'Mapa'}</button>}
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
 
+      {vista === 'concentracion' && (loading && !visits.length ? <div style={styles.empty}>Cargando visitas...</div> : (
+        <Suspense fallback={<div style={styles.empty}>Cargando...</div>}>
+          <Concentracion visitas={visits} estadoDe={getStatus} onRecargar={load} />
+        </Suspense>
+      ))}
+
+      {vista === 'lista' && <>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {TABS.map(t => (
@@ -297,6 +311,13 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                 {group.visits.length} {group.visits.length === 1 ? 'visita' : 'visitas'}
               </span>
               {tab === 'agendadas' && (
+                <button onClick={() => setMapaDia(mapaDia === group.label ? '' : group.label)}
+                  title="Las visitas de este día en el mapa, numeradas por hora, para mandárselo a quien hace las visitas"
+                  style={{ ...styles.btnSecondary, padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', ...(mapaDia === group.label ? { borderColor: C.orange, color: C.orangeDark } : {}) }}>
+                  🗺 {mapaDia === group.label ? 'Ocultar mapa' : 'Mapa del día'}
+                </button>
+              )}
+              {tab === 'agendadas' && (
                 <button onClick={() => copiarDia(group, confirmadas)} disabled={!confirmadas.length}
                   title="Copia las visitas confirmadas de este día, en orden y con todos sus datos, para mandarlas por WhatsApp"
                   style={{ ...styles.btnPrimary, padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap', opacity: confirmadas.length ? 1 : .45, cursor: confirmadas.length ? 'pointer' : 'default' }}>
@@ -304,6 +325,13 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                 </button>
               )}
             </div>
+
+            {tab === 'agendadas' && mapaDia === group.label && (
+              <Suspense fallback={<div style={styles.empty}>Cargando mapa...</div>}>
+                <MapaVisitas visitas={group.visits} estadoDe={getStatus} numerar alto="min(460px, 60vh)"
+                  descargable={`Visitas ${group.visits[0]?.start?.slice(0, 10) || ''}`} />
+              </Suspense>
+            )}
 
             {/* Tarjetas del grupo */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -422,6 +450,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
           )
         })}
       </div>
+      </>}
     </div>
   )
 }

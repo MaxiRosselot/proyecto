@@ -50,12 +50,13 @@ export async function handler(event) {
     const rowData = [visitId, nombre || '', fecha || '', hora || '', email || '', celular || '', direccion || '', status, notas || '', updatedAt]
 
     if (rowIndex > 0) {
-      // Actualizar fila existente
+      // Fila existente: solo estado, notas y fecha de actualizacion. El resto (fecha, hora,
+      // direccion, origen, coordenadas) no se toca: las visitas importadas viven en la hoja.
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!A${rowIndex}:J${rowIndex}`,
+        range: `${SHEET_NAME}!H${rowIndex}:J${rowIndex}`,
         valueInputOption: 'RAW',
-        requestBody: { values: [rowData] },
+        requestBody: { values: [[status, notas || '', updatedAt]] },
       })
     } else {
       // Si la hoja está vacía, agregar encabezado primero

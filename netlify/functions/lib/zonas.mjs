@@ -28,3 +28,26 @@ export function comunaDe(texto) {
   for (const [c, , original] of PORZONA) if (t.includes(` ${c} `)) return original
   return null
 }
+
+// Como comunaDe, pero perdona un error de tipeo en comunas de 6 letras o mas ("Viracura", "Providecia")
+// y entiende "Stgo". Para direcciones escritas a mano (visitas antiguas de Calendly).
+const ALIAS = { stgo: 'Santiago', 'stgo centro': 'Santiago', 'est central': 'Estación Central', 'pac': 'Pedro Aguirre Cerda' }
+function distancia(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return 2
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)])
+  for (let j = 1; j <= b.length; j++) d[0][j] = j
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+  return d[a.length][b.length]
+}
+export function comunaAproximada(texto) {
+  const exacta = comunaDe(texto)
+  if (exacta) return exacta
+  const palabras = normalizar(texto).split(' ')
+  for (const [alias, comuna] of Object.entries(ALIAS)) if (` ${palabras.join(' ')} `.includes(` ${alias} `)) return comuna
+  for (const [c, , original] of PORZONA) {
+    if (c.replace(/ /g, '').length < 6) continue
+    const n = c.split(' ').length
+    for (let i = 0; i + n <= palabras.length; i++) if (distancia(palabras.slice(i, i + n).join(' '), c) <= 1) return original
+  }
+  return null
+}

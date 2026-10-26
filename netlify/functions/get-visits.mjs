@@ -4,6 +4,8 @@ import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { geocodificar } from './lib/geocodificar.mjs'
 import { guardarCoordenadas } from './lib/visitas.mjs'
+import { visitaDesdeFila } from './lib/importar-calendly.mjs'
+import { horaLocalAUTC } from './lib/horarios.mjs'
 
 // Para el mapa: por llamada se ubican a lo mas estas visitas sin coordenadas (quedan guardadas).
 const MAX_GEOCODIFICAR = 15
@@ -52,7 +54,7 @@ export async function handler(event) {
       }),
       sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: 'Visitas!A:H',
+        range: 'Visitas!A:N',
       }).catch(() => ({ data: { values: [] } })),
     ])
 
@@ -62,7 +64,7 @@ export async function handler(event) {
       if (row[0] && row[7]) statusMap[row[0]] = row[7]
     }
 
-    const visits = (list.data.items || []).map(ev => {
+    const calendario = (list.data.items || []).map(ev => {
       const desc = ev.description || ''
       const get = (label) => {
         const m = desc.match(new RegExp(`${label}:\\s*(.+)`))
@@ -86,9 +88,16 @@ export async function handler(event) {
       }
     })
 
+    // Las visitas que viven solo en la hoja (importadas de Calendly: columna Origen), con su fecha y estado.
+    const enCalendario = new Set(calendario.map(v => v.id))
+    const deLaHoja = (sheetRes.data.values || []).slice(1)
+      .filter(f => f[10] && !enCalendario.has(f[0]))
+      .map(f => visitaDesdeFila(f, horaLocalAUTC)).filter(Boolean)
+    const visits = [...calendario, ...deLaHoja]
+
     // Con GOOGLE_MAPS_SERVER_KEY se ubican las que no tienen coordenadas (las mas recientes primero).
     if (process.env.GOOGLE_MAPS_SERVER_KEY) {
-      const sinUbicar = visits.filter(v => v.lat == null && (v.direccion || v.comuna)).reverse().slice(0, MAX_GEOCODIFICAR)
+      const sinUbicar = calendario.filter(v => v.lat == null && (v.direccion || v.comuna)).reverse().slice(0, MAX_GEOCODIFICAR)
       await Promise.all(sinUbicar.map(async v => {
         const punto = await geocodificar(v.direccion || v.comuna).catch(() => null)
         if (!punto) return

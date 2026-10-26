@@ -39,6 +39,7 @@ import { ejecutarSeguimiento } from '../../netlify/functions/lib/seguimiento.mjs
 import { atenderTelegramAdmin, configTelegram, enviarTelegram } from '../../netlify/functions/lib/telegram.mjs'
 import { atenderUpdate, conectarBot, enviarMananaDelBot, rolesTelegram, secretoWebhook } from '../../netlify/functions/lib/bot.mjs'
 import { depsTelegram } from '../../netlify/functions/lib/bot-servicios.mjs'
+import { leerCSV, visitaDesdeFila, visitasDesdeCalendly } from '../../netlify/functions/lib/importar-calendly.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = path.join(here, 'data.json')
@@ -278,10 +279,26 @@ const routes = {
     saveData(db)
     return { ok: true, fila: updated, local: true }
   },
+  // Las del calendario (db.visits) y las que viven solo en la hoja Visitas (db.visitasHoja, importadas).
   'get-visits': () => ({
     ok: true,
-    visits: db.visits.map(v => ({ ...v, status: db.visitStatuses[v.id] || v.status || 'agendada', comuna: v.shared?.comuna || '', ...(v.shared?.lat ? { lat: Number(v.shared.lat), lng: Number(v.shared.lng) } : {}) })),
+    visits: [
+      ...db.visits.map(v => ({ ...v, status: db.visitStatuses[v.id] || v.status || 'agendada', comuna: v.shared?.comuna || '', ...(v.shared?.lat ? { lat: Number(v.shared.lat), lng: Number(v.shared.lng) } : {}) })),
+      ...(db.visitasHoja || []).map(f => visitaDesdeFila(f, horaLocalAUTC)).filter(Boolean).map(v => ({ ...v, status: db.visitStatuses[v.id] || v.status })),
+    ],
   }),
+  // Mismo contrato que netlify/functions/importar-visitas.mjs (sin Google: "ubicar" no hay clave local).
+  'importar-visitas': async body => {
+    const filas = (db.visitasHoja ||= [])
+    if (body.accion === 'ubicar') return { status: 400, ok: false, error: 'Falta GOOGLE_MAPS_SERVER_KEY en Netlify (clave de Google con Geocoding API).' }
+    const csv = leerCSV(body.csv || '')
+    if (!csv.length || !('Invitee UUID' in csv[0] || 'Event UUID' in csv[0])) return { status: 400, ok: false, error: 'Ese archivo no parece un export de Calendly (Events → Export).' }
+    const { quotes } = await listarCotizaciones(cotizaciones)
+    const { nuevas, resumen } = visitasDesdeCalendly(csv, { cotizaciones: quotes, existentes: new Set(filas.map(f => f[0])) })
+    if (body.accion !== 'importar' || !nuevas.length) return { ok: true, resumen }
+    filas.push(...nuevas); saveData(db)
+    return { ok: true, resumen, importadas: nuevas.length }
+  },
   'get-quotes': async (_body, params) => {
     if (params.get('siguiente')) return { ok: true, siguiente: await siguienteDisponible(cotizaciones) }
     if (params.get('cotNum')) {
