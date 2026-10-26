@@ -1,7 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { Suspense, lazy, useEffect, useState, useCallback } from 'react'
 import { VISIT_STATUS_LABELS, C, apiFetch, fmtDate, fmtTime, styles } from './utils.js'
 import { VISITA_VIGENTE, horarioVisita, mensajeConfirmarVisita, mensajeVisitaReagendada, textoVisitas } from './listaVisitas.js'
 import CopiarMensaje from './CopiarMensaje.jsx'
+// El mapa (Leaflet) se carga solo al abrirlo.
+const MapaVisitas = lazy(() => import('./MapaVisitas.jsx'))
 
 function Badge({ status }) {
   const s = VISIT_STATUS_LABELS[status] || VISIT_STATUS_LABELS.agendada
@@ -109,6 +111,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
   const [buscar, setBuscar]     = useState('')
   const [copiado, setCopiado]   = useState('')
   const [reagendando, setReagendando] = useState(null)
+  const [verMapa, setVerMapa] = useState(false)
   const [movida, setMovida] = useState(null) // la visita recien reagendada (cambia de dia en la lista)
 
   const load = useCallback(async () => {
@@ -231,6 +234,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar por nombre..."
             style={{ ...styles.input, width: 180, padding: '7px 12px', fontSize: 13 }} />
+          <button onClick={() => setVerMapa(m => !m)} style={verMapa ? { ...styles.btnSecondary, borderColor: C.orange, color: C.orangeDark } : styles.btnSecondary} aria-pressed={verMapa}>🗺 {verMapa ? 'Ocultar mapa' : 'Mapa'}</button>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
@@ -255,6 +259,12 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
           </button>
         ))}
       </div>
+
+      {verMapa && !loading && (
+        <Suspense fallback={<div style={styles.empty}>Cargando mapa...</div>}>
+          <MapaVisitas visitas={list} estadoDe={getStatus} />
+        </Suspense>
+      )}
 
       {loading && <div style={styles.empty}>Cargando visitas...</div>}
       {error   && <div style={styles.errorBox}>{error}</div>}

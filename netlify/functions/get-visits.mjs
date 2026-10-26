@@ -2,6 +2,11 @@
 // Devuelve todas las visitas agendadas desde Google Calendar
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
+import { geocodificar } from './lib/geocodificar.mjs'
+import { guardarCoordenadas } from './lib/visitas.mjs'
+
+// Para el mapa: por llamada se ubican a lo mas estas visitas sin coordenadas (quedan guardadas).
+const MAX_GEOCODIFICAR = 15
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,10 +78,24 @@ export async function handler(event) {
         direccion: get('Dirección'),
         notas: get('Notas') === '(sin notas)' ? '' : get('Notas'),
         slotKey: ev.extendedProperties?.shared?.slot_key || '',
+        // Para el mapa: comuna y coordenadas (del autocompletado de /visita o ubicadas despues).
+        comuna: ev.extendedProperties?.shared?.comuna || '',
+        ...(ev.extendedProperties?.shared?.lat ? { lat: Number(ev.extendedProperties.shared.lat), lng: Number(ev.extendedProperties.shared.lng) } : {}),
         nombre: ev.summary?.match(/Visita — (.+?) \(/)?.[1] || ev.summary || '',
         status: statusMap[ev.id] || 'agendada',
       }
     })
+
+    // Con GOOGLE_MAPS_SERVER_KEY se ubican las que no tienen coordenadas (las mas recientes primero).
+    if (process.env.GOOGLE_MAPS_SERVER_KEY) {
+      const sinUbicar = visits.filter(v => v.lat == null && (v.direccion || v.comuna)).reverse().slice(0, MAX_GEOCODIFICAR)
+      await Promise.all(sinUbicar.map(async v => {
+        const punto = await geocodificar(v.direccion || v.comuna).catch(() => null)
+        if (!punto) return
+        Object.assign(v, punto)
+        await guardarCoordenadas(calendar, process.env.CALENDAR_ID, v.id, punto).catch(e => console.warn('get-visits: coordenadas no guardadas', e.message))
+      }))
+    }
 
     return {
       statusCode: 200,

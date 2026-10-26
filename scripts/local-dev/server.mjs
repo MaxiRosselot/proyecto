@@ -280,7 +280,7 @@ const routes = {
   },
   'get-visits': () => ({
     ok: true,
-    visits: db.visits.map(v => ({ ...v, status: db.visitStatuses[v.id] || v.status || 'agendada' })),
+    visits: db.visits.map(v => ({ ...v, status: db.visitStatuses[v.id] || v.status || 'agendada', comuna: v.shared?.comuna || '', ...(v.shared?.lat ? { lat: Number(v.shared.lat), lng: Number(v.shared.lng) } : {}) })),
   }),
   'get-quotes': async (_body, params) => {
     if (params.get('siguiente')) return { ok: true, siguiente: await siguienteDisponible(cotizaciones) }

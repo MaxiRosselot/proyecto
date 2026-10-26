@@ -12,6 +12,7 @@ import { rolesTelegram } from './bot.mjs'
 import { configTelegram, llamarTelegram } from './telegram.mjs'
 import { comunaDe } from './zonas.mjs'
 import { fijarHoraVisita, guardarCoordenadas } from './visitas.mjs'
+import { geocodificar } from './geocodificar.mjs'
 
 export const CARPETA_FOTOS_INSTALACIONES = 'Fotos instalaciones Don Maxi'
 const MARCA_FOTO_VENTA = 'fotoVentaDonMaxi'
@@ -53,16 +54,6 @@ export function fotosVentaDrive(drive) {
       return { datos: Buffer.from(r.data), tipo: meta.data.mimeType, titulo: meta.data.appProperties.titulo || 'Bodega' }
     },
   }
-}
-
-// Coordenadas de una direccion escrita (para la ruta de visitas antiguas o sin autocompletar).
-// Con GOOGLE_MAPS_SERVER_KEY (Geocoding API); sin ella, la ruta ordena esas visitas por comuna.
-export async function geocodificar(direccion, { key = process.env.GOOGLE_MAPS_SERVER_KEY, fetchImpl = fetch } = {}) {
-  if (!key || !direccion) return null
-  const q = new URLSearchParams({ address: direccion, region: 'cl', components: 'country:CL', language: 'es', key })
-  const r = await fetchImpl(`https://maps.googleapis.com/maps/api/geocode/json?${q}`).then(x => x.json()).catch(() => null)
-  const punto = r?.status === 'OK' ? r.results?.[0]?.geometry?.location : null
-  return punto ? { lat: punto.lat, lng: punto.lng } : null
 }
 
 // Todo junto para atenderUpdate / enviarMananaDelBot.
