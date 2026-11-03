@@ -20,3 +20,12 @@ test('una fila guardada vuelve igual al reabrir la cotizacion', () => {
   assert.equal(filasDeModulos([rack], [reabierta], [])[0].v, 120000)
   assert.deepEqual(filaDesdeProducto({ l: 2, p: 0.48, a: 2, n: 4, u: 1, v: 9 }, 3), { id: 'guardada-3', sourceModuleId: undefined, kind: 'shelf', modelId: undefined, label: undefined, l: 2, p: 0.48, a: 2, n: 4, u: 1, v: 9 })
 })
+
+test('los laterales extra de la esquina suman $10.000 neto cada uno y viajan a la cotizacion', () => {
+  const modulo = { sourceModuleId: 'fondo', lengthCm: 225, depthCm: 48, heightCm: 200, levels: 4, units: 1 }
+  const [base] = filasDeModulos([modulo], [], undefined)
+  const [conExtra] = filasDeModulos([{ ...modulo, lateralesExtra: 2 }], [base], undefined)
+  assert.equal(conExtra.v - base.v, 20000)
+  assert.equal(productoCotizacion(conExtra).lateralesExtra, 2)
+  assert.equal(filaDesdeProducto(productoCotizacion(conExtra), 0).lateralesExtra, 2)
+})

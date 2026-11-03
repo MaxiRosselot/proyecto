@@ -9,7 +9,7 @@ import { ErrorCotizacion, actualizarCotizacion, crearCotizacion, obtenerCotizaci
 import { normalizarDocumento } from './documentos.mjs'
 import { MARCA_EVENTO, eventoInstalacion, limpiarAdicionales, limpiarRepisas, validarHorario } from './instalaciones.mjs'
 import { mismoNombre } from './leer-ventas.mjs'
-import { totalesCotizacion } from './totales.mjs'
+import { conRecargoSabado, totalesCotizacion } from './totales.mjs'
 
 const falla = (mensaje, estado = 400) => { throw new ErrorCotizacion(estado, mensaje) }
 const texto = (v, max) => String(v ?? '').trim().slice(0, max)
@@ -77,8 +77,11 @@ export async function actualizarFila(almacen, calendar, calendarId, cotNum, camb
     if (repisas.length > 1) falla('Esta venta tiene varias repisas: edítalas en el detalle')
     repisas = [{ label: 'Repisas', ...repisas[0], unidades: 1, valor }]
   }
-  const adicionales = cambios.adicionales !== undefined ? limpiarAdicionales({ ...cotizacion.adicionales, ...cambios.adicionales }) : cotizacion.adicionales || {}
-  if (cambios.repisas !== undefined || cambios.repisasTotal !== undefined || cambios.adicionales !== undefined) {
+  let adicionales = cambios.adicionales !== undefined ? limpiarAdicionales({ ...cotizacion.adicionales, ...cambios.adicionales }) : cotizacion.adicionales || {}
+  // Mover la instalacion a un sabado (o sacarla de uno) pone o quita el recargo.
+  const cambiaDia = cambios.fecha !== undefined && cambios.fecha !== previa.fecha
+  if (cambiaDia) adicionales = conRecargoSabado(adicionales, instalacion.fecha)
+  if (cambios.repisas !== undefined || cambios.repisasTotal !== undefined || cambios.adicionales !== undefined || cambiaDia) {
     const t = totalesCotizacion(repisas, adicionales)
     Object.assign(datos, { repisas, adicionales, subtotal: t.subtotal, iva: t.iva, total: t.total })
   }

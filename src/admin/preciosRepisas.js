@@ -110,6 +110,12 @@ const PILAR_CM = 4
 
 // Precio neto de UNA repisa, o null si esa combinacion no esta en la tabla.
 // Medidas en metros, como las guarda la cotizacion.
+// Lateral que se agrega en la esquina de una L (el configurador 3D lo pone solo cuando, al pegar
+// el lateral del medio a la otra repisa, quedan mas de 120 cm hasta el siguiente). Neto, por lateral.
+export const LATERAL_EXTRA_NETO = 10000
+export const MAX_LATERALES_EXTRA = 4
+export const lateralesExtraDe = r => Math.min(MAX_LATERALES_EXTRA, Math.max(0, Math.round(Number(r?.lateralesExtra) || 0)))
+
 export function precioRepisa({ largoM, profM, altoM }, tabla = TABLA_PRECIOS) {
   return filaPrecioRepisa({ largoM, profM, altoM }, tabla)?.precio ?? null
 }

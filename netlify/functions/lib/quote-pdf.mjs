@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { CONDICIONES, MARCA, SERVICIOS, TEXTO_OFERTA } from './marca.mjs';
-import { montoDespacho, nombreServicio, porcentajeDescuento } from './totales.mjs';
+import { montoDespacho, nombreServicio, porcentajeDescuento, porcentajeRecargo } from './totales.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -38,6 +38,7 @@ function imageData(src, key) {
 export async function generateQuotePdf(data, { now = new Date(), functionsDir = join(process.env.LAMBDA_TASK_ROOT || process.cwd(), 'netlify/functions') } = {}) {
   const rows = (data.repisas || [data.repisa1, data.repisa2].filter(Boolean)).map(r => ({
     kind: r.kind, label: String(r.label || 'Rack completo').slice(0, 90), colgador: r.kind !== 'rack' && r.colgador === true,
+    lateralesExtra: r.kind === 'rack' ? 0 : Math.max(0, Math.round(Number(r.lateralesExtra) || 0)),
     largo: numeric(r.largo), prof: numeric(r.prof), alto: numeric(r.alto), niveles: numeric(r.niveles), unidades: numeric(r.unidades), valor: numeric(r.valor),
   }));
   if (rows.length > 100) throw new Error('Máximo 100 repisas por cotización');
@@ -51,7 +52,8 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   const despacho = montoDespacho(data);
   const bruto = rows.reduce((s, r) => s + r.unidades * r.valor, 0) + extras.reduce((s, r) => s + r.qty * r.price, 0) + despacho;
   const descuentoPct = porcentajeDescuento(data), descuento = Math.round(bruto * descuentoPct / 100);
-  const subtotal = bruto - descuento, iva = Math.round(subtotal * .19), total = subtotal + iva;
+  const recargoPct = porcentajeRecargo(data), recargo = Math.round((bruto - descuento) * recargoPct / 100);
+  const subtotal = bruto - descuento + recargo, iva = Math.round(subtotal * .19), total = subtotal + iva;
   const asset = name => readFileSync(join(functionsDir, 'quote-assets', name));
   const logo = asset('logo.png');
 
@@ -115,7 +117,9 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   withIcon('Repisas Don Maxi — N.º 1 en Google (', star, `${MARCA.rating} · ${MARCA.resenas} reseñas)`, L, 68.7, 9.75, C.ink, F.bold, 'center');
   // Drawings give up to 125 pt of height so a quote of about six rows still ends on page 1.
   // Una fila con titulo (rack o repisa con colgador) ocupa 13 pt mas.
-  const heading = r => r.kind === 'rack' ? `${r.label} · cajas incluidas` : r.colgador ? 'Repisa con colgador' : undefined;
+  const lateral = n => `${n} lateral${n > 1 ? 'es' : ''} extra en la esquina`
+  const heading = r => r.kind === 'rack' ? `${r.label} · cajas incluidas`
+    : r.colgador || r.lateralesExtra ? ['Repisa', r.colgador && 'con colgador', r.lateralesExtra && (r.colgador ? '· ' : 'con ') + lateral(r.lateralesExtra)].filter(Boolean).join(' ') : undefined;
   // El despacho no es parte del catalogo: si se cobra, va como una fila mas de servicios.
   const contracted = [...extras.filter(r => r.qty > 0), ...(despacho ? [{ key: 'despacho', name: 'Despacho', qty: 1, price: despacho }] : [])];
   const tableHeight = rows.reduce((h, r) => h + 23.85 + (heading(r) ? 13 : 0), 0) + contracted.length * 23.85 + (contracted.length ? SERVICES_BAND : 0);
@@ -187,10 +191,16 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   box(L, y, 357, 58.4, C.card, C.cardLine);
   label('Condiciones', 54.8, y + 10.9, 200, C.accentInk);
   text(CONDICIONES, 54.8, y + 24, 320, 8.25, C.body);
-  // Con descuento, el detalle sube dos lineas: subtotal antes del descuento, descuento y neto.
-  if (descuento) {
-    text('Subtotal', 412.5, y - 30, 80, 8.62, C.sub); text(money(bruto), 470, y - 30, 100, 8.62, C.sub, F.sans, { align: 'right' });
-    text(`Descuento ${descuentoPct}%`, 412.5, y - 15, 80, 8.62, C.green); text('-' + money(descuento), 470, y - 15, 100, 8.62, C.green, F.bold, { align: 'right' });
+  // Con descuento o recargo (sabado), el detalle sube una linea por cada uno: subtotal antes, el
+  // ajuste y el neto.
+  const ajustes = [
+    descuento && [`Descuento ${descuentoPct}%`, '-' + money(descuento), C.green],
+    recargo && [`Recargo sábado ${recargoPct}%`, '+' + money(recargo), C.sub],
+  ].filter(Boolean);
+  if (ajustes.length) {
+    const arriba = y - 15 * (ajustes.length + 1);
+    text('Subtotal', 412.5, arriba, 80, 8.62, C.sub); text(money(bruto), 470, arriba, 100, 8.62, C.sub, F.sans, { align: 'right' });
+    ajustes.forEach(([nombre, monto, color], i) => { text(nombre, 412.5, arriba + 15 * (i + 1), 80, 8.62, color); text(monto, 470, arriba + 15 * (i + 1), 100, 8.62, color, F.bold, { align: 'right' }); });
     text('Neto', 412.5, y, 80, 8.62, C.sub); text(money(subtotal), 470, y, 100, 8.62, C.sub, F.sans, { align: 'right' });
   } else {
     text('Subtotal', 412.5, y, 80, 8.62, C.sub); text(money(subtotal), 470, y, 100, 8.62, C.sub, F.sans, { align: 'right' });

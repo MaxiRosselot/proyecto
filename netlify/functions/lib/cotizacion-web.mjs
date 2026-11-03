@@ -8,7 +8,7 @@
 // Las dependencias (planilla, PDF, Drive, correo) se inyectan: en Netlify son Google, en local y
 // en los tests son falsas. La logica es la misma.
 import { avisoCotizacionCreada } from './telegram.mjs'
-import { precioRepisa } from '../../../src/admin/preciosRepisas.js'
+import { LATERAL_EXTRA_NETO, MAX_LATERALES_EXTRA, precioRepisa } from '../../../src/admin/preciosRepisas.js'
 import { actualizarCotizacion, crearCotizacion, listarCotizaciones, siguienteDisponible } from './cotizaciones.mjs'
 import { MARCA, OFERTA, TEXTO_OFERTA, WHATSAPP } from './marca.mjs'
 import { explicarErrorCorreo } from './correo.mjs'
@@ -54,7 +54,9 @@ export function validarSolicitud(body) {
     const largoCm = Number(m?.largoCm), profundidadCm = Number(m?.profundidadCm), altoCm = Number(m?.altoCm), niveles = Number(m?.niveles)
     if (!(largoCm >= 50 && largoCm <= 243.5) || !PROFUNDIDADES.includes(profundidadCm) || !ALTOS.includes(altoCm)
       || !Number.isInteger(niveles) || niveles < 1 || niveles > 6) falla('Hay un módulo con medidas inválidas')
-    return { largoCm, profundidadCm, altoCm, niveles, colgador: m?.colgador === true }
+    const lateralesExtra = Number(m?.lateralesExtra ?? 0)
+    if (!Number.isInteger(lateralesExtra) || lateralesExtra < 0 || lateralesExtra > MAX_LATERALES_EXTRA) falla('Hay un módulo con medidas inválidas')
+    return { largoCm, profundidadCm, altoCm, niveles, colgador: m?.colgador === true, lateralesExtra }
   })
 
   if (!body.proyecto3d || typeof body.proyecto3d !== 'object' || JSON.stringify(body.proyecto3d).length > 200000) falla('Falta el modelo 3D')
@@ -68,9 +70,10 @@ export function filasConPrecio(modulos, tabla) {
     const medidas = { largoM: m.largoCm / 100, profM: m.profundidadCm / 100, altoM: m.altoCm / 100 }
     const valor = precioRepisa(medidas, tabla)
     if (valor === null) falla('Alguna medida no está en nuestra tabla de precios. Escríbenos por WhatsApp y te la cotizamos al tiro.', 422)
+    const extra = m.lateralesExtra || 0
     return {
-      largo: medidas.largoM, prof: medidas.profM, alto: medidas.altoM, niveles: m.niveles, unidades: 1, valor,
-      kind: 'shelf', colgador: m.colgador, ...(m.colgador ? { label: 'Con colgador' } : {}),
+      largo: medidas.largoM, prof: medidas.profM, alto: medidas.altoM, niveles: m.niveles, unidades: 1, valor: valor + extra * LATERAL_EXTRA_NETO,
+      kind: 'shelf', colgador: m.colgador, ...(m.colgador ? { label: 'Con colgador' } : {}), ...(extra ? { lateralesExtra: extra } : {}),
     }
   })
 }

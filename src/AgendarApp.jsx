@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { disponibilidadAgenda, duracionInstalacionMin, duracionTexto } from '../netlify/functions/lib/agenda-horas.mjs'
-import { totalesCotizacion } from '../netlify/functions/lib/totales.mjs'
+import { RECARGO_SABADO_PCT, conRecargoSabado, totalesCotizacion } from '../netlify/functions/lib/totales.mjs'
 import './reserva.css'
 
 // /agendar?c=<N°>&t=<firma>: el cliente agenda su instalacion (sin pagar: el pago es al terminar y
@@ -169,7 +169,7 @@ function ElegirHora({ dias, elegida, onElegir }) {
       </div>
       {semana.dias.map(d => (
         <div key={d.fecha} className="agd-dia" data-testid="dia-agenda">
-          <div className="rsv-dia-nombre">{diaCorto(d.fecha)}<small>{numeroMes(d.fecha)}</small></div>
+          <div className="rsv-dia-nombre">{diaCorto(d.fecha)}<small>{numeroMes(d.fecha)}</small>{conRecargoSabado({}, d.fecha).recargo_pct && <small className="agd-recargo">+{RECARGO_SABADO_PCT}%</small>}</div>
           <div className="agd-horas">
             {d.horas.map(h => (
               <button key={h.inicio} type="button" className="agd-hora" aria-pressed={elegida?.fecha === d.fecha && elegida?.inicio === h.inicio}
@@ -209,7 +209,9 @@ export default function AgendarApp() {
   const isometrica = useIsometrica(cot?.proyecto3d)
   const adicionales = useMemo(() => (cot ? conElegidos(cot.adicionales, cot.servicios, elegidos) : {}), [cot, elegidos])
   const duracion = cot ? duracionInstalacionMin(cot, adicionales) : 0
-  const total = cot ? totalesCotizacion(cot.repisas, adicionales).total : 0
+  // El sabado tiene recargo: el total sigue al dia elegido (sin dia, el de la hora que ya tenia).
+  const totales = cot ? totalesCotizacion(cot.repisas, conRecargoSabado(adicionales, hora?.fecha ?? cot.instalacion?.fecha)) : null
+  const total = totales?.total ?? 0
   const dias = useMemo(() => (datos?.ocupados ? disponibilidadAgenda(datos.ocupados, duracion, new Date(), datos.horario || undefined) : []), [datos, duracion])
   // Si cambia la duracion (otro servicio), la hora elegida puede dejar de calzar.
   useEffect(() => {
@@ -300,12 +302,14 @@ export default function AgendarApp() {
       <section className="rsv-tarjeta">
         <h2><span className="rsv-paso">2</span> Elige día y hora</h2>
         <p className="rsv-sub" data-testid="agenda-duracion">Tu instalación dura aprox. <strong>{duracionTexto(duracion)}</strong>. Te mostramos solo las horas que calzan con nuestra agenda.</p>
+        {dias.some(d => conRecargoSabado({}, d.fecha).recargo_pct) && <p className="rsv-sub">Los sábados tienen un recargo de {RECARGO_SABADO_PCT}%.</p>}
         <ElegirHora dias={dias} elegida={hora} onElegir={setHora} />
       </section>
 
       {hora && (
         <section className="rsv-tarjeta">
           <div className="rsv-elegido"><div><span>Tu instalación</span><strong>{fechaLarga(hora.fecha)} · {hora.inicio} a {hora.fin}</strong></div></div>
+          {totales?.recargo > 0 && <p className="rsv-sub" data-testid="agenda-recargo">Sábado: recargo de {RECARGO_SABADO_PCT}% · total con IVA <strong>{pesos(total)}</strong></p>}
           {error && <p className="agd-aviso" role="alert">{error}</p>}
           <button type="button" className="rsv-boton" disabled={enviando} onClick={agendar}>{enviando ? 'Agendando…' : reagendando ? 'Cambiar a esta hora' : 'Agendar instalación'}</button>
         </section>

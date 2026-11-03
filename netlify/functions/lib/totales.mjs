@@ -1,9 +1,9 @@
 // Totales de una cotizacion, igual que en el PDF: repisas + servicios contratados + despacho,
 // menos el descuento si lo tiene, IVA 19%. Sin dependencias de Node: lo usan el servidor y el panel.
 //
-// El descuento, los nombres editados de los servicios y el despacho viajan dentro de "adicionales"
-// (descuento_pct, nombre_<clave>, despacho), junto a cantidades y precios: asi llegan solos al PDF,
-// a la planilla y al reabrir la cotizacion.
+// El descuento, el recargo, los nombres editados de los servicios y el despacho viajan dentro de
+// "adicionales" (descuento_pct, recargo_pct, nombre_<clave>, despacho), junto a cantidades y
+// precios: asi llegan solos al PDF, a la planilla y al reabrir la cotizacion.
 import { SERVICIOS } from './marca.mjs'
 
 export const DESCUENTO_MAX = 50
@@ -11,6 +11,22 @@ export const DESCUENTO_MAX = 50
 export function porcentajeDescuento(adicionales = {}) {
   const n = Math.round(Number(adicionales?.descuento_pct) || 0)
   return Math.min(DESCUENTO_MAX, Math.max(0, n))
+}
+
+// Instalar un sabado cuesta un 5% mas (incentivo para agendar en la semana). Se pone y se quita
+// solo segun el dia de la instalacion: al agendar, al reagendar y al cambiar la fecha en la planilla.
+export const RECARGO_SABADO_PCT = 5
+
+export function porcentajeRecargo(adicionales = {}) {
+  const n = Math.round(Number(adicionales?.recargo_pct) || 0)
+  return Math.min(DESCUENTO_MAX, Math.max(0, n))
+}
+
+const esSabado = fecha => /^\d{4}-\d{2}-\d{2}$/.test(fecha || '') && new Date(fecha + 'T12:00:00Z').getUTCDay() === 6
+
+export function conRecargoSabado(adicionales = {}, fecha) {
+  const { recargo_pct: _, ...resto } = adicionales || {}
+  return esSabado(fecha) ? { ...resto, recargo_pct: RECARGO_SABADO_PCT } : resto
 }
 
 // Despacho a regiones: un monto neto que se agrega en la instalacion, fuera del catalogo de servicios.
@@ -31,7 +47,9 @@ export function totalesCotizacion(repisas = [], adicionales = {}) {
   const bruto = totalRepisas + totalAdicionales + despacho
   const descuentoPct = porcentajeDescuento(adicionales)
   const descuento = Math.round(bruto * descuentoPct / 100)
-  const subtotal = bruto - descuento
+  const recargoPct = porcentajeRecargo(adicionales)
+  const recargo = Math.round((bruto - descuento) * recargoPct / 100)
+  const subtotal = bruto - descuento + recargo
   const iva = Math.round(subtotal * 0.19)
-  return { repisas: totalRepisas, adicionales: totalAdicionales, despacho, bruto, descuentoPct, descuento, subtotal, iva, total: subtotal + iva }
+  return { repisas: totalRepisas, adicionales: totalAdicionales, despacho, bruto, descuentoPct, descuento, recargoPct, recargo, subtotal, iva, total: subtotal + iva }
 }

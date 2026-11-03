@@ -21,6 +21,7 @@ body:has(.rsv){background:var(--fondo, #FAF8F5)}
 .rsv-dia:first-of-type{border-top:none}
 .rsv-dia-nombre{font-weight:800;font-size:14px;line-height:1.15}
 .rsv-dia-nombre small{display:block;font-weight:600;color:var(--suave);font-size:12px}
+.rsv-dia-nombre .agd-recargo{color:#A86E14;font-weight:800}
 .rsv-bloque{min-height:46px;border-radius:12px;border:1.5px solid var(--borde);background:#fff;font:inherit;font-weight:700;font-size:14px;color:var(--texto);cursor:pointer}
 .rsv-bloque:hover:not(:disabled){border-color:var(--acento)}
 .rsv-bloque[aria-pressed=true]{background:var(--acento);border-color:var(--acento);color:var(--sobre-acento);box-shadow:0 6px 16px rgba(219,153,43,.28)}

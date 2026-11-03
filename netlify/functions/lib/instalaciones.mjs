@@ -7,7 +7,7 @@
 // Calendar y la planilla se inyectan: en Netlify son Google; en local y en los tests, falsos.
 import { ErrorCotizacion, actualizarCotizacion, obtenerCotizacion } from './cotizaciones.mjs'
 import { SERVICIOS } from './marca.mjs'
-import { DESCUENTO_MAX, montoDespacho, nombreServicio, totalesCotizacion } from './totales.mjs'
+import { DESCUENTO_MAX, conRecargoSabado, montoDespacho, nombreServicio, totalesCotizacion } from './totales.mjs'
 
 export { totalesCotizacion }
 
@@ -45,6 +45,9 @@ export function limpiarAdicionales(adicionales = {}) {
   const descuento = Number(adicionales.descuento_pct ?? 0)
   if (!Number.isInteger(descuento) || descuento < 0 || descuento > DESCUENTO_MAX) falla(`El descuento debe ser un porcentaje entre 0 y ${DESCUENTO_MAX}`)
   if (descuento) limpio.descuento_pct = descuento
+  const recargo = Number(adicionales.recargo_pct ?? 0)
+  if (!Number.isInteger(recargo) || recargo < 0 || recargo > DESCUENTO_MAX) falla('Revisa el recargo')
+  if (recargo) limpio.recargo_pct = recargo
   const despacho = Number(adicionales.despacho ?? 0)
   if (!Number.isInteger(despacho) || despacho < 0 || despacho > 1e8) falla('Revisa el monto del despacho')
   if (despacho) limpio.despacho = montoDespacho({ despacho })
@@ -87,6 +90,7 @@ export function eventoInstalacion({ cotizacion, fecha, inicio, fin, adicionales,
     servicios.length && `\nServicios adicionales:\n${servicios.join('\n')}`,
     totales.despacho > 0 && `Despacho: ${pesos(totales.despacho)} neto`,
     totales.descuento > 0 && `Descuento ${totales.descuentoPct}%: -${pesos(totales.descuento)} neto`,
+    totales.recargo > 0 && `Recargo sábado ${totales.recargoPct}%: +${pesos(totales.recargo)} neto`,
     notas && `\nNotas:\n${notas}`,
   ].filter(Boolean).join('\n')
   return {
@@ -107,7 +111,7 @@ export async function agendarInstalacion(almacen, calendar, calendarId, datos) {
   if (!cotizacion) falla('Cotización no encontrada', 404)
   const fecha = datos.fecha, inicio = datos.inicio, fin = datos.fin
   validarHorario({ fecha, inicio, fin })
-  const adicionales = limpiarAdicionales(datos.adicionales)
+  const adicionales = conRecargoSabado(limpiarAdicionales(datos.adicionales), fecha)
   const correoNuevo = String(datos.email || '').trim().toLowerCase()
   if (correoNuevo && !correoValido(correoNuevo)) falla('El correo del cliente no es válido')
   const email = correoNuevo || cotizacion.email || ''

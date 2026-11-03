@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nombreServicio, porcentajeDescuento, totalesCotizacion } from './totales.mjs'
+import { conRecargoSabado, nombreServicio, porcentajeDescuento, totalesCotizacion } from './totales.mjs'
 import { limpiarAdicionales } from './instalaciones.mjs'
 
 test('el descuento se aplica al neto antes del IVA', () => {
   const t = totalesCotizacion([{ unidades: 1, valor: 200000 }], { qty_retiro_orden: 1, precio_retiro_orden: 40000, descuento_pct: 10 })
-  assert.deepEqual(t, { repisas: 200000, adicionales: 40000, despacho: 0, bruto: 240000, descuentoPct: 10, descuento: 24000, subtotal: 216000, iva: 41040, total: 257040 })
+  assert.deepEqual(t, { repisas: 200000, adicionales: 40000, despacho: 0, bruto: 240000, descuentoPct: 10, descuento: 24000, recargoPct: 0, recargo: 0, subtotal: 216000, iva: 41040, total: 257040 })
 })
 
 test('el despacho se suma al neto, antes del descuento y el IVA', () => {
@@ -31,4 +31,13 @@ test('al agendar se conservan los nombres editados y el descuento', () => {
   assert.equal(limpio.descuento_pct, 10)
   assert.equal(limpio.otra_cosa, undefined)
   assert.throws(() => limpiarAdicionales({ descuento_pct: 60 }), /entre 0 y 50/)
+})
+
+test('sabado: recargo de 5% sobre el neto, que se pone y se quita segun el dia', () => {
+  const sabado = conRecargoSabado({ descuento_pct: 10 }, '2026-11-07')
+  assert.equal(sabado.recargo_pct, 5)
+  const t = totalesCotizacion([{ unidades: 1, valor: 200000 }], sabado)
+  assert.deepEqual([t.descuento, t.recargo, t.subtotal], [20000, 9000, 189000])
+  assert.equal(conRecargoSabado(sabado, '2026-11-09').recargo_pct, undefined)
+  assert.equal(conRecargoSabado({}, '').recargo_pct, undefined)
 })

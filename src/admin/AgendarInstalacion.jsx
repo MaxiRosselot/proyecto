@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { OFERTA, SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
-import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
+import { DESCUENTO_MAX, conRecargoSabado, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { duracion, fechaLarga, mensajeInstalacionDe } from './whatsappInstalacion.js'
 import CopiarMensaje from './CopiarMensaje.jsx'
 
@@ -50,7 +50,8 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
-  const totales = useMemo(() => totalesCotizacion(repisas, adicionales), [repisas, adicionales])
+  // Un sabado lleva recargo: el servidor lo pone segun la fecha, aca se muestra igual.
+  const totales = useMemo(() => totalesCotizacion(repisas, conRecargoSabado(adicionales, fecha)), [repisas, adicionales, fecha])
   const repisasCambiadas = repisas.some((r, i) => r.unidades !== (Number(quote.repisas[i].unidades ?? 1) || 0) || r.valor !== (Number(quote.repisas[i].valor) || 0))
   const cambiarRepisa = (i, campo, valor) => setRepisas(prev => prev.map((r, j) => (j === i ? { ...r, [campo]: valor } : r)))
 
@@ -85,7 +86,7 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
           ...(repisasCambiadas ? { repisas: repisas.map(r => ({ unidades: r.unidades, valor: r.valor })) } : {}) }),
       })
       if (!r.ok) throw new Error(r.error || 'No se pudo agendar')
-      onListo({ status: 'confirmada', motivoRechazo: '', adicionales, ...(repisasCambiadas ? { repisas: r.repisas } : {}), subtotal: r.totales.subtotal, iva: r.totales.iva, total: r.totales.total, instalacion: r.instalacion, email: r.email || quote.email })
+      onListo({ status: 'confirmada', motivoRechazo: '', adicionales: conRecargoSabado(adicionales, fecha), ...(repisasCambiadas ? { repisas: r.repisas } : {}), subtotal: r.totales.subtotal, iva: r.totales.iva, total: r.totales.total, instalacion: r.instalacion, email: r.email || quote.email })
     } catch (e) { setError(e.message) }
     finally { setGuardando(false) }
   }
@@ -134,6 +135,7 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
         <span>Repisas</span><span style={{ textAlign: 'right' }}>{fmt(totales.repisas)}</span>
         <span>Servicios adicionales</span><span style={{ textAlign: 'right' }}>{fmt(totales.adicionales)}</span>
         {totales.descuento > 0 && <><span style={{ color: C.green }}>Descuento {totales.descuentoPct}%</span><span style={{ textAlign: 'right', color: C.green, fontWeight: 700 }}>-{fmt(totales.descuento)}</span></>}
+        {totales.recargo > 0 && <><span data-testid="recargo-sabado">Recargo sábado {totales.recargoPct}%</span><span style={{ textAlign: 'right', fontWeight: 700 }}>+{fmt(totales.recargo)}</span></>}
         <span>Neto</span><span style={{ textAlign: 'right' }}>{fmt(totales.subtotal)}</span>
         <span>IVA (19%)</span><span style={{ textAlign: 'right' }}>{fmt(totales.iva)}</span>
         <strong style={{ color: C.text, borderTop: '1px solid ' + C.border, paddingTop: 4 }}>Total</strong>

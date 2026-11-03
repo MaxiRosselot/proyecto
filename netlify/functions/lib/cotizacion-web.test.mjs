@@ -120,3 +120,11 @@ test('el correo lleva el PDF adjunto y no deja inyectar encabezados', () => {
   assert.match(raw, /Subject: =\?UTF-8\?B\?/)
   assert.match(raw, /Content-Disposition: attachment; filename="c.pdf"/)
 })
+
+test('cada lateral extra de la esquina suma $10.000 neto al modulo y sale en el PDF', async () => {
+  const [fila] = filasConPrecio([{ largoCm: 225, profundidadCm: 48, altoCm: 200, niveles: 4, colgador: false, lateralesExtra: 1 }], TABLA_PRECIOS)
+  const [base] = filasConPrecio([{ largoCm: 225, profundidadCm: 48, altoCm: 200, niveles: 4, colgador: false }], TABLA_PRECIOS)
+  assert.deepEqual([fila.valor - base.valor, fila.lateralesExtra], [10000, 1])
+  const pdf = await generateQuotePdf({ cot_num: 1, repisas: [fila] })
+  assert.ok(pdf.total > 0)
+})

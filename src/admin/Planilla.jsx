@@ -253,6 +253,7 @@ function Montos({ q, onGuardar }) {
         <span style={{ fontSize: 12.5 }}>Descuento %</span><span />
         <input inputMode="numeric" aria-label="Descuento %" value={ad.descuento_pct || 0} onFocus={e => e.target.select()} onChange={e => setAd(a => ({ ...a, descuento_pct: num(e.target.value, DESCUENTO_MAX) }))} style={campo} />
         <span style={{ fontSize: 12.5, textAlign: 'right', color: C.green }}>{t.descuento ? '-' + fmt(t.descuento) : ''}</span>
+        {t.recargo > 0 && <><span style={{ fontSize: 12.5 }}>Recargo sábado</span><span /><span style={{ fontSize: 12.5, textAlign: 'center' }}>{t.recargoPct}%</span><span style={{ fontSize: 12.5, textAlign: 'right', fontWeight: 700 }}>+{fmt(t.recargo)}</span></>}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13 }}>Neto <strong>{fmt(t.subtotal)}</strong> · Bruto <strong style={{ color: C.orangeDark }}>{fmt(t.total)}</strong></span>

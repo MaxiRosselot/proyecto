@@ -197,3 +197,13 @@ test('guarda las ubicaciones de las instalaciones solo en la columna de instalac
   assert.deepEqual(JSON.parse(almacen.filas[1][17]), { lat: '-', lng: '-' })
   assert.equal(almacen.filas[0][16], 'proyecto-3d') // el resto de la fila no se toca
 })
+
+test('mover la instalacion a un sabado suma 5% y volverla a la semana lo quita', async () => {
+  const almacen = almacenEnMemoria(), calendar = calendarFalso()
+  const { cotizacion } = await crearInstalacion(almacen, calendar, 'cal', { nombre: 'Sara Sabado', fecha: '2026-10-26', inicio: '10:00', fin: '12:00' })
+  await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { adicionales: { qty_retiro_basura: 1, precio_retiro_basura: 30000, despacho: 50000 } })
+  const sabado = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { fecha: '2026-10-31' })
+  assert.deepEqual([sabado.cotizacion.adicionales.recargo_pct, Number(sabado.cotizacion.subtotal)], [5, 84000])
+  const lunes = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { fecha: '2026-11-02' })
+  assert.deepEqual([lunes.cotizacion.adicionales.recargo_pct, Number(lunes.cotizacion.subtotal)], [undefined, 80000])
+})
