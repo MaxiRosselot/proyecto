@@ -1,5 +1,5 @@
 // Textos del sitio publico. Para cambiar una pregunta, una ventaja o agregar reseñas, se edita aca.
-import { MARCA, OFERTA, SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
+import { MARCA, SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 
 // Cifras de la portada. Salen de la planilla de ventas 2025 (587 instalaciones, mediana 2 h).
 export const CIFRAS = [
@@ -20,7 +20,7 @@ export const VENTAJAS = [
   { icono: '🧊', titulo: 'Tu bodega en 3D', texto: 'Antes de comprar ves cómo queda tu bodega con las repisas, desde cualquier ángulo.' },
   { icono: '📅', titulo: 'Agenda en línea', texto: 'Eliges día y hora de la instalación desde tu link, y puedes cambiarla hasta 48 h antes.' },
   { icono: '🛡️', titulo: '5 años de garantía', texto: 'Sobre la estructura y la instalación.' },
-  { icono: '💳', titulo: 'Pagas al terminar', texto: `Abona el 50% antes o paga todo al final. Por transferencia tienes ${OFERTA.descuento}% de descuento.` },
+  { icono: '💳', titulo: 'Pagas al terminar', texto: 'Abona el 50% antes o paga todo al final, por transferencia o con tarjeta.' },
   { icono: '🧥', titulo: 'Hecho a tu uso', texto: 'Barra para colgar ropa, nivel antiinundación, doble profundidad o soporte para la bicicleta.' },
 ]
 
@@ -56,7 +56,7 @@ export const PREGUNTAS = [
   {
     grupo: 'Pago',
     preguntas: [
-      ['¿Cómo pago?', `Puedes abonar un 50% antes de la instalación o pagar el total al terminar. Aceptamos transferencia y tarjetas a través de Mercado Pago. Por transferencia tienes ${OFERTA.descuento}% de descuento.`],
+      ['¿Cómo pago?', `Puedes abonar un 50% antes de la instalación o pagar el total al terminar. Aceptamos transferencia y tarjetas a través de Mercado Pago.`],
       ['¿Tengo que pagar para agendar?', 'No. Agendas la instalación sin pagar y el pago se coordina al terminar el trabajo.'],
     ],
   },

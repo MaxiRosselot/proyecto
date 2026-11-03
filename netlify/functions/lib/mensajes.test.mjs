@@ -2,12 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mensajeEnvioCotizacion, mensajeConfirmarInstalacion, linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
 
-test('mensaje de la cotizacion: numero, total, link al PDF y la oferta', () => {
+test('mensaje de la cotizacion: numero, total, link al PDF y la vigencia', () => {
   const texto = mensajeCotizacion({ nombre: 'Marta Díaz', cotNum: 1579, total: 303450, pdfUrl: 'https://drive.google.com/file/d/abc/view' })
   assert.match(texto, /^¡Hola Marta! Le envío su cotización N° 1579/)
   assert.match(texto, /Total: \$303\.450 con IVA incluido\./)
   assert.match(texto, /Puede verla aquí: https:\/\/drive\.google\.com\/file\/d\/abc\/view/)
-  assert.match(texto, /Si paga por transferencia, tiene un 5% de descuento\./)
+  assert.match(texto, /Precio válido por 5 días\./)
 })
 
 test('con su link el mensaje invita a elegir el dia y pagar', () => {

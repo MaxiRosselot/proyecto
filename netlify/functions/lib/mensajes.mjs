@@ -1,6 +1,6 @@
 // Textos para el cliente: envio de la cotizacion, confirmacion de la instalacion y recordatorios.
 // Sin dependencias de Node: los usan el cron de recordatorios y el panel admin.
-import { MAESTRO, MARCA, OFERTA, SERVICIOS, WHATSAPP } from './marca.mjs'
+import { MAESTRO, MARCA, SERVICIOS, TEXTO_VIGENCIA, WHATSAPP } from './marca.mjs'
 
 // Numero chileno en formato internacional sin "+": 9 1234 5678 -> 56912345678.
 export function telefonoWhatsapp(telefono) {
@@ -88,7 +88,7 @@ export function mensajeCotizacion({ nombre, cotNum, total, pdfUrl, linkPago, lin
       ? `Aquí puede elegir el día de su instalación y pagar (total o abono del 50%): ${linkPago}`
       : `Puede pagar en línea aquí (total o abono del 50%): ${linkPago}`] : []),
     '',
-    `Si paga por transferencia, tiene un ${OFERTA.descuento}% de descuento.`,
+    `${TEXTO_VIGENCIA}.`,
     'Cualquier duda, respóndanos por aquí.',
     '',
     'Repisas Don Maxi',

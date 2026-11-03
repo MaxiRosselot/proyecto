@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
-import { OFERTA, SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
+import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { DESCUENTO_MAX, conRecargoSabado, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { duracion, fechaLarga, mensajeInstalacionDe } from './whatsappInstalacion.js'
 import CopiarMensaje from './CopiarMensaje.jsx'
@@ -125,10 +125,6 @@ export function AgendarInstalacion({ quote, onListo, onCancelar }) {
         <span style={{ ...etiqueta, marginBottom: 0 }}>Descuento</span>
         <Numero etiqueta="Descuento en porcentaje" valor={totales.descuentoPct} onCambio={descuento} ancho={70} />
         <span style={{ fontSize: 13, color: C.textSub }}>%</span>
-        <button type="button" onClick={() => descuento(totales.descuentoPct === OFERTA.descuento ? 0 : OFERTA.descuento)} aria-pressed={totales.descuentoPct === OFERTA.descuento}
-          style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 10px', ...(totales.descuentoPct === OFERTA.descuento ? { borderColor: C.green, color: C.green, background: C.green + '12' } : {}) }}>
-          Transferencia · {OFERTA.descuento}%
-        </button>
       </div>
       {/* La cuenta completa, en columna: de las repisas al total con IVA. */}
       <div data-testid="resumen-montos" style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '3px 24px', width: 'fit-content', minWidth: 260, marginLeft: 'auto', fontSize: 13, color: C.textSub, padding: '10px 14px', borderRadius: 10, background: 'white', border: '1px solid ' + C.border, marginBottom: 14 }}>

@@ -8,7 +8,10 @@ export const CONDICIONES = 'Puede abonar un 50% antes de la instalación, o paga
 // Lo muestran el PDF, /cotiza, el correo, WhatsApp y la pagina de reserva; se aplica al confirmar
 // el primer pago por transferencia (si la cotizacion no tiene ya otro descuento).
 export const OFERTA = { descuento: 5, medio: 'transferencia' };
-export const TEXTO_OFERTA = `Paga por transferencia y obtén ${OFERTA.descuento}% de descuento`;
+// La cotizacion ya no ofrece el descuento por transferencia (OFERTA queda para la /reserva con pago,
+// que esta apagada): cierra con su vigencia y el link para agendar la instalacion.
+export const VIGENCIA_DIAS = 5;
+export const TEXTO_VIGENCIA = `Precio válido por ${VIGENCIA_DIAS} días`;
 export const WHATSAPP = '+56951020367';
 // El maestro y la camioneta, para el mensaje de la vispera de cada instalacion.
 export const MAESTRO = { nombre: 'Felipe Chacón', telefono: '+56 9 7468 8362', patente: 'VLZZ79' };

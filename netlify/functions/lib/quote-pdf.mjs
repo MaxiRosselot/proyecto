@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { CONDICIONES, MARCA, SERVICIOS, TEXTO_OFERTA } from './marca.mjs';
+import { CONDICIONES, MARCA, SERVICIOS, TEXTO_VIGENCIA, VIGENCIA_DIAS } from './marca.mjs';
 import { montoDespacho, nombreServicio, porcentajeDescuento, porcentajeRecargo } from './totales.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -112,7 +112,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   page(`${FOOTER_MATERIAL} · Ver servicios adicionales en pág. 2`);
   fit(logo, L, 26.8, 62, 24);
   text(`Cotización N.º ${data.cot_num || ''}`, 330, 25.5, R - 330, 12, C.accentInk, F.serif, { align: 'right' });
-  text(`Válida hasta ${fecha(new Date(now.getTime() + 7 * 86400000))}`, 330, 41.6, R - 330, 7.5, C.muted, F.sans, { align: 'right' });
+  text(`Válida hasta ${fecha(new Date(now.getTime() + VIGENCIA_DIAS * 86400000))}`, 330, 41.6, R - 330, 7.5, C.muted, F.sans, { align: 'right' });
   box(L, 60.4, W, 28.8, C.accent, undefined, 6);
   withIcon('Repisas Don Maxi — N.º 1 en Google (', star, `${MARCA.rating} · ${MARCA.resenas} reseñas)`, L, 68.7, 9.75, C.ink, F.bold, 'center');
   // Drawings give up to 125 pt of height so a quote of about six rows still ends on page 1.
@@ -195,7 +195,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   // ajuste y el neto.
   const ajustes = [
     descuento && [`Descuento ${descuentoPct}%`, '-' + money(descuento), C.green],
-    recargo && [`Recargo sábado ${recargoPct}%`, '+' + money(recargo), C.sub],
+    recargo && [`Sábado +${recargoPct}%`, '+' + money(recargo), C.sub],
   ].filter(Boolean);
   if (ajustes.length) {
     const arriba = y - 15 * (ajustes.length + 1);
@@ -210,10 +210,12 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   text('TOTAL', 421.5, y + 41.8, 60, 7.5, C.ink);
   text(money(total), 450, y + 36.9, 111, 12.75, C.ink, F.serif, { align: 'right' });
   y += 66.7;
+  // Vigencia del precio y, si hay link, "Agenda tu instalación" (toda la franja es el link).
   box(L, y, W, 32.5, C.amber, C.amberLine);
-  withIcon('', clock, descuento
-    ? `Incluye ${descuentoPct}% de descuento sobre el precio de lista`
-    : TEXTO_OFERTA, L, y + 11, 9, C.amberInk, F.bold, 'center');
+  const vence = new Date(now.getTime() + VIGENCIA_DIAS * 864e5).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', timeZone: 'America/Santiago' });
+  const agendaUrl = typeof data.agenda_url === 'string' && /^https?:\/\//.test(data.agenda_url) ? data.agenda_url : '';
+  withIcon('', clock, `${TEXTO_VIGENCIA} (hasta el ${vence})${agendaUrl ? ' · Agenda tu instalación aquí' : ''}`, L, y + 11, 9, C.amberInk, F.bold, 'center');
+  if (agendaUrl) doc.link(L, y, W, 32.5, agendaUrl);
   y += 40.8;
   box(L, y, W, 77.3, C.card, C.cardLine);
   label('Transferencia', 56.2, y + 15.2);

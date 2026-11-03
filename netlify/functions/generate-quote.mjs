@@ -1,6 +1,6 @@
 import { generateQuotePdf } from './lib/quote-pdf.mjs'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
-import { linkPagoCotizacion } from './lib/mercadopago.mjs'
+import { linkAgenda, linkPagoCotizacion } from './lib/mercadopago.mjs'
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': AUTH_HEADERS, 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 // ── Handler ───────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,7 @@ export async function handler(event) {
     const data = JSON.parse(event.body || '{}')
     // El link de pago lo arma el servidor (va firmado); el que mande el navegador no se usa.
     data.payment_url = linkPagoCotizacion(data.cot_num)
+    data.agenda_url = linkAgenda(data.cot_num)
     const { bytes: pdfBytes, subtotal, iva, total } = await generateQuotePdf(data)
 
     return {

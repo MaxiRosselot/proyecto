@@ -10,7 +10,7 @@
 import { avisoCotizacionCreada } from './telegram.mjs'
 import { LATERAL_EXTRA_NETO, MAX_LATERALES_EXTRA, precioRepisa } from '../../../src/admin/preciosRepisas.js'
 import { actualizarCotizacion, crearCotizacion, listarCotizaciones, siguienteDisponible } from './cotizaciones.mjs'
-import { MARCA, OFERTA, TEXTO_OFERTA, WHATSAPP } from './marca.mjs'
+import { MARCA, TEXTO_VIGENCIA, VIGENCIA_DIAS, WHATSAPP } from './marca.mjs'
 import { explicarErrorCorreo } from './correo.mjs'
 
 export const NOTA_WEB = 'Cotización web: la armó el cliente en /cotiza'
@@ -91,12 +91,12 @@ export function correoCliente({ cliente, cotNum, total, modulos, avisoA, linkPag
     '',
     `Te adjuntamos la cotización N° ${cotNum} de las repisas que armaste: ${modulos} ${modulos === 1 ? 'módulo' : 'módulos'} por ${pesos(total)} con IVA incluido.`,
     '',
-    `${TEXTO_OFERTA}.`,
+    `${TEXTO_VIGENCIA}.`,
     '',
     'Para reservar tu instalación:',
     ...(linkAgenda ? [`• Agenda tu instalación aquí (elige día y hora; el pago es al terminar): ${linkAgenda}`] : []),
     /\/reserva\?/.test(linkPago)
-      ? `• Elige tu día y paga aquí (transferencia con ${OFERTA.descuento}% de descuento, o Mercado Pago): ${linkPago}`
+      ? `• Elige tu día y paga aquí (transferencia o Mercado Pago): ${linkPago}`
       : `• Paga en línea aquí: ${linkPago}`,
     `• Datos para transferir: ${MARCA.razonSocial} · RUT ${MARCA.rut} · ${MARCA.banco} Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}`,
     `• O confírmanos por WhatsApp: ${linkWhatsapp(`Hola, quiero aceptar la cotización N° ${cotNum}`)}`,
@@ -141,7 +141,7 @@ export async function procesarCotizacionWeb(body, deps) {
   let numero = await siguienteDisponible(almacen)
   let pdf
   for (let intento = 0; ; intento++) {
-    pdf = await generarPdf({ cot_num: numero, nombre: cliente.nombre, direccion: cliente.direccion, rut: '', telefono: cliente.telefono, email: cliente.email, repisas, grafica3d: vistas, payment_url: linkDe(numero) })
+    pdf = await generarPdf({ cot_num: numero, nombre: cliente.nombre, direccion: cliente.direccion, rut: '', telefono: cliente.telefono, email: cliente.email, repisas, grafica3d: vistas, payment_url: linkDe(numero), agenda_url: agendaDe(numero) })
     const { estado, respuesta } = await crearCotizacion(almacen, {
       crear: true, cotNum: numero, ...cliente, fechaVisita: '',
       subtotal: pdf.subtotal, iva: pdf.iva, total: pdf.total,
@@ -184,7 +184,7 @@ export async function procesarCotizacionWeb(body, deps) {
     cotNum: String(numero), total: pdf.total, correoEnviado,
     // El PDF va en la respuesta para verlo en la pantalla final aunque el correo o Drive fallen.
     pdfBase64: Buffer.from(pdf.bytes).toString('base64'), pdfUrl,
-    oferta: { descuento: OFERTA.descuento, medio: OFERTA.medio },
+    vigenciaDias: VIGENCIA_DIAS,
     agenda: linkAgenda,
     pago: { link: linkPago, razonSocial: MARCA.razonSocial, rut: MARCA.rut, banco: MARCA.banco, tipoCuenta: MARCA.tipoCuenta, numeroCuenta: MARCA.numeroCuenta },
     whatsapp: WHATSAPP,
