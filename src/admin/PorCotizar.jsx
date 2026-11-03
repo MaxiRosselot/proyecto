@@ -302,6 +302,21 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setAdicionales(prev => ({ ...prev, qty_bici: soportes3d }))
   }, [soportes3d])
 
+  // Otra cotizacion para el mismo cliente, partiendo de lo que hay en pantalla (repisas, servicios y
+  // modelo 3D, para editar): la guardada queda como esta y la nueva toma otro N°. El recargo de
+  // sabado no pasa: va con la fecha de una instalacion.
+  function nuevaMismoCliente() {
+    setNuevaDesde({ cotNum: String(cotGuardada.cotNum), nombre: manualCliente.nombre || selectedVisit?.nombre || '' })
+    setAdicionales(({ recargo_pct: _, ...resto }) => resto)
+    setCotGuardada(null)
+    setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
+  }
+
+  function empezarDeCero() {
+    if (!window.confirm(`Se limpia el cotizador para un cliente nuevo. La N° ${cotGuardada?.cotNum ?? ''} queda guardada tal como está. ¿Seguir?`)) return
+    resetCotizador()
+  }
+
   function resetCotizador() {
     setNuevaDesde(null)
     setMode('visita')
@@ -629,14 +644,19 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           {cotGuardada
             ? <>
                 <span style={styles.badge(C.green)}>Guardada</span>
-                <span style={{ color: C.textMuted, fontSize: 12, flex: 1, minWidth: 200 }}>Al generar se actualiza esta cotización: PDF, montos y modelo 3D. Su estado no cambia.</span>
-                <button type="button" onClick={resetCotizador} style={{ ...styles.btnSecondary, fontSize: 12 }}>Nueva cotización</button>
+                <span style={{ color: C.textMuted, fontSize: 12, flex: 1, minWidth: 200 }}>Si generas de nuevo, se actualiza esta misma cotización (PDF, montos y modelo 3D).</span>
+                <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} data-testid="nueva-cotizacion-opciones">
+                  <button type="button" onClick={nuevaMismoCliente} style={{ ...styles.btnSecondary, fontSize: 12 }}
+                    title="Mismo cliente y mismo modelo 3D para editar; se guarda con otro N° y en Cotizaciones aparecen juntas">👥 Otra para este cliente</button>
+                  <button type="button" onClick={empezarDeCero} style={{ ...styles.btnSecondary, fontSize: 12 }}
+                    title="Borra todo lo que hay en pantalla para cotizar a otro cliente">✨ Empezar de cero</button>
+                </span>
               </>
             : <span style={{ color: C.textMuted, fontSize: 12 }}>Próximo número libre. Se confirma al guardar; si otra persona lo toma antes, se usa el siguiente.</span>}
         </div>
         {nuevaDesde && !cotGuardada && (
           <div data-testid="nueva-desde" style={{ marginTop: 10, fontSize: 12.5, padding: '8px 10px', borderRadius: 8, background: '#F5F3FF', color: '#5B21B6' }}>
-            👥 Otra cotización para <strong>{nuevaDesde.nombre}</strong> (ya tiene la N° {nuevaDesde.cotNum}). Se guarda con un número nuevo y en Cotizaciones aparecen juntas.
+            👥 Otra cotización para <strong>{nuevaDesde.nombre}</strong> (ya tiene la N° {nuevaDesde.cotNum}). Parte de lo que había: edítala y al generar se guarda con un número nuevo; en Cotizaciones aparecen juntas.
           </div>
         )}
       </div>
