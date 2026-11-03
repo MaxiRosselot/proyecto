@@ -262,7 +262,7 @@ function Montos({ q, onGuardar }) {
   )
 }
 
-function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) {
+function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion, onReagendar }) {
   useEffect(() => { const f = e => e.key === 'Escape' && onCerrar(); window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f) }, [onCerrar])
   const inst = q.instalacion || {}
   const pago = resumenPagos(q.total, q.pagos)
@@ -278,6 +278,10 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion }) 
             <div style={{ fontSize: 12.5, color: C.textSub }}>N° {q.cotNum} · {inst.fecha ? `${fechaCorta(inst.fecha)} · ${inst.inicio || ''}–${inst.fin || ''}` : 'Sin fecha'}{inst.origen === 'excel' ? ' · del Excel' : ''}</div>
           </div>
           <button onClick={onCerrar} aria-label="Cerrar" style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: C.textMuted }}>✕</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          <button type="button" onClick={onReagendar} style={boton}>📅 {inst.fecha ? 'Reagendar' : 'Agendar'}</button>
+          {inst.instalada && <button type="button" onClick={onReagendar} style={{ ...boton, color: C.red }}>↩️ No se realizó · reagendar</button>}
         </div>
 
         <div style={titulo}>Cliente</div>
@@ -346,9 +350,11 @@ function Reagendar({ q, ventas, onGuardar, onCerrar }) {
   const choca = v => v.instalacion.inicio && v.instalacion.fin && aMin(v.instalacion.inicio) < aMin(d.fin) && aMin(v.instalacion.fin) > aMin(d.inicio)
   const valido = d.fecha && d.inicio && d.fin && aMin(d.fin) > aMin(d.inicio)
   const cambio = d.fecha !== (inst.fecha || '') || d.inicio !== (inst.inicio || '') || d.fin !== (inst.fin || '')
+  // Marcada como instalada pero no se hizo: al reagendar vuelve a quedar pendiente.
+  const hecha = inst.instalada === true
   async function guardar(e) {
     e.preventDefault(); setError(''); setGuardando(true)
-    try { await onGuardar(d); onCerrar() } catch (err) { setError(err.message) } finally { setGuardando(false) }
+    try { await onGuardar(hecha ? { ...d, instalada: false } : d); onCerrar() } catch (err) { setError(err.message) } finally { setGuardando(false) }
   }
   const campo = { ...styles.input, padding: '8px 10px', fontSize: 14 }
   return (
@@ -361,6 +367,7 @@ function Reagendar({ q, ventas, onGuardar, onCerrar }) {
           <button type="button" onClick={onCerrar} aria-label="Cerrar" style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: C.textMuted }}>✕</button>
         </div>
         {inst.fecha && <div style={{ fontSize: 13, color: C.textSub }}>Ahora: {fechaCorta(inst.fecha)} · {inst.inicio}–{inst.fin}</div>}
+        {hecha && <div style={{ fontSize: 12.5, padding: '8px 10px', borderRadius: 8, background: '#FFFBEB', color: '#92400E' }} data-testid="reagendar-hecha">Está marcada como <strong>instalada</strong>. Si no se hizo ese día, elige la nueva fecha: al guardar vuelve a quedar <strong>pendiente</strong>.</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8 }}>
           <label><span style={styles.detailLabel}>Día</span><input type="date" required aria-label="Nuevo día" value={d.fecha} onChange={e => setD({ ...d, fecha: e.target.value })} style={campo} /></label>
           <label><span style={styles.detailLabel}>Inicio</span><input type="time" step="1800" required aria-label="Nuevo inicio" value={d.inicio} onChange={e => setD({ ...d, inicio: e.target.value })} style={campo} /></label>
@@ -380,7 +387,7 @@ function Reagendar({ q, ventas, onGuardar, onCerrar }) {
         {error && <div style={{ ...styles.errorBox, marginBottom: 0 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" onClick={onCerrar} style={styles.btnSecondary}>Cancelar</button>
-          <button type="submit" disabled={!valido || !cambio || guardando} style={styles.btnPrimary}>{guardando ? 'Guardando…' : 'Guardar cambio'}</button>
+          <button type="submit" disabled={!valido || !(cambio || hecha) || guardando} style={styles.btnPrimary}>{guardando ? 'Guardando…' : hecha ? 'Reagendar como pendiente' : 'Guardar cambio'}</button>
         </div>
         <div style={{ fontSize: 11.5, color: C.textMuted }}>El evento del calendario se mueve con el cambio.</div>
       </form>
@@ -719,7 +726,8 @@ export default function PlanillaSection({ onVerCotizacion }) {
             reemplazar(r.cotizacion)
           }} />
       )}
-      {abierta && <Detalle q={abierta} onCerrar={() => setDetalle(null)} onActualizar={c => actualizar(abierta.cotNum, c)} onCambioLocal={c => reemplazar({ cotNum: abierta.cotNum, ...c })} onVerCotizacion={onVerCotizacion} />}
+      {abierta && <Detalle q={abierta} onCerrar={() => setDetalle(null)} onActualizar={c => actualizar(abierta.cotNum, c)} onCambioLocal={c => reemplazar({ cotNum: abierta.cotNum, ...c })} onVerCotizacion={onVerCotizacion}
+        onReagendar={() => { setDetalle(null); setReagendando(abierta.cotNum) }} />}
       {importar && <ImportarExcel onCerrar={() => setImportar(false)} onListo={() => { setImportar(false); setPeriodo('todo'); cargar() }} />}
     </div>
   )

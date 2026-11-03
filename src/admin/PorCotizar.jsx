@@ -239,6 +239,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [autoSaved, setAutoSaved]   = useState(false)
   const [error, setError]           = useState('')
   const [editingNombre, setEditingNombre] = useState(null)
+  // Cotizacion nueva para un cliente que ya tiene otra (Cotizaciones → Nueva cotización para este cliente).
+  const [nuevaDesde, setNuevaDesde] = useState(null)
 
   // Cotizar una visita desde la agenda es siempre una cotizacion nueva: si habia una guardada
   // abierta, generar la habria sobrescrito con el cliente de la visita.
@@ -246,19 +248,22 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada); setCotGuardada(null) }
   }, [visitaSeleccionada])
 
-  // Reabre una cotizacion guardada con su proyecto 3D, tal como quedo.
+  // Reabre una cotizacion guardada con su proyecto 3D, tal como quedo. Con comoNueva ('blanco' o
+  // 'copia') es otra cotizacion para el mismo cliente: sus datos, N° nuevo, y vacia o copiando esa.
   useEffect(() => {
     if (!cotizacionAbierta) return
     const q = cotizacionAbierta
+    const blanco = q.comoNueva === 'blanco'
     setMode('manual')
     setSelectedVisit(null)
     setManualCliente({ nombre: q.nombre || '', email: q.email || '', celular: q.telefono || '', direccion: q.direccion || '' })
-    setRepisas(q.repisas?.length ? q.repisas.map(filaDesdeProducto) : [repisaPorDefecto(tablaPrecios)])
-    setAdicionales({ ...ADICIONALES_INICIALES, ...(q.adicionales || {}) })
-    setProject3d(q.proyecto3d || null)
-    soportesPrevios.current = q.proyecto3d?.soportes?.length ?? 0
-    setCotGuardada({ cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
-    setTotalInfo({ subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
+    setRepisas(!blanco && q.repisas?.length ? q.repisas.map(filaDesdeProducto) : [repisaPorDefecto(tablaPrecios)])
+    setAdicionales(blanco ? ADICIONALES_INICIALES : { ...ADICIONALES_INICIALES, ...(q.adicionales || {}) })
+    setProject3d(blanco ? null : q.proyecto3d || null)
+    soportesPrevios.current = blanco ? 0 : q.proyecto3d?.soportes?.length ?? 0
+    setCotGuardada(q.comoNueva ? null : { cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
+    setNuevaDesde(q.comoNueva ? { cotNum: String(q.origenCotNum || q.cotNum), nombre: q.nombre || '' } : null)
+    setTotalInfo(blanco ? { subtotal: 0, iva: 0, total: 0 } : { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
   }, [cotizacionAbierta])
 
@@ -298,6 +303,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   }, [soportes3d])
 
   function resetCotizador() {
+    setNuevaDesde(null)
     setMode('visita')
     setManualCliente({ nombre: '', email: '', celular: '', direccion: '' })
     setCotGuardada(null)
@@ -628,6 +634,11 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
               </>
             : <span style={{ color: C.textMuted, fontSize: 12 }}>Próximo número libre. Se confirma al guardar; si otra persona lo toma antes, se usa el siguiente.</span>}
         </div>
+        {nuevaDesde && !cotGuardada && (
+          <div data-testid="nueva-desde" style={{ marginTop: 10, fontSize: 12.5, padding: '8px 10px', borderRadius: 8, background: '#F5F3FF', color: '#5B21B6' }}>
+            👥 Otra cotización para <strong>{nuevaDesde.nombre}</strong> (ya tiene la N° {nuevaDesde.cotNum}). Se guarda con un número nuevo y en Cotizaciones aparecen juntas.
+          </div>
+        )}
       </div>
 
       {/* Repisas */}

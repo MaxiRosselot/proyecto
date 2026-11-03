@@ -74,6 +74,17 @@ function SiguientePaso({ q, onAgendar }) {
   return caja(C.green, C.green + '0F', <>Pagada y con la instalación agendada. Recuerda anotar las boletas.</>)
 }
 
+// Un mismo cliente: mismo correo, o mismo celular (ultimos 8 digitos), o mismo nombre completo.
+// Sus cotizaciones se muestran juntas y enlazadas (un cliente puede pedir dos o mas).
+const sinTildes = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+export function claveCliente(q) {
+  const correo = sinTildes(q.email)
+  if (/@/.test(correo)) return 'c:' + correo
+  const fono = String(q.telefono || '').replace(/\D/g, '').slice(-8)
+  if (fono.length === 8) return 't:' + fono
+  return 'n:' + sinTildes(q.nombre)
+}
+
 export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [quotes, setQuotes]             = useState([])
   const [loading, setLoading]           = useState(true)
@@ -196,6 +207,29 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     finally { setAbriendo(null) }
   }
 
+  // Otra cotizacion para el mismo cliente: en blanco con sus datos, o copiando esta (con su modelo 3D).
+  // Se guarda con un N° nuevo; la lista las muestra juntas.
+  async function nuevaParaCliente(quote, copiar) {
+    if (hayBorradorSinGuardar() && !window.confirm('Hay una cotización nueva sin guardar en el cotizador. ¿Reemplazarla?')) return
+    setAbriendo(quote.cotNum)
+    try {
+      let base = quote
+      if (copiar) {
+        const res = await apiFetch('/.netlify/functions/get-quotes?cotNum=' + encodeURIComponent(quote.cotNum))
+        if (!res.ok || !res.quote) throw new Error(res.error || 'No se encontró la cotización')
+        base = res.quote
+      }
+      onAbrirEnCotizador?.({ ...base, comoNueva: copiar ? 'copia' : 'blanco', origenCotNum: quote.cotNum })
+    } catch (e) { alert('No se pudo abrir: ' + e.message) }
+    finally { setAbriendo(null) }
+  }
+
+  // Ir a otra cotizacion del mismo cliente (puede estar en otra pestaña).
+  function irA(q) {
+    setBuscar(''); setTab(porVerificar(q) ? 'verificar' : q.status); setExpanded(q.cotNum)
+    setTimeout(() => document.getElementById('cot-' + q.cotNum)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+  }
+
   // Diagnostico: manda un correo de prueba y muestra la causa exacta si Google lo rechaza.
   async function probarCorreo() {
     setProbandoCorreo(true)
@@ -229,10 +263,18 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   useEffect(() => { if (tab === 'verificar' && !counts.verificar) setTab('por confirmar') }, [counts.verificar])
 
   const bq = buscar.trim().toLowerCase()
-  const filtered = quotes
+  const delCliente = {}
+  for (const q of quotes) (delCliente[claveCliente(q)] ||= []).push(q)
+  const ordenadas = quotes
     .filter(enTab)
     .filter(q => !bq || (q.nombre || '').toLowerCase().includes(bq) || String(q.cotNum).includes(bq))
     .sort((a, b) => (tab === 'por confirmar' && antiguasPrimero ? -porCreacion(a, b) : porCreacion(a, b)))
+  // Las del mismo cliente, juntas (donde aparece la primera de ellas).
+  const filtered = []
+  for (const q of ordenadas) {
+    if (filtered.includes(q)) continue
+    filtered.push(...ordenadas.filter(x => claveCliente(x) === claveCliente(q)))
+  }
 
   return (
     <div>
@@ -303,6 +345,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                     <Badge status={q.status} />
                     {porVerificar(q) && <span style={styles.badge(AMBAR)}>Transferencia por verificar</span>}
                     {q.reserva?.estado === 'esperando pago' && <span style={styles.badge(C.blue)}>Pagando con MP</span>}
+                    {delCliente[claveCliente(q)].length > 1 && <span style={styles.badge(C.purple)} title="Este cliente tiene más de una cotización">👥 {delCliente[claveCliente(q)].length} cotizaciones</span>}
                   </div>
                   <div style={{ fontSize: 13, color: C.textSub }}>
                     <span style={{ marginRight: 8, color: C.textMuted, fontWeight: 600 }}>N{q.cotNum}</span>
@@ -420,6 +463,22 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                             </button>
                           )}
                           <button onClick={() => startEditing(q)} style={boton}>Editar montos</button>
+                        </div>
+                      )}
+                      {onAbrirEnCotizador && (
+                        <div style={{ ...fila, marginTop: 8 }} data-testid="nueva-para-cliente">
+                          <button onClick={() => nuevaParaCliente(q, false)} disabled={abriendo === q.cotNum} style={boton} title="Otra cotización para este mismo cliente, con un N° nuevo">➕ Nueva cotización para este cliente</button>
+                          <button onClick={() => nuevaParaCliente(q, true)} disabled={abriendo === q.cotNum} style={boton} title="Parte de esta cotización (repisas, servicios y modelo 3D) para armar una variante con N° nuevo">⧉ Copiar como nueva</button>
+                        </div>
+                      )}
+                      {delCliente[claveCliente(q)].length > 1 && (
+                        <div style={{ ...fila, marginTop: 8, fontSize: 12.5 }} data-testid="otras-del-cliente">
+                          <span style={{ color: C.textMuted }}>Otras de este cliente:</span>
+                          {delCliente[claveCliente(q)].filter(x => x.cotNum !== q.cotNum).sort(porCreacion).map(x => (
+                            <button key={x.cotNum} onClick={() => irA(x)} style={{ ...boton, padding: '4px 10px' }}>
+                              N° {x.cotNum} · {QUOTE_STATUS_LABELS[x.status]?.label || x.status} · {fmt(x.total)}
+                            </button>
+                          ))}
                         </div>
                       )}
                     </Seccion>
