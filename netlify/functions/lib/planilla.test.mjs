@@ -139,6 +139,12 @@ test('editar una fila: nota, documento, instalada, montos y el evento se mueve c
   assert.equal(Number(sinMontos.cotizacion.subtotal), 80000)
   assert.equal(Number(sinMontos.cotizacion.total), 95200)
 
+  // El descuento se cambia y tambien se puede quitar (0 borra el que tenia).
+  const conDcto = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { adicionales: { descuento_pct: 10 } })
+  assert.deepEqual([conDcto.cotizacion.adicionales.descuento_pct, Number(conDcto.cotizacion.subtotal)], [10, 72000])
+  const sinDcto = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { adicionales: { descuento_pct: 0 } })
+  assert.deepEqual([sinDcto.cotizacion.adicionales.descuento_pct, Number(sinDcto.cotizacion.subtotal)], [undefined, 80000])
+
   const r = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { nota: 'Fabricar repisa especial', documento: 'b*', instalada: true, fecha: '2026-10-25' })
   assert.deepEqual([r.cotizacion.instalacion.nota, r.cotizacion.instalacion.documento, r.cotizacion.instalacion.instalada], ['Fabricar repisa especial', 'B*', true])
   assert.equal(calendar.eventos.get('ev1').start.dateTime, '2026-10-25T16:00:00')

@@ -251,7 +251,7 @@ function Montos({ q, onGuardar }) {
         <input inputMode="numeric" aria-label="Despacho" value={ad.despacho || 0} onFocus={e => e.target.select()} onChange={e => setAd(a => ({ ...a, despacho: num(e.target.value) }))} style={campo} />
         <span style={{ fontSize: 12.5, textAlign: 'right', fontWeight: 700 }}>{fmt(ad.despacho || 0)}</span>
         <span style={{ fontSize: 12.5 }}>Descuento %</span><span />
-        <input inputMode="numeric" aria-label="Descuento %" value={ad.descuento_pct || 0} onFocus={e => e.target.select()} onChange={e => setAd(({ descuento_pct: _, ...r }) => { const n = num(e.target.value, DESCUENTO_MAX); return n ? { ...r, descuento_pct: n } : r })} style={campo} />
+        <input inputMode="numeric" aria-label="Descuento %" value={ad.descuento_pct || 0} onFocus={e => e.target.select()} onChange={e => setAd(a => ({ ...a, descuento_pct: num(e.target.value, DESCUENTO_MAX) }))} style={campo} />
         <span style={{ fontSize: 12.5, textAlign: 'right', color: C.green }}>{t.descuento ? '-' + fmt(t.descuento) : ''}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
