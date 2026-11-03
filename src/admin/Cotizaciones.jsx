@@ -11,7 +11,7 @@ import EnviarCotizacion, { CopiarLink, CopiarMensajeAgenda } from './EnviarCotiz
 import FichaMaestro from './FichaMaestro.jsx'
 import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
-import { porcentajeDescuento } from '../../netlify/functions/lib/totales.mjs'
+import { porcentajeDescuento, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 const AMBAR = '#D97706'
@@ -222,6 +222,40 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
       onAbrirEnCotizador?.({ ...base, comoNueva: copiar ? 'copia' : 'blanco', origenCotNum: quote.cotNum })
     } catch (e) { alert('No se pudo abrir: ' + e.message) }
     finally { setAbriendo(null) }
+  }
+
+  // Otra cotizacion igual sin pasar por el cotizador: mismo cliente, repisas, servicios y modelo 3D,
+  // con N° nuevo, su PDF y su propio link para agendar. El recargo de sabado no se copia: va con la
+  // fecha de una instalacion, y la nueva todavia no tiene.
+  async function regenerarComoNueva(quote) {
+    if (!window.confirm(`Se crea una cotización nueva (con otro N°) igual a la N° ${quote.cotNum}, con su PDF y su link para agendar. ¿Seguir?`)) return
+    setAbriendo(quote.cotNum)
+    let nueva = null
+    try {
+      const res = await apiFetch('/.netlify/functions/get-quotes?cotNum=' + encodeURIComponent(quote.cotNum))
+      if (!res.ok || !res.quote) throw new Error(res.error || 'No se encontró la cotización')
+      const q = res.quote
+      const { recargo_pct: _, ...adicionales } = q.adicionales || {}
+      const t = totalesCotizacion(q.repisas || [], adicionales)
+      const creada = await apiFetch('/.netlify/functions/save-quote', {
+        method: 'POST',
+        body: JSON.stringify({
+          crear: true, status: 'por confirmar', nombre: q.nombre, email: q.email, telefono: q.telefono, direccion: q.direccion,
+          fechaVisita: q.fechaVisita || '', repisas: q.repisas || [], adicionales, proyecto3d: q.proyecto3d || null,
+          subtotal: t.subtotal, iva: t.iva, total: t.total, notas: `Nueva versión de la N° ${quote.cotNum}`,
+        }),
+      })
+      if (!creada.ok) throw new Error(creada.error || 'No se pudo crear la cotización')
+      nueva = creada.cotNum
+      setPdfEnCurso({ cotNum: nueva, etapa: 'Empezando' })
+      const pdf = await regenerarPdf(nueva, { alAvanzar: etapa => setPdfEnCurso({ cotNum: nueva, etapa }) })
+      setPdfNuevo(p => ({ ...p, [nueva]: { blobUrl: pdf.blobUrl } }))
+    } catch (e) {
+      alert(nueva ? `Se creó la N° ${nueva}, pero no su PDF (${e.message}). Usa "Regenerar PDF" en ella.` : 'No se pudo crear: ' + e.message)
+    } finally {
+      setAbriendo(null); setPdfEnCurso(null)
+      if (nueva) { await load(); irA({ cotNum: nueva, status: 'por confirmar' }) }
+    }
   }
 
   // Ir a otra cotizacion del mismo cliente (puede estar en otra pestaña).
@@ -468,7 +502,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                       {onAbrirEnCotizador && (
                         <div style={{ ...fila, marginTop: 8 }} data-testid="nueva-para-cliente">
                           <button onClick={() => nuevaParaCliente(q, false)} disabled={abriendo === q.cotNum} style={boton} title="Otra cotización para este mismo cliente, con un N° nuevo">➕ Nueva cotización para este cliente</button>
-                          <button onClick={() => nuevaParaCliente(q, true)} disabled={abriendo === q.cotNum} style={boton} title="Parte de esta cotización (repisas, servicios y modelo 3D) para armar una variante con N° nuevo">⧉ Copiar como nueva</button>
+                          <button onClick={() => nuevaParaCliente(q, true)} disabled={abriendo === q.cotNum} style={boton} title="Abre en el cotizador una copia de esta (repisas, servicios y modelo 3D) para editarla y guardarla con N° nuevo">⧉ Copiar y editar como nueva</button>
+                          <button onClick={() => regenerarComoNueva(q)} disabled={abriendo === q.cotNum || Boolean(pdfEnCurso)} style={boton} data-testid="regenerar-como-nueva" title="Crea al tiro una cotización igual con N° nuevo, su PDF y su link para agendar, sin abrir el cotizador">⟳ Regenerar como nueva</button>
                         </div>
                       )}
                       {delCliente[claveCliente(q)].length > 1 && (
