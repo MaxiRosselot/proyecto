@@ -1,16 +1,17 @@
 // netlify/functions/sitio.mjs — publico, lo usa el sitio (repisasdonmaxi.cl).
 //   GET                                  → fotos subidas desde Admin → Web, por seccion
 //   POST { tipo: 'contacto', ... }       → correo al negocio desde el formulario de contacto
+//   POST { tipo: 'pyme', ... }           → solicitud de empresa desde /pyme (correo + Telegram)
 //   POST { tipo: 'fotos-iniciar', ... }  → "Envíanos fotos o un video": crea la carpeta y las subidas
 //   POST { tipo: 'fotos-trozo', ... }    → un trozo de un archivo (se reenvia a Drive)
 //   POST { tipo: 'fotos-terminar', carpeta } → correo al negocio con la carpeta y acuse al cliente
 // Las reglas viven en lib/sitio.mjs.
 import { google } from 'googleapis'
 import { enviarCorreoGmail } from './lib/correo.mjs'
-import { alertarError, avisar, avisoContacto } from './lib/telegram.mjs'
+import { alertarError, avisar, avisoContacto, avisoPyme } from './lib/telegram.mjs'
 import {
   almacenFotosDrive, almacenSolicitudesDrive, correoContacto, fotosPorSeccion, iniciarSolicitudFotos,
-  subirTrozoSolicitud, terminarSolicitudFotos, validarContacto,
+  subirTrozoSolicitud, terminarSolicitudFotos, validarContacto, validarPyme, correoPyme,
 } from './lib/sitio.mjs'
 
 const json = (statusCode, body, extra = {}) => ({ statusCode, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extra }, body: JSON.stringify(body) })
@@ -38,6 +39,12 @@ export async function atenderSitio(event, d) {
     const contacto = validarContacto(body)
     await d.enviarCorreo(correoContacto(contacto, d.avisoA))
     await d.avisar?.(avisoContacto(contacto))
+    return json(200, { ok: true })
+  }
+  if (body.tipo === 'pyme') {
+    const solicitud = validarPyme(body)
+    await d.enviarCorreo(correoPyme(solicitud, d.avisoA))
+    await d.avisar?.(avisoPyme(solicitud))
     return json(200, { ok: true })
   }
   if (body.tipo === 'fotos-iniciar') return json(200, { ok: true, ...(await iniciarSolicitudFotos(d, body)) })

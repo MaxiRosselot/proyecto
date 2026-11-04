@@ -94,6 +94,33 @@ export function validarContacto(body) {
   return c
 }
 
+// ---------- Solicitud de empresa (/pyme) ----------
+export function validarPyme(body) {
+  if (body.website) falla('Solicitud inválida')  // honeypot
+  const p = {
+    empresa: texto(body.empresa, 120), rut: texto(body.rut, 20), nombre: texto(body.nombre, 80), cargo: texto(body.cargo, 80),
+    email: texto(body.email, 120).toLowerCase(), telefono: texto(body.telefono, 30), comuna: texto(body.comuna, 60),
+    espacio: texto(body.espacio, 60), tamano: texto(body.tamano, 60), plazo: texto(body.plazo, 60), mensaje: String(body.mensaje ?? '').trim().slice(0, 3000),
+  }
+  if (!p.empresa) falla('Escribe el nombre de la empresa')
+  if (!p.nombre) falla('Escribe tu nombre')
+  if (!correoValido(p.email) && p.telefono.replace(/\D/g, '').length < 8) falla('Déjanos un correo o un teléfono para responderte')
+  if (p.email && !correoValido(p.email)) falla('Revisa tu correo')
+  return p
+}
+
+export function correoPyme(p, avisoA) {
+  return {
+    para: avisoA, responderA: correoValido(p.email) ? p.email : undefined,
+    asunto: `Empresa (web /pyme): ${p.empresa} · ${p.espacio}`,
+    texto: [`Solicitud de empresa desde /pyme.`, '',
+      `Empresa: ${p.empresa}${p.rut ? ` (RUT ${p.rut})` : ''}`, `Contacto: ${p.nombre}${p.cargo ? `, ${p.cargo}` : ''}`,
+      `Correo: ${p.email || '—'}`, `Teléfono: ${p.telefono || '—'}`, `Comuna: ${p.comuna || '—'}`, '',
+      `Tipo de espacio: ${p.espacio}`, `Tamaño: ${p.tamano}`, `Plazo: ${p.plazo}`, '', p.mensaje || '(sin mensaje)', '',
+      ...(p.telefono ? [`WhatsApp: https://wa.me/${whatsappDe(p.telefono)}`] : [])].join('\n'),
+  }
+}
+
 export function correoContacto(c, avisoA) {
   return {
     para: avisoA, responderA: correoValido(c.email) ? c.email : undefined,

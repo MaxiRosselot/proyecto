@@ -176,6 +176,19 @@ export function avisoContacto(c) {
   }
 }
 
+export function avisoPyme(p) {
+  return {
+    texto: `🏢 Empresa desde /pyme
+🏷️ ${p.empresa}${p.rut ? ` · ${p.rut}` : ''}
+👤 ${p.nombre}${p.cargo ? ` (${p.cargo})` : ''}
+📞 ${[p.telefono, p.email].filter(Boolean).join(' · ') || '—'}
+📍 ${p.comuna || '—'}
+📦 ${p.espacio} · ${p.tamano} · ${p.plazo}${p.mensaje ? `
+💬 ${String(p.mensaje).slice(0, 600)}` : ''}`,
+    botones: botonesCliente({ telefono: p.telefono }, `${hola(p.nombre)} Le escribo por la solicitud de ${p.empresa} en nuestra web.`, 'Responder por WhatsApp'),
+  }
+}
+
 export function avisoPago(q, monto, medio = '') {
   return { texto: `💳 Pago recibido${medio ? ` (${medio})` : ''}: ${pesos(monto)}\n${fichaCotizacion(q)}`, botones: [] }
 }

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   almacenFotosMemoria, almacenSolicitudesMemoria, correoContacto, editarFotosWeb, fotosPorSeccion, iniciarSolicitudFotos,
-  subirFotoWeb, subirTrozoSolicitud, terminarSolicitudFotos, validarContacto, whatsappDe,
+  subirFotoWeb, subirTrozoSolicitud, terminarSolicitudFotos, validarContacto, validarPyme, correoPyme, whatsappDe,
 } from './sitio.mjs'
 
 const jpg = Buffer.alloc(1000, 7).toString('base64')
@@ -90,4 +90,16 @@ test('enviar fotos: valida datos y archivos antes de crear nada', async () => {
   await assert.rejects(iniciarSolicitudFotos(deps, solicitud({ archivos: Array(11).fill({ nombre: 'a.jpg', tipo: 'image/jpeg', tamano: 1 }) })), /hasta 10/)
   await assert.rejects(terminarSolicitudFotos(deps, { carpeta: 'no-existe' }), /No encontramos/)
   assert.equal(deps.solicitudes.carpetas.size, 0)
+})
+
+test('solicitud de empresa (/pyme): pide empresa, nombre y un contacto, y llega con todo al correo', () => {
+  assert.throws(() => validarPyme({ nombre: 'Ana', email: 'ana@empresa.cl' }), /empresa/)
+  assert.throws(() => validarPyme({ empresa: 'Logística Sur', nombre: 'Ana' }), /correo o un teléfono/)
+  assert.throws(() => validarPyme({ empresa: 'X', nombre: 'Ana', email: 'a@b.cl', website: 'spam' }), /inválida/)
+  const p = validarPyme({ empresa: 'Logística Sur SpA', rut: '76.123.456-7', nombre: 'Ana Pérez', cargo: 'Jefa de bodega', email: 'Ana@LogSur.cl', telefono: '9 8765 4321',
+    comuna: 'Quilicura', espacio: 'Bodega o centro de distribución', tamano: '30 a 100 metros lineales', plazo: 'Este mes', mensaje: 'Galpón de 6 m de alto' })
+  const c = correoPyme(p, 'repisas@donmaxi.cl')
+  assert.equal(c.responderA, 'ana@logsur.cl')
+  assert.match(c.asunto, /Logística Sur SpA/)
+  for (const t of ['RUT 76.123.456-7', 'Jefa de bodega', 'Quilicura', '30 a 100 metros lineales', 'Este mes', 'Galpón de 6 m de alto', 'https://wa.me/56987654321']) assert.ok(c.texto.includes(t), t)
 })

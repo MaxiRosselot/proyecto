@@ -6,6 +6,7 @@ import CotizaApp from './CotizaApp.jsx'
 import ReservaApp from './ReservaApp.jsx'
 import AgendarApp from './AgendarApp.jsx'
 import SitioApp from './sitio/SitioApp.jsx'
+import PymeApp from './sitio/PymeApp.jsx'
 
 const container = document.getElementById('root')
 const root = createRoot(container)
@@ -19,4 +20,6 @@ root.render(ruta.startsWith('/admin') ? <AdminApp />
   : ruta.startsWith('/reserva') ? <ReservaApp />
   : ruta.startsWith('/agendar') ? <AgendarApp />
   : ruta.startsWith('/visita') ? <App />
+  // /pyme: la marca para empresas (src/sitio/pyme-contenido.js).
+  : /^\/pyme\/?$/.test(ruta) ? <PymeApp />
   : <SitioApp />)
