@@ -306,7 +306,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   // modelo 3D, para editar): la guardada queda como esta y la nueva toma otro N°. El recargo de
   // sabado no pasa: va con la fecha de una instalacion.
   function nuevaMismoCliente() {
-    setNuevaDesde({ cotNum: String(cotGuardada.cotNum), nombre: manualCliente.nombre || selectedVisit?.nombre || '' })
+    setNuevaDesde({ cotNum: String(cotGuardada.cotNum), nombre: cliente.nombre || '' })
     setAdicionales(({ recargo_pct: _, ...resto }) => resto)
     setCotGuardada(null)
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
