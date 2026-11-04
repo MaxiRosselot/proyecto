@@ -6,7 +6,7 @@ import { hayBorradorSinGuardar } from './PorCotizar.jsx'
 import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx'
 import { fechaLarga } from './whatsappInstalacion.js'
 import { BadgePago, PagosCotizacion } from './PagosCotizacion.jsx'
-import { regenerarPdf } from './regenerarPdf.js'
+import { cambiarAOpcion, regenerarPdf } from './regenerarPdf.js'
 import EnviarCotizacion, { CopiarLink, CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
 import FichaMaestro from './FichaMaestro.jsx'
 import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
@@ -258,6 +258,24 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     }
   }
 
+  // Cambio rapido a una de las otras opciones de la pagina 5: pasa a ser la cotizacion (repisas,
+  // modelo 3D y total) y la de antes queda como opcion. Se rehace el PDF con el valor nuevo.
+  async function cambiarOpcion(quote, alternativa) {
+    if (!window.confirm(`¿Cambiar la cotización N° ${quote.cotNum} a "${alternativa.titulo}" (${fmt(alternativa.total)})? La opción actual queda como alternativa en la página 5.`)) return
+    setAbriendo(quote.cotNum)
+    try {
+      const res = await apiFetch('/.netlify/functions/get-quotes?cotNum=' + encodeURIComponent(quote.cotNum))
+      if (!res.ok || !res.quote) throw new Error(res.error || 'No se encontró la cotización')
+      const cambios = cambiarAOpcion(res.quote, alternativa.tipo)
+      const guardado = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ cotNum: quote.cotNum, ...cambios }) })
+      if (!guardado.ok) throw new Error(guardado.error || 'No se pudo guardar')
+      actualizarLocal(quote.cotNum, { repisas: cambios.repisas, subtotal: cambios.subtotal, iva: cambios.iva, total: cambios.total,
+        alternativas: cambios.alternativas.map(({ proyecto: _, ...a }) => a) })
+    } catch (e) { alert('No se pudo cambiar: ' + e.message); return }
+    finally { setAbriendo(null) }
+    await rehacerPdf(quote)
+  }
+
   // Ir a otra cotizacion del mismo cliente (puede estar en otra pestaña).
   function irA(q) {
     setBuscar(''); setTab(porVerificar(q) ? 'verificar' : q.status); setExpanded(q.cotNum)
@@ -504,6 +522,17 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                           <button onClick={() => nuevaParaCliente(q, false)} disabled={abriendo === q.cotNum} style={boton} title="Otra cotización para este mismo cliente, con un N° nuevo">➕ Nueva cotización para este cliente</button>
                           <button onClick={() => nuevaParaCliente(q, true)} disabled={abriendo === q.cotNum} style={boton} title="Abre en el cotizador una copia de esta (repisas, servicios y modelo 3D) para editarla y guardarla con N° nuevo">⧉ Copiar y editar como nueva</button>
                           <button onClick={() => regenerarComoNueva(q)} disabled={abriendo === q.cotNum || Boolean(pdfEnCurso)} style={boton} data-testid="regenerar-como-nueva" title="Crea al tiro una cotización igual con N° nuevo, su PDF y su link para agendar, sin abrir el cotizador">⟳ Regenerar como nueva</button>
+                        </div>
+                      )}
+                      {q.alternativas?.length > 0 && (
+                        <div style={{ marginTop: 10 }} data-testid="otras-opciones">
+                          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .6, marginBottom: 6 }}>Otras opciones (pág. 5)</div>
+                          {q.alternativas.map(a => (
+                            <div key={a.tipo} style={{ ...fila, justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderTop: '1px solid ' + C.border }}>
+                              <span><strong>{a.titulo}</strong> · {fmt(a.total)}</span>
+                              <button onClick={() => cambiarOpcion(q, a)} disabled={abriendo === q.cotNum || Boolean(pdfEnCurso)} style={{ ...boton, padding: '4px 10px' }}>Cambiar a esta opción</button>
+                            </div>
+                          ))}
                         </div>
                       )}
                       {delCliente[claveCliente(q)].length > 1 && (

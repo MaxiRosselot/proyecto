@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
-import { CONDICIONES, MARCA, SERVICIOS, TEXTO_VIGENCIA, VIGENCIA_DIAS } from './marca.mjs';
-import { montoDespacho, nombreServicio, porcentajeDescuento, porcentajeRecargo } from './totales.mjs';
+import { CONDICIONES, MARCA, SERVICIOS, TEXTO_VIGENCIA, VIGENCIA_DIAS, WHATSAPP } from './marca.mjs';
+import { montoDespacho, nombreServicio, porcentajeDescuento, porcentajeRecargo, totalesCotizacion } from './totales.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -42,6 +42,16 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     largo: numeric(r.largo), prof: numeric(r.prof), alto: numeric(r.alto), niveles: numeric(r.niveles), unidades: numeric(r.unidades), valor: numeric(r.valor),
   }));
   if (rows.length > 100) throw new Error('Máximo 100 repisas por cotización');
+  // Pagina 5 (opcional): hasta 2 alternativas del mismo trabajo, con sus repisas, su vista y su
+  // comparacion con la cotizada. Sus totales se calculan aca con los mismos servicios (sin recargo).
+  const { recargo_pct: _recargo, ...sinRecargo } = data;
+  const alternativas = (Array.isArray(data.alternativas) ? data.alternativas : []).slice(0, 2).map((a, i) => {
+    const repisas = (a.repisas || []).map(r => ({ largo: numeric(r.largo), prof: numeric(r.prof), alto: numeric(r.alto), niveles: numeric(r.niveles), unidades: numeric(r.unidades), valor: numeric(r.valor) })).filter(r => r.unidades > 0);
+    if (!repisas.length || repisas.length > 30) throw new Error('Alternativa inválida');
+    const t = totalesCotizacion(repisas, sinRecargo);
+    return { numero: i + 2, titulo: String(a.titulo || 'Alternativa').slice(0, 60), etiqueta: String(a.etiqueta || '').slice(0, 30), descripcion: String(a.descripcion || '').slice(0, 200),
+      comparacion: String(a.comparacion || '').slice(0, 120), repisas, servicios: t.adicionales + t.despacho, subtotal: t.subtotal, iva: t.iva, total: t.total, imagen: imageData(a.imagen, `alternativa ${i + 1}`) };
+  });
   // Una repisa en 0 unidades (se saco al agendar) no se cobra ni se muestra.
   for (let i = rows.length - 1; i >= 0; i--) if (rows[i].unidades === 0 && rows.length > 1) rows.splice(i, 1);
   if (rows.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.valor) || r.valor <= 0))) throw new Error('Cada rack requiere un precio neto entero positivo');
@@ -109,7 +119,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   const fecha = d => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d).filter(p => p.type !== 'literal').map(p => p.value).join('/');
 
   // Page 1: header, drawings, client, items and payment.
-  page(`${FOOTER_MATERIAL} · Ver servicios adicionales en pág. 2`);
+  page(`${FOOTER_MATERIAL} · Ver servicios adicionales en pág. 2${alternativas.length ? ' · Otras opciones en pág. 5' : ''}`);
   fit(logo, L, 26.8, 62, 24);
   text(`Cotización N.º ${data.cot_num || ''}`, 330, 25.5, R - 330, 12, C.accentInk, F.serif, { align: 'right' });
   text(`Válida hasta ${fecha(new Date(now.getTime() + VIGENCIA_DIAS * 86400000))}`, 330, 41.6, R - 330, 7.5, C.muted, F.sans, { align: 'right' });
@@ -261,6 +271,55 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
     text(q, L, y, W, 10.12, C.ink, F.serif);
     text(a, L, y + 17.4, W, 9, C.sub, F.sans, { lineGap: .45 });
     y = doc.y + 9; rule(y, C.rowLine); y += 10.5;
+  }
+
+  // Page 5 (optional): alternativas, una debajo de la otra, con el formato de la pagina 1.
+  if (alternativas.length) {
+    page('Precios con IVA incluido · Los servicios contratados están incluidos en cada opción', 'Otras opciones para tu bodega', 'La opción de la página 1 es la que te recomendamos. Si prefieres otra, avísanos y la ajustamos.');
+    y = 122;
+    const alto = alternativas.length > 1 ? 296 : 330;
+    for (const a of alternativas) {
+      box(L, y, W, alto - 12, '#FFFFFF', C.frame, 10.5);
+      const imgW = 190, imgX = L + 12;
+      if (a.imagen) fit(doc.openImage(a.imagen), imgX, y + 14, imgW, alto - 40);
+      const x = imgX + imgW + 16, w = R - 14 - x;
+      let ty = y + 16;
+      label(`Opción ${a.numero}${a.etiqueta ? ' · ' + a.etiqueta : ''}`, x, ty, w, C.accentInk);
+      ty += 13;
+      text(a.titulo, x, ty, w, 14, C.ink, F.serif); ty = doc.y + 3;
+      if (a.descripcion) { text(a.descripcion, x, ty, w, 8.6, C.sub); ty = doc.y + 6; }
+      // Tabla corta: medidas, unidades y total por fila.
+      const cols = [['Largo', 0], ['Fondo', 52], ['Alto', 102], ['Niv.', 146], ['Uds.', 180]];
+      doc.rect(x, ty, w, 14).fill(C.card);
+      cols.forEach(([t, dx]) => label(t, x + 6 + dx, ty + 4, 50, C.muted));
+      label('Total', x + w - 86, ty + 4, 80, C.muted, 'right');
+      ty += 14;
+      const visibles = a.repisas.slice(0, alternativas.length > 1 ? 5 : 7);
+      for (const r of visibles) {
+        [[metres(r.largo), 0], [metres(r.prof), 52], [metres(r.alto), 102], [r.niveles, 146], [r.unidades, 180]].forEach(([v, dx]) => text(v, x + 6 + dx, ty + 4, 48, 8.4, C.ink, F.sans, { lineBreak: false }));
+        text(money(r.valor * r.unidades), x + w - 106, ty + 4, 100, 8.4, C.ink, F.bold, { align: 'right' });
+        ty += 15.5; rule(ty, C.rowLine, x, x + w);
+      }
+      if (a.repisas.length > visibles.length) { text(`+ ${a.repisas.length - visibles.length} repisas más`, x + 6, ty + 4, w, 8, C.muted); ty += 15; }
+      if (a.servicios > 0) {
+        text('Servicios contratados', x + 6, ty + 4, 200, 8.4, C.sub, F.sans, { lineBreak: false });
+        text(money(a.servicios), x + w - 106, ty + 4, 100, 8.4, C.ink, F.bold, { align: 'right' });
+        ty += 15.5; rule(ty, C.rowLine, x, x + w);
+      }
+      // Total y comparacion con la recomendada.
+      const by = y + alto - 12 - 64;
+      text(`Neto ${money(a.subtotal)} · IVA ${money(a.iva)}`, x, by, w - 160, 8.4, C.sub);
+      if (a.comparacion) text(a.comparacion, x, by + 13, w - 160, 8.6, C.accentInk, F.bold);
+      box(x + w - 150, by - 4, 150, 26.8, C.accent, undefined, 6);
+      text('TOTAL', x + w - 142, by + 6.2, 50, 7.5, C.ink);
+      text(money(a.total), x + w - 110, by + 1.3, 104, 12.75, C.ink, F.serif, { align: 'right' });
+      // Quiero esta opcion: WhatsApp con el mensaje listo.
+      const ly = y + alto - 12 - 24;
+      const wa = `https://wa.me/${String(WHATSAPP).replace(/\D/g, '')}?text=${encodeURIComponent(`Hola, quiero la opción ${a.numero} (${a.titulo}) de la cotización N° ${data.cot_num || ''}`)}`;
+      withIcon('Quiero esta opción', arrow, '', x, ly, 9.38, C.accentInk, F.bold, 'left', 200);
+      doc.link(x, ly - 2, 120, 14, wa);
+      y += alto;
+    }
   }
 
   const count = doc.bufferedPageRange().count;

@@ -4,6 +4,8 @@ import { precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } fro
 import './PorCotizar.css'
 import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
 import EnviarCotizacion, { CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
+import AlternativasPanel, { firmaProyecto } from './AlternativasPanel.jsx'
+import { VISTA_ALTERNATIVA, planificarYDibujar } from './regenerarPdf.js'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 
@@ -241,6 +243,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [editingNombre, setEditingNombre] = useState(null)
   // Cotizacion nueva para un cliente que ya tiene otra (Cotizaciones → Nueva cotización para este cliente).
   const [nuevaDesde, setNuevaDesde] = useState(null)
+  // Alternativas elegidas para la pagina 5 (hasta 2), cada una con la huella del modelo con que se calculo.
+  const [alternativas, setAlternativas] = useState([])
 
   // Cotizar una visita desde la agenda es siempre una cotizacion nueva: si habia una guardada
   // abierta, generar la habria sobrescrito con el cliente de la visita.
@@ -264,6 +268,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setCotGuardada(q.comoNueva ? null : { cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
     setNuevaDesde(q.comoNueva ? { cotNum: String(q.origenCotNum || q.cotNum), nombre: q.nombre || '' } : null)
     setTotalInfo(blanco ? { subtotal: 0, iva: 0, total: 0 } : { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
+    setAlternativas(blanco ? [] : (q.alternativas || []).map(a => ({ ...a, base: firmaProyecto(q.proyecto3d || null) })))
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
   }, [cotizacionAbierta])
 
@@ -318,6 +323,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   }
 
   function resetCotizador() {
+    setAlternativas([])
     setNuevaDesde(null)
     setMode('visita')
     setManualCliente({ nombre: '', email: '', celular: '', direccion: '' })
@@ -435,7 +441,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     })
   }
 
-  async function generarPdf(numero, grafica3d) {
+  async function generarPdf(numero, grafica3d, alternativasPdf = []) {
     const res = await adminFetch('/.netlify/functions/generate-quote', {
       method: 'POST',
       body: JSON.stringify({
@@ -449,6 +455,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
         repisas:   repisas.map(productoCotizacion),
         ...adicionales,
         ...(grafica3d ? { grafica3d } : {}),
+        ...(alternativasPdf.length ? { alternativas: alternativasPdf } : {}),
       }),
     })
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + res.status) }
@@ -469,6 +476,14 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setGenerating(true); setError(''); setPdfUrl(null); setPdfDrive(''); setAutoSaved(false)
 
     try {
+      // Las alternativas tienen que ser del modelo actual; las que vienen de una cotizacion guardada
+      // no traen su vista: se dibuja de nuevo.
+      const base = firmaProyecto(project3d)
+      if (alternativas.some(a => a.base !== base)) throw new Error('Las otras opciones se calcularon con otro modelo 3D: vuelve a calcularlas o quítalas.')
+      const conVista = []
+      for (const a of alternativas) conVista.push(a.imagen ? a : { ...a, imagen: (await planificarYDibujar(a.proyecto, [VISTA_ALTERNATIVA])).imagenes?.isometric || null })
+      const alternativasPdf = conVista.map(({ titulo, etiqueta, descripcion, comparacion, repisas: r, imagen }) => ({ titulo, etiqueta, descripcion, comparacion, repisas: r, imagen }))
+
       const grafica3d = await pedirGrafica3d()
       if (project3d && !grafica3d) throw new Error('No se pudieron generar las vistas 3D. Reintenta antes de emitir la cotización.')
 
@@ -484,6 +499,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
         adicionales,
         // El modelo 3D se guarda con la cotizacion para poder reabrirla tal como se envio.
         proyecto3d:  project3d || null,
+        // Las de la pagina 5, con su modelo, para cambiar a una desde Cotizaciones.
+        alternativas: conVista.map(({ imagen: _i, base: _b, ...a }) => a),
       }
 
       // Nueva: se pide el siguiente numero libre y se crea. Si alguien lo tomo entre medio, el
@@ -492,7 +509,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       let numero = cotGuardada ? cotGuardada.cotNum : await pedirSiguienteNumero()
       let pdf, link = ''
       for (let intento = 0; ; intento++) {
-        pdf = await generarPdf(numero, grafica3d)
+        pdf = await generarPdf(numero, grafica3d, alternativasPdf)
         const guardado = await apiFetch('/.netlify/functions/save-quote', {
           method: 'POST',
           body: JSON.stringify(cotGuardada
@@ -806,6 +823,12 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           </div>
         </div>
       </div>
+
+      {project3d && (
+        <AlternativasPanel project3d={project3d} tabla={tablaPrecios} adicionales={adicionales}
+          principal={{ total: totales.total, repisas: repisas.map(productoCotizacion), filas: repisas }}
+          elegidas={alternativas} onCambio={setAlternativas} />
+      )}
 
       {error && <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div>}
 
