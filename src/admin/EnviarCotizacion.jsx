@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { styles } from './utils.js'
-import { linkWhatsapp, mensajeCotizacion, mensajeEnvioCotizacion } from '../../netlify/functions/lib/mensajes.mjs'
+import { linkWhatsapp, mensajeCotizacion, mensajeEnvioCotizacion, mensajeHorarios } from '../../netlify/functions/lib/mensajes.mjs'
+import { disponibilidadAgenda, duracionInstalacionMin, duracionTexto } from '../../netlify/functions/lib/agenda-horas.mjs'
+import { RECARGO_SABADO_PCT } from '../../netlify/functions/lib/totales.mjs'
+import { ahoraEnZona, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 
 const VERDE = '#25D366'
 const nombreArchivo = nombre => `Cotizacion ${(nombre || 'cliente').trim()} - Repisas Don Maxi.pdf`
@@ -24,6 +27,36 @@ export function CopiarMensajeAgenda({ link, tamano = 12 }) {
     <button type="button" onClick={copiar} title={texto}
       style={{ ...styles.btnSecondary, fontSize: tamano, padding: tamano < 13 ? '6px 14px' : '8px 16px', borderColor: VERDE, color: '#128C7E', fontWeight: 700 }}>
       {copiado ? '✓ Mensaje copiado' : link ? '📋 Copiar mensaje + link para agendar' : '📋 Copiar mensaje'}
+    </button>
+  )
+}
+
+// Copia los horarios libres de los proximos 10 dias para esta instalacion, para agendar a mano a
+// quien no entra a su link. Son los mismos que ve el cliente en /agendar (misma duracion y agenda).
+export const DIAS_HORARIOS = 10
+export function CopiarHorarios({ link, nombre, tamano = 12 }) {
+  const [estado, setEstado] = useState('')
+  if (!link) return null
+  async function copiar() {
+    setEstado('Buscando…')
+    try {
+      const url = new URL(link)
+      const r = await fetch(`/.netlify/functions/agendar?c=${encodeURIComponent(url.searchParams.get('c'))}&t=${encodeURIComponent(url.searchParams.get('t'))}`).then(x => x.json())
+      if (!r.ok) throw new Error(r.error || 'No se pudo leer la agenda')
+      if (!r.horario) throw new Error(r.estado === 'instalada' ? 'Esta instalación ya se hizo' : 'Faltan menos de 48 h para su instalación: se cambia por WhatsApp')
+      const duracion = duracionInstalacionMin(r.cotizacion, r.cotizacion.adicionales)
+      const hasta = sumarDias(ahoraEnZona().fecha, DIAS_HORARIOS)
+      const dias = disponibilidadAgenda(r.ocupados || {}, duracion, new Date(), r.horario).filter(d => d.fecha <= hasta)
+      const texto = mensajeHorarios({ nombre, duracion: duracionTexto(duracion), dias, recargoSabadoPct: RECARGO_SABADO_PCT })
+      try { await navigator.clipboard.writeText(texto) } catch { window.prompt('Copia los horarios:', texto) }
+      setEstado('✓ Horarios copiados'); setTimeout(() => setEstado(''), 2500)
+    } catch (e) { setEstado(''); alert('No se pudieron copiar los horarios: ' + e.message) }
+  }
+  return (
+    <button type="button" onClick={copiar} disabled={estado === 'Buscando…'} data-testid="copiar-horarios"
+      title={`Los horarios libres de los próximos ${DIAS_HORARIOS} días para esta instalación, para mandarlos por WhatsApp y agendar tú`}
+      style={{ ...styles.btnSecondary, fontSize: tamano, padding: tamano < 13 ? '6px 14px' : '8px 16px' }}>
+      {estado || '🕒 Copiar horarios disponibles'}
     </button>
   )
 }

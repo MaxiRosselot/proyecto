@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mensajeEnvioCotizacion, mensajeConfirmarInstalacion, linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
+import { mensajeEnvioCotizacion, mensajeHorarios, mensajeConfirmarInstalacion, linkWhatsapp, mensajeCotizacion } from './mensajes.mjs'
 
 test('mensaje de la cotizacion: numero, total, link al PDF y la vigencia', () => {
   const texto = mensajeCotizacion({ nombre: 'Marta Díaz', cotNum: 1579, total: 303450, pdfUrl: 'https://drive.google.com/file/d/abc/view' })
@@ -49,4 +49,17 @@ test('el mensaje para enviar la cotizacion lleva cuotas, servicios y el link par
   assert.ok(t.includes('Agenda tu instalación aquí'))
   assert.ok(t.includes('\nhttps://repisasdonmaxi.cl/agendar?c=1500&t=abc\n'))
   assert.doesNotMatch(mensajeEnvioCotizacion(''), /Agenda tu instalación/)
+})
+
+test('horarios para agendar a mano: un dia por linea, el sabado con su recargo', () => {
+  const texto = mensajeHorarios({ nombre: 'Carmen Cedeño', duracion: '2 h 30 min', dias: [
+    { fecha: '2026-11-06', horas: [{ inicio: '10:00', fin: '12:30' }, { inicio: '13:30', fin: '16:00' }] },
+    { fecha: '2026-11-07', horas: [{ inicio: '10:00', fin: '12:30' }] },
+  ] })
+  assert.match(texto, /^Hola Carmen 👋 Estos son los horarios disponibles para tu instalación \(dura aprox\. 2 h 30 min\):/)
+  assert.match(texto, /• Viernes 6 de noviembre: 10:00, 13:30/)
+  assert.match(texto, /• Sábado 7 de noviembre \(\+5%\): 10:00/)
+  assert.match(texto, /Los sábados tienen un recargo de 5% sobre el valor del proyecto\./)
+  assert.doesNotMatch(mensajeHorarios({ dias: [{ fecha: '2026-11-06', horas: [{ inicio: '10:00' }] }] }), /recargo/)
+  assert.match(mensajeHorarios({ nombre: 'Ana', dias: [] }), /no me quedan horarios libres/)
 })

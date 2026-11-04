@@ -293,6 +293,26 @@ export function mensajeEnvioCotizacion(linkAgenda) {
   ].join('\n')
 }
 
+// Los horarios libres para la instalacion, para mandarlos por WhatsApp a quien no entra a su link y
+// agendar a mano. dias: [{ fecha: 'AAAA-MM-DD', horas: [{ inicio, fin }] }]. Los sabados llevan recargo.
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const MESES_ANIO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+export function mensajeHorarios({ nombre = '', duracion = '', dias = [], recargoSabadoPct = 5 }) {
+  const fecha = f => { const [y, m, d] = f.split('-').map(Number); const dia = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); return { texto: `${DIAS_SEMANA[dia]} ${d} de ${MESES_ANIO[m - 1]}`, sabado: dia === 6 } }
+  const lineas = dias.map(d => { const f = fecha(d.fecha); return `• ${f.texto}${f.sabado ? ` (+${recargoSabadoPct}%)` : ''}: ${d.horas.map(h => h.inicio).join(', ')}` })
+  const haySabado = dias.some(d => fecha(d.fecha).sabado)
+  const primerNombre = String(nombre).trim().split(/\s+/)[0]
+  if (!dias.length) return `Hola${primerNombre ? ' ' + primerNombre : ''} 👋 Por ahora no me quedan horarios libres en los próximos días. Cuéntame qué días te acomodan y lo buscamos 🙌`
+  return [
+    `Hola${primerNombre ? ' ' + primerNombre : ''} 👋 Estos son los horarios disponibles para tu instalación${duracion ? ` (dura aprox. ${duracion})` : ''}:`,
+    '',
+    ...lineas,
+    '',
+    ...(haySabado ? [`Los sábados tienen un recargo de ${recargoSabadoPct}% sobre el valor del proyecto.`, ''] : []),
+    'Respóndeme con el día y la hora que te acomode y te la dejo agendada 📅',
+  ].join('\n')
+}
+
 // La vispera de cada instalacion (8 pm, por Telegram a Maxi): el mensaje para copiar y mandarle
 // al cliente por WhatsApp. Con retiro y orden contratado no se le pide la bodega despejada.
 export function mensajeInstalacionManana(q, { fecha, inicio }) {

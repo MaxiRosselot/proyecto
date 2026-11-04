@@ -7,7 +7,7 @@ import { AgendarInstalacion, ResumenInstalacion } from './AgendarInstalacion.jsx
 import { fechaLarga } from './whatsappInstalacion.js'
 import { BadgePago, PagosCotizacion } from './PagosCotizacion.jsx'
 import { cambiarAOpcion, regenerarPdf } from './regenerarPdf.js'
-import EnviarCotizacion, { CopiarLink, CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
+import EnviarCotizacion, { CopiarHorarios, CopiarLink, CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
 import FichaMaestro from './FichaMaestro.jsx'
 import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
@@ -65,7 +65,7 @@ function SiguientePaso({ q, onAgendar }) {
   if (q.reserva?.estado === 'esperando pago') return caja(C.blue, '#EFF6FF', <>El cliente está pagando con Mercado Pago{q.reserva.fecha ? ` (reservó ${fechaLarga(q.reserva.fecha).toLowerCase()}, ${q.reserva.inicio})` : ''}. Se agenda solo cuando se apruebe.</>)
   if (q.status === 'por confirmar') return caja(C.orange, C.orangeLight,
     <>Mándale la cotización con su link para agendar: ahí elige su día y hora. Si ya aceptó por otro lado, agenda tú.</>,
-    <><EnviarCotizacion cotizacion={q} tamano={12} soloWhatsapp /><CopiarMensajeAgenda link={q.linkAgenda} /><CopiarLink link={q.linkPago} texto="Copiar link de pago" />
+    <><EnviarCotizacion cotizacion={q} tamano={12} soloWhatsapp /><CopiarMensajeAgenda link={q.linkAgenda} /><CopiarHorarios link={q.linkAgenda} nombre={q.nombre} /><CopiarLink link={q.linkPago} texto="Copiar link de pago" />
       <button onClick={onAgendar} style={{ ...boton, color: C.green, borderColor: C.green }}>Agendar instalación</button></>)
   if (!q.instalacion?.fecha) return caja(C.green, C.green + '0F', <>Aceptada{pago.pagado ? ` · pagó ${fmt(pago.pagado)}` : ''}. Falta agendar la instalación.</>,
     <button onClick={onAgendar} style={{ ...boton, background: C.green, borderColor: C.green, color: 'white' }}>Agendar instalación</button>)
@@ -551,7 +551,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                       <Seccion titulo="Enviar al cliente" testid="seccion-enviar">
                         <div style={fila}>
                           <EnviarCotizacion cotizacion={q} tamano={12} />
-                          <CopiarMensajeAgenda link={q.linkAgenda} />
+                          <CopiarMensajeAgenda link={q.linkAgenda} /><CopiarHorarios link={q.linkAgenda} nombre={q.nombre} />
                           <CopiarLink link={q.linkPago} texto="Copiar link de pago" />
                         </div>
                         <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>Con el link para agendar el cliente elige su día y hora (y puede sumar servicios). El pago lo coordinas tú.</div>
