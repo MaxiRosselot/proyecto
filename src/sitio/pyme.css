@@ -35,9 +35,10 @@
 .py-encabezado{position:sticky;top:0;z-index:20;background:rgba(11,22,38,.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.08)}
 .py-encabezado-fila{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:68px}
 .py-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.py-logo-fondo{fill:var(--azul)}
-.py-marca{font-size:22px;font-weight:500;color:#fff;letter-spacing:-.02em}
-.py-marca b{font-weight:800;color:var(--celeste);margin-left:1px}
+.py-logo img{height:38px;width:auto}
+.py-marca{font-size:22px;font-weight:500;color:#fff;letter-spacing:.06em}
+.py-marca b{font-weight:800;color:var(--celeste)}
+.py-pie-logo{width:150px;height:auto}
 .py-encabezado nav{display:flex;align-items:center;gap:26px}
 .py-encabezado nav a:not(.py-boton){color:#C7D2E0;text-decoration:none;font-weight:600;font-size:14.5px}
 .py-encabezado nav a:not(.py-boton):hover{color:#fff}

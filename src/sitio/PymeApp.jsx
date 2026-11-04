@@ -40,13 +40,9 @@ const irA = id => e => { e.preventDefault(); document.getElementById(id)?.scroll
 function Logo() {
   return (
     <a className="py-logo" href="/pyme" aria-label={`${PYME.nombre}, inicio`}>
-      <svg viewBox="0 0 36 36" width="34" height="34" aria-hidden="true">
-        <rect width="36" height="36" rx="7" className="py-logo-fondo" />
-        <rect x="8" y="9" width="20" height="3.4" rx="1" fill="#fff" />
-        <rect x="8" y="16.3" width="20" height="3.4" rx="1" fill="#fff" opacity=".8" />
-        <rect x="8" y="23.6" width="20" height="3.4" rx="1" fill="#fff" opacity=".6" />
-      </svg>
-      <span className="py-marca">repisas<b>PRO</b></span>
+      {/* El simbolo de repisa, en los colores de la marca (public/pyme). */}
+      <img src="/pyme/icono-celeste.png" alt="" width="26" height="38" />
+      <span className="py-marca">REPISAS<b>PRO</b></span>
     </a>
   )
 }
@@ -237,7 +233,7 @@ export default function PymeApp() {
 
       <footer className="py-pie">
         <div className="py-contenedor py-pie-fila">
-          <Logo />
+          <img className="py-pie-logo" src="/pyme/logo-repisaspro-oscuro.png" alt={PYME.nombre} width="150" />
           <p>{PYME.bajada} · Santiago, Chile<br />{[PYME.correo, PYME.whatsapp.replace(/^\+56(\d)(\d{4})(\d{4})$/, '+56 $1 $2 $3'), PYME.instagram && `@${PYME.instagram}`].filter(Boolean).join(' · ')}</p>
         </div>
       </footer>
