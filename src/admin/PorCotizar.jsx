@@ -397,6 +397,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   }
 
   const cliente = mode === 'visita' ? (selectedVisit || {}) : manualCliente
+  const visitasParaElegir = selectedVisit && !realizadas.some(v => v.id === selectedVisit.id) ? [selectedVisit, ...realizadas] : realizadas
 
   // Recuadros verticales de la pagina 1 del PDF (diseño de Maxi, 25-09), a la resolucion que pide
   // su README (~860 x 1080 la isometrica). Se piden con estas proporciones para que entren sin deformarse.
@@ -591,11 +592,12 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           <button onClick={() => setMode('manual')} style={{ ...styles.tab, ...(mode === 'manual' ? styles.tabActive : {}) }}>Ingreso manual</button>
         </div>
 
+        {/* La visita elegida se sigue viendo aunque al generar haya pasado a "cotizada" (sale de las realizadas). */}
         {mode === 'visita' && (
-          realizadas.length === 0
+          visitasParaElegir.length === 0
             ? <p style={{ color: C.textMuted, fontSize: 14, margin: 0 }}>No hay visitas marcadas como Realizadas aun.</p>
             : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {realizadas.map(v => (
+                {visitasParaElegir.map(v => (
                   <button key={v.id} onClick={() => setSelectedVisit(v)} style={{
                     padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                     border: '1.5px solid ' + (selectedVisit?.id === v.id ? C.orange : C.border),
