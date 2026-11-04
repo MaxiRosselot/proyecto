@@ -1,22 +1,23 @@
-// Marca para empresas y pymes (/pyme): el mismo producto y taller de Don Maxi, con su propia
-// cara para el cliente empresa. El nombre y los textos se cambian aca, en un solo lugar.
-import { MARCA, WHATSAPP } from '../../netlify/functions/lib/marca.mjs'
+// RepisasPro: la marca para empresas y pymes. Mismo taller, identidad propia y separada de la
+// marca para personas (no menciona a Don Maxi). Se ve en /pyme mientras no tenga su dominio.
+// El nombre, los datos de contacto y los textos se cambian aca, en un solo lugar.
+import { WHATSAPP } from '../../netlify/functions/lib/marca.mjs'
 
 export const PYME = {
-  nombre: 'Estiba',
+  nombre: 'RepisasPro',
   bajada: 'Estanterías de madera para empresas',
-  instagram: '',            // p. ej. 'estiba.cl' cuando exista la cuenta
-  correo: MARCA.correo,
+  instagram: '',            // p. ej. 'repisaspro' cuando exista la cuenta
+  correo: '',               // p. ej. 'contacto@repisaspro.cl' cuando exista; vacio no se muestra
   whatsapp: WHATSAPP,
   // El mensaje de WhatsApp parte asi, para saber que viene de la marca empresa.
-  saludo: 'Hola, les escribo desde la web de Estiba (empresas).',
+  saludo: 'Hola, les escribo desde la web de RepisasPro.',
 }
 
 export const CIFRAS_PYME = [
   { valor: '+580', texto: 'proyectos instalados en 2025' },
   { valor: '5 años', texto: 'de garantía en estructura e instalación' },
   { valor: '24 h', texto: 'hábiles para tu propuesta formal' },
-  { valor: `${MARCA.rating} ★`, texto: `en Google · ${MARCA.resenas} reseñas` },
+  { valor: 'Factura', texto: 'electrónica y orden de compra' },
 ]
 
 export const SEGMENTOS = [

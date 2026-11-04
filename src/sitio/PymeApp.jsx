@@ -2,7 +2,6 @@
 // por que, proceso, proyectos, formulario de cotizacion y preguntas. El formulario llega por
 // correo y Telegram como solicitud de empresa (tipo 'pyme' en sitio.mjs).
 import React, { useEffect, useMemo, useState } from 'react'
-import { MARCA } from '../../netlify/functions/lib/marca.mjs'
 import { FOTOS_EJEMPLO } from './fotos-ejemplo.js'
 import { CIFRAS_PYME, PASOS_PYME, PLAZOS, PREGUNTAS_PYME, PYME, SEGMENTOS, TAMANOS, TIPOS_ESPACIO, VENTAJAS_PYME } from './pyme-contenido.js'
 import './pyme.css'
@@ -25,6 +24,11 @@ function useProyectos() {
 
 function useMetaPyme() {
   useEffect(() => {
+    // La marca usa su propia tipografia (Manrope), distinta a la del sitio para personas.
+    if (!document.getElementById('fuente-repisaspro')) {
+      const link = Object.assign(document.createElement('link'), { id: 'fuente-repisaspro', rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap' })
+      document.head.appendChild(link)
+    }
     document.title = `${PYME.nombre} · ${PYME.bajada} en Santiago`
     const meta = document.querySelector('meta[name="description"]')
     meta?.setAttribute('content', 'Estanterías de madera a medida para bodegas, centros de distribución, retail, edificios y contenedores. Fabricación propia, visita técnica sin costo, propuesta formal con 3D y factura.')
@@ -36,11 +40,13 @@ const irA = id => e => { e.preventDefault(); document.getElementById(id)?.scroll
 function Logo() {
   return (
     <a className="py-logo" href="/pyme" aria-label={`${PYME.nombre}, inicio`}>
-      <svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true">
-        <rect x="4" y="4" width="32" height="32" rx="6" fill="currentColor" />
-        <path d="M11 13h18M11 20h18M11 27h18M13 10v20M27 10v20" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+      <svg viewBox="0 0 36 36" width="34" height="34" aria-hidden="true">
+        <rect width="36" height="36" rx="7" className="py-logo-fondo" />
+        <rect x="8" y="9" width="20" height="3.4" rx="1" fill="#fff" />
+        <rect x="8" y="16.3" width="20" height="3.4" rx="1" fill="#fff" opacity=".8" />
+        <rect x="8" y="23.6" width="20" height="3.4" rx="1" fill="#fff" opacity=".6" />
       </svg>
-      <span><strong>{PYME.nombre}</strong><small>{PYME.bajada}</small></span>
+      <span className="py-marca">repisas<b>PRO</b></span>
     </a>
   )
 }
@@ -126,7 +132,6 @@ export default function PymeApp() {
                 <a className="py-boton claro" href={linkWhatsApp()} target="_blank" rel="noreferrer">Hablar por WhatsApp</a>
               </div>
             </div>
-            <figure className="py-hero-foto"><img src="/web/fotos/dm-090.jpg" alt="Estanterías de madera instaladas en una bodega de empresa" /></figure>
           </div>
           <div className="py-contenedor">
             <ul className="py-cifras">
@@ -233,7 +238,7 @@ export default function PymeApp() {
       <footer className="py-pie">
         <div className="py-contenedor py-pie-fila">
           <Logo />
-          <p>{PYME.nombre} es una marca de {MARCA.razonSocial} · RUT {MARCA.rut}<br />{PYME.correo} · {PYME.whatsapp.replace(/^\+56(\d)(\d{4})(\d{4})$/, '+56 $1 $2 $3')}{PYME.instagram ? ` · @${PYME.instagram}` : ''}</p>
+          <p>{PYME.bajada} · Santiago, Chile<br />{[PYME.correo, PYME.whatsapp.replace(/^\+56(\d)(\d{4})(\d{4})$/, '+56 $1 $2 $3'), PYME.instagram && `@${PYME.instagram}`].filter(Boolean).join(' · ')}</p>
         </div>
       </footer>
       <a className="py-flotante" href={linkWhatsApp()} target="_blank" rel="noreferrer" aria-label="Escríbenos por WhatsApp">💬</a>
