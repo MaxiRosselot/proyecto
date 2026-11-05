@@ -224,6 +224,35 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     finally { setAbriendo(null) }
   }
 
+  // Importar: un .json con una lista de cotizaciones { nombre, email?, telefono?, direccion?, notas?,
+  // proyecto3d?, repisas? }. Cada una se crea "por confirmar" con N° nuevo; las sin repisas quedan en $0
+  // para armarlas en el cotizador (Abrir en cotizador).
+  const [importando, setImportando] = useState('')
+  async function importar(archivo) {
+    let lista
+    try { lista = JSON.parse(await archivo.text()); if (!Array.isArray(lista)) lista = [lista] }
+    catch { return alert('El archivo no es un JSON válido') }
+    if (!lista.length || lista.some(c => !String(c?.nombre || '').trim())) return alert('Cada cotización del archivo necesita un nombre')
+    if (!window.confirm(`Se crearán ${lista.length} cotizaciones nuevas (por confirmar). ¿Seguir?`)) return
+    const creadas = []
+    try {
+      for (const [i, c] of lista.entries()) {
+        setImportando(`Importando ${i + 1} de ${lista.length}…`)
+        const repisas = Array.isArray(c.repisas) ? c.repisas : []
+        const t = totalesCotizacion(repisas, c.adicionales || {})
+        const r = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({
+          crear: true, status: 'por confirmar', nombre: String(c.nombre).slice(0, 120), email: c.email || '', telefono: c.telefono || '', direccion: c.direccion || '',
+          notas: c.notas || '', repisas, adicionales: c.adicionales || {}, proyecto3d: c.proyecto3d || null, subtotal: t.subtotal, iva: t.iva, total: t.total,
+        }) })
+        if (!r.ok) throw new Error(`${c.nombre}: ${r.error || 'no se pudo crear'}`)
+        creadas.push(r.cotNum)
+      }
+    } catch (e) { alert(`Se crearon ${creadas.length} de ${lista.length}. ${e.message}`) }
+    finally { setImportando('') }
+    await load()
+    if (creadas.length) { setTab('por confirmar'); alert(`Listo: ${creadas.length} cotizaciones creadas (N° ${creadas.join(', ')}). Ábrelas en el cotizador para poner las repisas.`) }
+  }
+
   // Otra cotizacion igual sin pasar por el cotizador: mismo cliente, repisas, servicios y modelo 3D,
   // con N° nuevo, su PDF y su propio link para agendar. El recargo de sabado no se copia: va con la
   // fecha de una instalacion, y la nueva todavia no tiene.
@@ -340,6 +369,11 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
             style={{ ...styles.input, width: 200, padding: '7px 12px', fontSize: 13 }}
           />
           <button onClick={probarCorreo} disabled={probandoCorreo} style={styles.btnSecondary}>{probandoCorreo ? 'Probando...' : 'Probar correo'}</button>
+          <label style={{ ...styles.btnSecondary, cursor: 'pointer' }} title="Crea cotizaciones desde un archivo .json (por ejemplo, bodegas dibujadas desde un plano)">
+            {importando || 'Importar'}
+            <input type="file" accept=".json,application/json" style={{ display: 'none' }} data-testid="importar-cotizaciones"
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importar(f) }} />
+          </label>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
