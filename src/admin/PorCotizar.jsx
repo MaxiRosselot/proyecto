@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { DEFAULTS_REPISA, C, adminFetch, apiFetch, fmtDate, fmt, styles } from './utils.js'
-import { precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } from './preciosRepisas.js'
+import { LATERAL_EXTRA_NETO, precioRepisa, filaPrecioRepisa, cargarTablaPrecios, TABLA_PRECIOS } from './preciosRepisas.js'
 import './PorCotizar.css'
 import { filasDeModulos, filaDesdeProducto, productoCotizacion } from './modulosCotizacion.js'
 import EnviarCotizacion, { CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
@@ -701,7 +701,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
             <tbody>
               {repisas.map((r, idx) => (
                 <tr key={r.id} style={{ background: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                  <td style={{ padding: '5px 8px', minWidth: 145 }}>{r.kind === 'rack' ? <>{r.label}<small style={{ display: 'block', color: C.textMuted }}>Cajas incluidas · precio propio</small></> : 'Repisa'}</td>
+                  <td style={{ padding: '5px 8px', minWidth: 145 }}>{r.kind === 'rack' ? <>{r.label}<small style={{ display: 'block', color: C.textMuted }}>Cajas incluidas · precio propio</small></> : <>Repisa{r.lateralesExtra ? <small style={{ display: 'block', color: C.textMuted }}>+{r.lateralesExtra} lateral{r.lateralesExtra > 1 ? 'es' : ''} en la esquina (+{fmt(r.lateralesExtra * LATERAL_EXTRA_NETO)})</small> : null}</>}</td>
                   <td style={{ padding: '5px 4px' }}>
                     <input type="number" readOnly={r.kind === 'rack'} value={r.l} step="0.01" onChange={e => updRep(r.id, 'l', e.target.value)} style={inputStyle} />
                   </td>
