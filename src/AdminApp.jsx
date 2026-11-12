@@ -9,6 +9,8 @@ import CalendarioSection   from './admin/Calendario.jsx'
 import EstadisticasSection from './admin/Instalaciones.jsx'
 import PlanillaSection from './admin/Planilla.jsx'
 import FotosWebSection from './admin/FotosWeb.jsx'
+import UsoPanel from './admin/UsoPanel.jsx'
+import { fijarSeccionUso } from './admin/registroUso.js'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -93,6 +95,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'estadisticas') return <EstadisticasSection onVerCotizacion={verCotizacion} />
   if (section === 'horarios')     return <HorariosSection />
   if (section === 'web')          return <FotosWebSection />
+  if (section === 'uso')          return <UsoPanel onVolver={() => navigateTo('inicio')} />
   return null
 }
 
@@ -105,6 +108,9 @@ export default function AdminApp() {
   const [cotizacionParaAbrir, setCotizacionParaAbrir] = useState(null)
   const [cotizacionEnfocada, setCotizacionEnfocada]   = useState(null)
   const isMobile = useIsMobile()
+
+  // Registro de uso del panel (Inicio → Uso del panel): que secciones y botones se ocupan.
+  useEffect(() => { if (authed) fijarSeccionUso(section) }, [authed, section])
 
   // Cualquier llamada rechazada por sesion vencida devuelve al login.
   useEffect(() => {
@@ -153,7 +159,7 @@ export default function AdminApp() {
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
 
-  const currentSection = SECTIONS.find(s => s.id === section)
+  const currentSection = section === 'uso' ? { label: 'Uso del panel', icon: 'chart' } : SECTIONS.find(s => s.id === section)
   const contentProps = {
     section, statuses, onStatusChange: handleStatusChange,
     navigateTo, setAllVisits: handleVisitsLoaded, allVisits, visitaParaCotizar,

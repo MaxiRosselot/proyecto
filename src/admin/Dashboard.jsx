@@ -248,6 +248,11 @@ export default function DashboardSection({ navigateTo }) {
         </SectionCard>
       </div>
       <AvisosTelegram />
+      <div style={{ textAlign: 'center', marginTop: 18 }}>
+        <button onClick={() => navigateTo('uso')} style={{ background: 'none', border: 'none', color: C.textMuted, fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>
+          Uso del panel
+        </button>
+      </div>
     </div>
   )
 }

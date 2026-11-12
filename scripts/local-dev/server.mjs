@@ -17,6 +17,7 @@ import {
 import {
   DURACION_MIN, HORARIO_INSTALACIONES, aHHMM, ahoraEnZona, diasConRangos, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario, sumarDias,
 } from '../../netlify/functions/lib/horarios.mjs'
+import { atenderUso } from '../../netlify/functions/lib/uso.mjs'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
 import { eventoParaVista } from '../../netlify/functions/lib/calendario.mjs'
@@ -424,6 +425,14 @@ const routes = {
   'probar-correo': async () => {
     guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })
     return { ok: true, para: 'admin-local@example.com', remitente: 'local' }
+  },
+  // Mismo contrato que netlify/functions/uso.mjs, con las filas en data.json.
+  'uso': async (body, params, method) => {
+    const r = await atenderUso({ httpMethod: method, body: JSON.stringify(body || {}), queryStringParameters: Object.fromEntries(params) }, {
+      async leerFilas() { return db.usoFilas || [] },
+      async agregarFilas(filas) { db.usoFilas = [...(db.usoFilas || []), ...filas]; saveData(db) },
+    })
+    return r.cuerpo
   },
   // Mismo contrato que netlify/functions/horarios.mjs
   'horarios': async (body, params, method) => {

@@ -529,6 +529,20 @@ export default function PlanillaSection({ onVerCotizacion }) {
   }, [])
   useEffect(() => { cargar() }, [cargar])
 
+  // Al abrir (y con el boton Hoy) la lista parte en el dia de hoy o el proximo con instalaciones,
+  // no en el primero del mes: lo de dias pasados casi nunca se mira.
+  const [irAHoy, setIrAHoy] = useState(1)
+  useEffect(() => {
+    if (!irAHoy || cargando || !quotes.length) return
+    const id = requestAnimationFrame(() => {
+      const dias = [...document.querySelectorAll('[data-dia]')].filter(el => el.dataset.dia !== 'sin-fecha')
+      const destino = dias.find(el => el.dataset.dia >= hoy)
+      if (destino && destino !== dias[0]) destino.scrollIntoView({ block: 'start' })
+      setIrAHoy(0)
+    })
+    return () => cancelAnimationFrame(id)
+  }, [irAHoy, cargando, quotes, hoy])
+
   const reemplazar = q => setQuotes(prev => prev.map(x => (String(x.cotNum) === String(q.cotNum) ? { ...x, ...q, linkPago: x.linkPago } : x)))
   async function actualizar(cotNum, cambios) {
     setAviso('')
@@ -590,7 +604,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {periodo !== 'todo' && <>
-            <button onClick={() => setCursor(hoy)} style={{ ...styles.btnSecondary, padding: '6px 12px', fontSize: 12.5 }}>Hoy</button>
+            <button onClick={() => { setCursor(hoy); setIrAHoy(n => n + 1) }} style={{ ...styles.btnSecondary, padding: '6px 12px', fontSize: 12.5 }}>Hoy</button>
             <button onClick={() => mover(-1)} aria-label="Anterior" style={{ ...styles.btnSecondary, padding: '6px 10px' }}>‹</button>
             <button onClick={() => mover(1)} aria-label="Siguiente" style={{ ...styles.btnSecondary, padding: '6px 10px' }}>›</button>
           </>}
@@ -633,7 +647,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
         <div style={{ display: 'grid', gap: 8 }}>
           {porDia(visibles).map(dia => (
             <React.Fragment key={'dia' + dia.fecha}>
-            <div data-testid="encabezado-dia" style={{ padding: '10px 4px 0' }}><EncabezadoDia dia={dia} hoy={hoy} /></div>
+            <div data-testid="encabezado-dia" data-dia={dia.fecha || 'sin-fecha'} style={{ padding: '10px 4px 0', scrollMarginTop: 'calc(60px + env(safe-area-inset-top))' }}><EncabezadoDia dia={dia} hoy={hoy} /></div>
             {dia.filas.map(f => (
             <div key={f.q.cotNum} data-testid="fila-planilla" onClick={() => setDetalle(f.q.cotNum)}
               style={{ ...styles.card, padding: 12, cursor: 'pointer', borderLeft: '4px solid ' + (f.instalada ? C.green : f.atrasada ? C.yellow : C.border), background: f.instalada ? '#F6F7F9' : 'white' }}>
@@ -669,7 +683,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
             </thead>
             <tbody>
               {porDia(visibles).map(dia => [
-                <tr key={'dia' + dia.fecha} data-dia={dia.fecha || 'sin-fecha'} data-testid="encabezado-dia">
+                <tr key={'dia' + dia.fecha} data-dia={dia.fecha || 'sin-fecha'} data-testid="encabezado-dia" style={{ scrollMarginTop: 64 }}>
                   <td colSpan={13 + SERV.length} style={{ padding: '9px 10px 6px', background: '#F8F9FB', borderTop: '2px solid ' + C.border }}><EncabezadoDia dia={dia} hoy={hoy} /></td>
                 </tr>,
                 ...dia.filas.map(f => {
