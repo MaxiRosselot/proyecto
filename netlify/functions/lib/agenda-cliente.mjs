@@ -1,7 +1,7 @@
 // El link de agendar del cliente: https://<sitio>/agendar?c=<N°>&t=<firma>. Solo agenda (el pago lo
 // coordina Don Maxi por WhatsApp, normalmente al terminar). El cliente ve su cotizacion, puede
 // agregar servicios adicionales, elige dia y hora y queda agendado (Calendario + Instalaciones).
-// Si vuelve a abrir el link ve su hora y puede reagendar cuando quiera, mientras no haya empezado.
+// Si vuelve a abrir el link ve su hora y puede reagendar cuando quiera.
 // Las reglas de horas viven en agenda-horas.mjs. Lo usan la funcion agendar y el backend local.
 //
 // deps: { almacen, config, calendar, calendarId, leerEventos(desde, hasta), enviarCorreo, avisoA, ahora }
@@ -103,7 +103,7 @@ export async function atenderAgendaGet(params, deps) {
 }
 
 // POST { c, t, fecha, inicio, servicios: { retiro_orden: 1, cajas: 2, ... } } → agenda o reagenda.
-// Lo que el cliente no puede hacer (hora tomada, instalacion ya empezada) vuelve como respuesta con su motivo.
+// Lo que el cliente no puede hacer (hora tomada) vuelve como respuesta con su motivo.
 export async function atenderAgendaPost(body, deps) {
   try { return await agendarPost(body, deps) }
   catch (e) {
@@ -122,7 +122,7 @@ async function agendarPost(body, deps) {
   if (estado === 'instalada') falla('Tu instalación ya se realizó. Si necesitas algo más, escríbenos por WhatsApp.', 409)
   const reagendada = estado === 'agendada'
   if (reagendada && !puedeReagendar(cotizacion.instalacion, ahora))
-    falla('Tu instalación ya comenzó: para cambiarla escríbenos directamente por WhatsApp.', 409)
+    falla('Esta instalación no tiene hora para cambiar: escríbenos por WhatsApp.', 409)
 
   const adicionales = conServiciosElegidos(cotizacion.adicionales || {}, body.servicios || {})
   const duracion = duracionInstalacionMin(cotizacion, adicionales)

@@ -5,7 +5,7 @@ import './reserva.css'
 
 // /agendar?c=<N°>&t=<firma>: el cliente agenda su instalacion (sin pagar: el pago es al terminar y
 // se coordina por WhatsApp). Puede sumar servicios adicionales, y si vuelve a entrar ve su hora y
-// puede reagendar cuando quiera, mientras no haya empezado. Reglas: netlify/functions/lib/agenda-horas.mjs y agenda-cliente.mjs.
+// puede reagendar cuando quiera. Reglas: netlify/functions/lib/agenda-horas.mjs y agenda-cliente.mjs.
 const API = '/.netlify/functions/agendar'
 const URL_3D = (import.meta.env.VITE_REPISAS_3D_URL || window.location.origin).replace(/\/$/, '')
 const ORIGEN_3D = new URL(URL_3D).origin
@@ -264,7 +264,7 @@ export default function AgendarApp() {
     </div>
   )
 
-  // Ya agendada: su hora, y reagendar mientras no haya empezado.
+  // Ya agendada: su hora, y reagendar cuando quiera.
   if (datos.estado === 'agendada' && !reagendando) {
     const i = cot.instalacion
     return (
@@ -278,7 +278,7 @@ export default function AgendarApp() {
           <p className="rsv-sub">Te escribiremos por WhatsApp para confirmar. El pago es una vez terminada la instalación.</p>
           {cot.puedeReagendar
             ? <button type="button" className="rsv-boton" onClick={() => setReagendando(true)}>Cambiar día u hora</button>
-            : <><p className="agd-aviso">Tu instalación ya comenzó: para cambiarla escríbenos directamente.</p>
+            : <><p className="agd-aviso">Para cambiarla escríbenos directamente.</p>
                 <WhatsApp whatsapp={datos.whatsapp} cotNum={cot.cotNum} mensaje={`Hola, necesito cambiar la instalación de la cotización N° ${cot.cotNum}`} /></>}
         </section>
       </div>

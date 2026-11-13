@@ -43,7 +43,7 @@ export function CopiarHorarios({ link, nombre, tamano = 12 }) {
       const url = new URL(link)
       const r = await fetch(`/.netlify/functions/agendar?c=${encodeURIComponent(url.searchParams.get('c'))}&t=${encodeURIComponent(url.searchParams.get('t'))}`).then(x => x.json())
       if (!r.ok) throw new Error(r.error || 'No se pudo leer la agenda')
-      if (!r.horario) throw new Error(r.estado === 'instalada' ? 'Esta instalación ya se hizo' : 'Su instalación ya comenzó: se cambia por WhatsApp')
+      if (!r.horario) throw new Error(r.estado === 'instalada' ? 'Esta instalación ya se hizo' : 'No se pudo leer su agenda')
       const duracion = duracionInstalacionMin(r.cotizacion, r.cotizacion.adicionales)
       const hasta = sumarDias(ahoraEnZona().fecha, DIAS_HORARIOS)
       const dias = disponibilidadAgenda(r.ocupados || {}, duracion, new Date(), r.horario).filter(d => d.fecha <= hasta)

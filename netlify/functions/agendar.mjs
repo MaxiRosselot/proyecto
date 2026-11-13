@@ -1,6 +1,6 @@
 // netlify/functions/agendar.mjs — publico, lo usa la pagina /agendar del cliente (link firmado).
 //   GET  ?c=&t=  → estado de su agendamiento, su cotizacion y lo ocupado de la agenda
-//   POST { c, t, fecha, inicio, servicios }  → agenda o reagenda (mientras no haya empezado)
+//   POST { c, t, fecha, inicio, servicios }  → agenda o reagenda (cuando quiera)
 // Las reglas viven en lib/agenda-horas.mjs y lib/agenda-cliente.mjs.
 import { google } from 'googleapis'
 import { atenderAgendaGet, atenderAgendaPost } from './lib/agenda-cliente.mjs'

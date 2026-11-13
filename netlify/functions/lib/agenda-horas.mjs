@@ -17,15 +17,14 @@
 //   · para no cortar el dia: solo se ofrecen horas que dejan libre 0 o al menos 2 h antes y despues
 //     (lo que mas se vende son trabajos de 2 y 3 h). En un dia vacio: 3 h → 10 o 13; 2 h → 10, 12 o 14.
 //   · se puede agendar el mismo dia hasta las 8:00; hasta las semanas que diga el horario (4).
-//   · reagendar: cuando quiera, mientras la instalacion no haya empezado.
-import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, horaLocalAUTC, rangosDelDia, sumarDias } from './horarios.mjs'
+//   · reagendar: cuando quiera, incluso si la hora ya paso (solo no, si ya esta instalada).
+import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, rangosDelDia, sumarDias } from './horarios.mjs'
 
 // Hasta las 8:00 se puede agendar para el mismo dia.
 export const MISMO_DIA_HASTA_MIN = 8 * 60
 // La jornada mas larga: un trabajo mas largo se agenda como jornada completa.
 export const MAX_DURACION_MIN = 6 * 60
 export const MIN_DURACION_MIN = 60
-export const ANTICIPACION_REAGENDAR_H = 0
 // Los servicios que el cliente puede agregar desde su link (clave y si va por cantidad).
 export const SERVICIOS_CLIENTE = [['retiro_orden', false], ['retiro_basura', false], ['cajas', true], ['bici', true]]
 
@@ -143,8 +142,7 @@ export function ocupadosAgenda({ eventos = [], cotizaciones = [], excepto = {} }
   return porFecha
 }
 
-// Puede reagendar mientras la instalacion no haya empezado.
-export function puedeReagendar(instalacion, ahora = new Date()) {
-  if (!instalacion?.fecha || !instalacion.inicio) return false
-  return horaLocalAUTC(instalacion.fecha, instalacion.inicio).getTime() - ahora.getTime() > ANTICIPACION_REAGENDAR_H * 3600000
+// Puede reagendar siempre que tenga una hora (lo ya instalado se corta antes, en estadoAgenda).
+export function puedeReagendar(instalacion) {
+  return Boolean(instalacion?.fecha && instalacion.inicio)
 }

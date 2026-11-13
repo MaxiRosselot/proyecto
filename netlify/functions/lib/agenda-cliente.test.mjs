@@ -64,7 +64,7 @@ test('agenda con un servicio: duracion, calendario, total y correos al cliente y
   assert.equal(g.cotizacion.puedeReagendar, true)
 })
 
-test('solo horas que calzan; reagendar mientras no haya empezado', async () => {
+test('solo horas que calzan; reagendar cuando quiera', async () => {
   const { deps, correos } = await preparar()
   // 2 h: a las 11:00 no se ofrece (dejaria 1 h suelta antes).
   const mal = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-21', inicio: '11:00', servicios: {} }, deps))
@@ -80,8 +80,7 @@ test('solo horas que calzan; reagendar mientras no haya empezado', async () => {
   // El dia antes todavia se puede (el lunes 26 a las 14:00; ahora domingo 25 a las 12:00).
   const vispera = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-27', inicio: '10:00', servicios: {} }, { ...deps, ahora: Date.parse('2026-10-25T15:00:00Z') }))
   assert.equal(vispera.ok, true, vispera.error)
-  // Ya empezada (martes 27 a las 10:30), no.
+  // Ya empezada (martes 27 a las 10:30), tambien.
   const tarde = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-28', inicio: '10:00', servicios: {} }, { ...deps, ahora: Date.parse('2026-10-27T13:30:00Z') }))
-  assert.equal(tarde.status, 409)
-  assert.match(tarde.error, /ya comenzó/)
+  assert.equal(tarde.ok, true, tarde.error)
 })
