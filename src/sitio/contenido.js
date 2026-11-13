@@ -18,7 +18,7 @@ export const PASOS = [
 export const VENTAJAS = [
   { icono: '📐', titulo: 'Al centímetro', texto: 'Cada repisa se fabrica para tu espacio: aprovechamos el largo, el alto y las esquinas.' },
   { icono: '🧊', titulo: 'Tu bodega en 3D', texto: 'Antes de comprar ves cómo queda tu bodega con las repisas, desde cualquier ángulo.' },
-  { icono: '📅', titulo: 'Agenda en línea', texto: 'Eliges día y hora de la instalación desde tu link, y puedes cambiarla hasta 48 h antes.' },
+  { icono: '📅', titulo: 'Agenda en línea', texto: 'Eliges día y hora de la instalación desde tu link, y puedes cambiarla cuando quieras.' },
   { icono: '🛡️', titulo: '5 años de garantía', texto: 'Sobre la estructura y la instalación.' },
   { icono: '💳', titulo: 'Pagas al terminar', texto: 'Abona el 50% antes o paga todo al final, por transferencia o con tarjeta.' },
   { icono: '🧥', titulo: 'Hecho a tu uso', texto: 'Barra para colgar ropa, nivel antiinundación, doble profundidad o soporte para la bicicleta.' },
@@ -48,7 +48,7 @@ export const PREGUNTAS = [
     preguntas: [
       ['¿Cuánto demora la instalación?', 'Depende del tamaño: una bodega típica queda lista en unas 2 horas. Al agendar te mostramos la duración estimada de la tuya.'],
       ['¿Cómo agendo la instalación?', 'Con tu cotización te llega un link para elegir el día y la hora. Instalamos de lunes a viernes.'],
-      ['¿Puedo cambiar la fecha?', 'Sí, desde el mismo link hasta 48 horas antes. Si falta menos, escríbenos por WhatsApp y lo vemos.'],
+      ['¿Puedo cambiar la fecha?', 'Sí, desde el mismo link, cuando quieras.'],
       ['¿Tengo que vaciar la bodega?', 'El espacio debe estar despejado al llegar. Si prefieres, contrata el servicio de retiro y orden: sacamos todo y lo volvemos a ordenar en las repisas nuevas.'],
       ['¿Pueden llevarse lo que ya no uso?', 'Sí, con el servicio de retiro de basura nos llevamos muebles, cajas y escombros.'],
     ],

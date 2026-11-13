@@ -234,7 +234,7 @@ export function correoAgendaCliente({ nombre, email, cotNum, direccion, adiciona
       '',
       'Te escribiremos por WhatsApp para confirmar. El pago es una vez terminada la instalación.',
       AVISO_RETRASO,
-      ...(linkAgenda ? ['', `Puedes ver o cambiar tu hora (hasta 48 h antes) aquí: ${linkAgenda}`] : []),
+      ...(linkAgenda ? ['', `Puedes ver o cambiar tu hora cuando quieras aquí: ${linkAgenda}`] : []),
       '',
       'Repisas Don Maxi',
     ].join('\n'),

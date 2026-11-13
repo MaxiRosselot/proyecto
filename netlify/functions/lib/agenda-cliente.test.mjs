@@ -60,11 +60,11 @@ test('agenda con un servicio: duracion, calendario, total y correos al cliente y
   // Al volver a entrar ve su hora.
   const g = await leer(await atenderAgendaGet({ c: '1500', t: T }, deps))
   assert.equal(g.estado, 'agendada')
-  // Es mañana: faltan menos de 48 h, ya no puede reagendar solo.
-  assert.equal(g.cotizacion.puedeReagendar, false)
+  // Aunque sea mañana, puede cambiarla desde el link.
+  assert.equal(g.cotizacion.puedeReagendar, true)
 })
 
-test('solo horas que calzan; reagendar hasta 48 h antes', async () => {
+test('solo horas que calzan; reagendar mientras no haya empezado', async () => {
   const { deps, correos } = await preparar()
   // 2 h: a las 11:00 no se ofrece (dejaria 1 h suelta antes).
   const mal = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-21', inicio: '11:00', servicios: {} }, deps))
@@ -72,13 +72,16 @@ test('solo horas que calzan; reagendar hasta 48 h antes', async () => {
   // Sabado no.
   assert.equal((await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-24', inicio: '10:00', servicios: {} }, deps))).status, 409)
   assert.equal((await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-23', inicio: '10:00', servicios: {} }, deps))).ok, true)
-  // Reagenda al lunes 26 (faltan mas de 48 h para el viernes 23 a las 10).
+  // Reagenda al lunes 26.
   const re = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-26', inicio: '14:00', servicios: {} }, deps))
   assert.equal(re.ok, true, re.error)
   assert.equal(re.reagendada, true)
   assert.match(correos.at(-1).texto, /Antes: Viernes,? 23 de octubre, 10:00–12:00/)
-  // A menos de 48 h ya no se puede.
-  const tarde = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-27', inicio: '10:00', servicios: {} }, { ...deps, ahora: Date.parse('2026-10-25T15:00:00Z') }))
+  // El dia antes todavia se puede (el lunes 26 a las 14:00; ahora domingo 25 a las 12:00).
+  const vispera = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-27', inicio: '10:00', servicios: {} }, { ...deps, ahora: Date.parse('2026-10-25T15:00:00Z') }))
+  assert.equal(vispera.ok, true, vispera.error)
+  // Ya empezada (martes 27 a las 10:30), no.
+  const tarde = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-28', inicio: '10:00', servicios: {} }, { ...deps, ahora: Date.parse('2026-10-27T13:30:00Z') }))
   assert.equal(tarde.status, 409)
-  assert.match(tarde.error, /menos de 48 horas/)
+  assert.match(tarde.error, /ya comenzó/)
 })

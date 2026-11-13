@@ -93,19 +93,13 @@ try {
   expect(nuevos).toMatch(/Tu instalación quedó agendada/)
   expect(nuevos).toMatch(/📅 Agendó: Paula Agenda/)
 
-  // Al volver a entrar ve su hora. Si faltan 48 h o mas, puede cambiarla.
+  // Al volver a entrar ve su hora, y puede cambiarla cuando quiera.
   await cel.goto(enlace.toString())
   const actual = cel.getByTestId('agenda-actual')
   await expect(actual).toContainText('De 13:00 a 16:00 hrs')
-  // Se puede cambiar hasta 48 h antes del inicio.
-  const lejos = horaLocalAUTC(q.instalacion.fecha, q.instalacion.inicio).getTime() - Date.now() >= 48 * 3600e3
-  if (lejos) {
-    await actual.getByRole('button', { name: 'Cambiar día u hora' }).click()
-    await expect(cel.getByRole('heading', { name: 'Cambia tu día u hora' })).toBeVisible()
-    await cel.getByRole('button', { name: 'Mantener mi hora actual' }).click()
-  } else {
-    await expect(actual).toContainText('Faltan menos de 48 horas')
-  }
+  await actual.getByRole('button', { name: 'Cambiar día u hora' }).click()
+  await expect(cel.getByRole('heading', { name: 'Cambia tu día u hora' })).toBeVisible()
+  await cel.getByRole('button', { name: 'Mantener mi hora actual' }).click()
   await cel.screenshot({ path: path.join(evidence, '03-estado.png'), fullPage: true })
   expect(diaSemana(q.instalacion.fecha)).toBeGreaterThan(0)
   expect(diaSemana(q.instalacion.fecha)).toBeLessThan(6)

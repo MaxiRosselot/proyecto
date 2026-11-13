@@ -90,8 +90,9 @@ test('lo ocupado: instalaciones del calendario y ventas con fecha sin evento, me
   })
 })
 
-test('reagendar hasta 48 h antes', () => {
+test('reagendar cuando quiera, mientras no haya empezado', () => {
   const inst = { fecha: '2026-10-23', inicio: '10:00' }
-  assert.equal(puedeReagendar(inst, new Date('2026-10-21T09:59:00-03:00')), true)
-  assert.equal(puedeReagendar(inst, new Date('2026-10-21T10:01:00-03:00')), false)
+  assert.equal(puedeReagendar(inst, new Date('2026-10-21T10:01:00-03:00')), true)
+  assert.equal(puedeReagendar(inst, new Date('2026-10-23T09:59:00-03:00')), true)
+  assert.equal(puedeReagendar(inst, new Date('2026-10-23T10:00:00-03:00')), false)
 })
