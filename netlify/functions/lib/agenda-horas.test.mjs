@@ -40,7 +40,7 @@ test('una sola muralla: 30 min por modulo de hasta 243 cm; sin modelo, los modul
   assert.equal(duracionInstalacionMin({ repisas: Array(20).fill({ unidades: 1 }) }), 360) // tope: la jornada
 })
 
-test('solo horas que dejan libre 0 o al menos 2 h: no se corta el dia', () => {
+test('horas pegadas a cada espacio libre, y las que no cortan el dia', () => {
   const inicios = (d, ocupados = []) => horasDelDia(ocupados, d).map(h => h.inicio)
   assert.deepEqual(inicios(180), ['10:00', '13:00'])
   assert.deepEqual(inicios(120), ['10:00', '12:00', '14:00'])
@@ -48,13 +48,17 @@ test('solo horas que dejan libre 0 o al menos 2 h: no se corta el dia', () => {
   assert.deepEqual(inicios(240), ['10:00', '12:00'])
   assert.deepEqual(inicios(360), ['10:00'])
   assert.deepEqual(inicios(60), ['10:00', '12:00', '12:30', '13:00', '15:00'])
-  // Con 10-12 ocupado, una de 3 h dejaria 1 h suelta: no se ofrece; una de 2 h si.
-  assert.deepEqual(inicios(180, [{ desde: 600, hasta: 720 }]), [])
+  // Con 10-12 ocupado, una de 3 h se ofrece igual pegada a la otra o al cierre (aunque deje 1 h).
+  assert.deepEqual(inicios(180, [{ desde: 600, hasta: 720 }]), ['12:00', '13:00'])
   assert.deepEqual(horasDelDia([{ desde: 600, hasta: 720 }], 120).map(h => `${h.inicio}-${h.fin}`), ['12:00-14:00', '14:00-16:00'])
   // Hueco justo.
   assert.deepEqual(inicios(120, [{ desde: 600, hasta: 720 }, { desde: 840, hasta: 960 }]), ['12:00'])
   // No cabe.
   assert.deepEqual(inicios(120, [{ desde: 600, hasta: 780 }, { desde: 840, hasta: 960 }]), [])
+  // La semana del 16 de noviembre (2 h 30): antes no se ofrecia nada en estos dias.
+  assert.deepEqual(inicios(150, [{ desde: 810, hasta: 960 }]), ['10:00', '11:00']) // martes 17: 13:30-16 ocupado
+  assert.deepEqual(inicios(150, [{ desde: 600, hasta: 750 }]), ['12:30', '13:30']) // miercoles 18: 10-12:30 ocupado
+  assert.deepEqual(inicios(150, [{ desde: 840, hasta: 960 }]), ['10:00', '11:30']) // viernes 20: 14-16 ocupado
 })
 
 test('lunes a viernes por defecto, el mismo dia solo hasta las 8:00, y con el horario editable', () => {
@@ -71,8 +75,8 @@ test('lunes a viernes por defecto, el mismo dia solo hasta las 8:00, y con el ho
   const horario = { semanal: { 1: rango, 2: rango, 3: rango, 4: rango, 5: rango },
     fechas: { '2026-10-21': [], '2026-10-22': [{ desde: '13:00', hasta: '16:00' }] }, semanas: 1 }
   const editado = disponibilidadAgenda({}, 120, new Date('2026-10-20T09:00:00-03:00'), horario)
-  assert.deepEqual(editado.slice(0, 2).map(d => [d.fecha, d.horas.map(h => h.inicio)]), [['2026-10-23', ['10:00', '12:00', '14:00']], ['2026-10-26', ['10:00', '12:00', '14:00']]])
-  // El jueves 22 solo en la tarde (13 a 16): una de 2 h dejaria 1 h suelta; una de 3 h calza justo.
+  // El jueves 22 solo en la tarde (13 a 16): una de 2 h, al inicio o al final; una de 3 h calza justo.
+  assert.deepEqual(editado.slice(0, 2).map(d => [d.fecha, d.horas.map(h => h.inicio)]), [['2026-10-22', ['13:00', '14:00']], ['2026-10-23', ['10:00', '12:00', '14:00']]])
   assert.deepEqual(disponibilidadAgenda({}, 180, new Date('2026-10-20T09:00:00-03:00'), horario)[0], { fecha: '2026-10-22', horas: [{ inicio: '13:00', fin: '16:00' }] })
   assert.equal(editado.at(-1).fecha, '2026-10-27') // 1 semana
 })

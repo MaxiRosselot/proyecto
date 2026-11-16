@@ -14,8 +14,10 @@
 //     modulos de la cotizacion. El traslado no se cuenta.
 //   · jornada segun Admin → Horarios → Instalaciones (por defecto lunes a viernes de 10:00 a 16:00);
 //     un dia puede tener varios rangos (p. ej. solo la tarde) o estar cerrado. Una instalacion a la vez.
-//   · para no cortar el dia: solo se ofrecen horas que dejan libre 0 o al menos 2 h antes y despues
-//     (lo que mas se vende son trabajos de 2 y 3 h). En un dia vacio: 3 h → 10 o 13; 2 h → 10, 12 o 14.
+//   · todo espacio libre donde quepa el trabajo se ofrece: siempre pegado a su inicio y a su fin
+//     (junto a la otra instalacion o al borde de la jornada). Ademas, las horas que dejan libre 0 o
+//     al menos 2 h antes y despues (para no cortar el dia). En un dia vacio: 3 h → 10 o 13;
+//     2 h → 10, 12 o 14. (2026-11-16: antes solo esas, y se perdian dias con espacio.)
 //   · se puede agendar el mismo dia hasta las 8:00; hasta las semanas que diga el horario (4).
 //   · reagendar: cuando quiera, incluso si la hora ya paso (solo no, si ya esta instalada).
 import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, rangosDelDia, sumarDias } from './horarios.mjs'
@@ -94,10 +96,14 @@ export function horasDelDia(ocupados, duracionMin, rangos = JORNADA_POR_DEFECTO)
     }
     if (cursor < fin) huecos.push([cursor, fin])
   }
-  // Cada media hora del hueco, si lo que queda libre antes y despues es 0 o al menos 2 h.
+  // En cada hueco donde cabe: pegado a su inicio y a su fin, y cada media hora que deja libre
+  // 0 o al menos 2 h antes y despues.
   const sirve = libre => libre === 0 || libre >= HUECO_MINIMO_MIN
   const horas = new Set()
   for (const [a, b] of huecos) {
+    if (b - a < duracionMin) continue
+    horas.add(a)
+    horas.add(b - duracionMin)
     for (let inicio = a; inicio + duracionMin <= b; inicio += 30) {
       if (sirve(inicio - a) && sirve(b - inicio - duracionMin)) horas.add(inicio)
     }
