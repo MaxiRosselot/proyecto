@@ -2,16 +2,14 @@
 // le quedan libres. Sin imports de Node: la pagina del cliente recalcula las horas al agregar un
 // servicio y el servidor vuelve a validar con estas mismas funciones.
 //
-// Reglas (las que dio Maxi, 2026-10-23):
-//   · duracion segun la bodega (largo × ancho, del modelo 3D) y en cuantos muros van las repisas:
-//       - una sola muralla: 30 min por modulo (cada tramo de hasta 243 cm);
-//       - en L: menos de 2 m² 1 h, de 6 m² 2 h, de 10 m² 2 h 30, de 15 m² 3 h, y desde 15 m² 4 h;
-//       - en U (3 muros): lo mismo, pero 1 h → 2 h, 2 h 30 → 3 h y 3 h → 4 h;
-//       - repisas de 2,5 m de alto +30 min; de 3 m +1 h;
-//       - servicios: retiro y orden 30 min (bodega de menos de 4 m²), 1 h (menos de 7,5 m²) o 1 h 30
-//         (mas grande); retiro de basura 30 min; soporte de bicicleta 15 min cada uno; cajas nada.
-//     Minimo 1 h, maximo la jornada, en tramos de 30 min. Sin modelo 3D, como una muralla con los
-//     modulos de la cotizacion. El traslado no se cuenta.
+// Reglas:
+//   · duracion (2026-11-16): ajustada con las 613 instalaciones del panel hasta septiembre de 2026,
+//     tomando como real la hora agendada, y probada con las 30 ya hechas de oct-nov con modelo 3D
+//     (acierta el 50% exacto, error medio 20 min; la regla anterior por m² y muros se quedaba corta
+//     en el 27% por mas de 30 min). El monto neto ya resume el tamaño: largo, fondo, alto, niveles
+//     y laterales. Minutos = 83 + 25 por cada $100.000 de repisas + 25 por cada $100.000 de racks
+//     + 29 con retiro y orden + 4 con retiro de basura + 6 por soporte de bicicleta; a la media hora
+//     mas cercana, entre 1 h y la jornada (6 h).
 //   · jornada segun Admin → Horarios → Instalaciones (por defecto lunes a viernes de 10:00 a 16:00);
 //     un dia puede tener varios rangos (p. ej. solo la tarde) o estar cerrado. Una instalacion a la vez.
 //   · todo espacio libre donde quepa el trabajo se ofrece: siempre pegado a su inicio y a su fin
@@ -30,7 +28,6 @@ export const MIN_DURACION_MIN = 60
 // Los servicios que el cliente puede agregar desde su link (clave y si va por cantidad).
 export const SERVICIOS_CLIENTE = [['retiro_orden', false], ['retiro_basura', false], ['cajas', true], ['bici', true]]
 
-const media = min => Math.ceil(min / 30 - 1e-9) * 30
 // Lo minimo libre que tiene que quedar al lado de una instalacion (o nada).
 export const HUECO_MINIMO_MIN = 120
 const MODULO_MAX_CM = 243
@@ -57,22 +54,28 @@ export function perfilBodega(proyecto3d, repisas = []) {
   }
 }
 
-// Minutos de las repisas en L segun los m² de la bodega; en U suma lo que dijo Maxi.
-function minutosEnL(m2) { return m2 < 2 ? 60 : m2 < 6 ? 120 : m2 < 10 ? 150 : m2 < 15 ? 180 : 240 }
-const EXTRA_U = { 60: 60, 150: 30, 180: 60 }
+// Coeficientes del ajuste (ver arriba). Para recalibrar: mismas variables, minimos cuadrados.
+export const MODELO_DURACION = { base: 83, por100kRepisas: 25, por100kRacks: 25, retiroOrden: 29, retiroBasura: 4, porBici: 6 }
 
-// Minutos que dura la instalacion: cotizacion = { repisas, proyecto3d }, con sus servicios.
+// Neto de las repisas y de los racks de una cotizacion (sus filas: unidades × valor).
+export function netosCotizacion(repisas = []) {
+  let repisasNeto = 0, racksNeto = 0
+  for (const r of repisas || []) {
+    const monto = (Number(r.unidades ?? r.u ?? 1) || 0) * (Number(r.valor ?? r.v) || 0)
+    if (r.kind === 'rack') racksNeto += monto; else repisasNeto += monto
+  }
+  return { repisasNeto, racksNeto }
+}
+
+// Minutos que dura la instalacion: cotizacion = { repisas }, con sus servicios.
 export function duracionInstalacionMin(cotizacion = {}, adicionales = {}) {
-  const b = perfilBodega(cotizacion.proyecto3d, cotizacion.repisas || [])
-  let min = b.muros >= 2 && b.m2 != null
-    ? minutosEnL(b.m2) + (b.muros >= 3 ? EXTRA_U[minutosEnL(b.m2)] || 0 : 0)
-    : 30 * b.modulos
-  if (b.altoCm >= 300) min += 60
-  else if (b.altoCm >= 250) min += 30
-  if ((Number(adicionales.qty_retiro_orden) || 0) > 0) min += b.m2 == null ? 60 : b.m2 < 4 ? 30 : b.m2 < 7.5 ? 60 : 90
-  if ((Number(adicionales.qty_retiro_basura) || 0) > 0) min += 30
-  min += 15 * (Number(adicionales.qty_bici) || 0)
-  return Math.min(MAX_DURACION_MIN, Math.max(MIN_DURACION_MIN, media(min)))
+  const m = MODELO_DURACION
+  const { repisasNeto, racksNeto } = netosCotizacion(cotizacion.repisas)
+  const min = m.base + m.por100kRepisas * repisasNeto / 1e5 + m.por100kRacks * racksNeto / 1e5
+    + ((Number(adicionales.qty_retiro_orden) || 0) > 0 ? m.retiroOrden : 0)
+    + ((Number(adicionales.qty_retiro_basura) || 0) > 0 ? m.retiroBasura : 0)
+    + m.porBici * (Number(adicionales.qty_bici) || 0)
+  return Math.min(MAX_DURACION_MIN, Math.max(MIN_DURACION_MIN, Math.round(min / 30) * 30))
 }
 
 export const duracionTexto = min => [Math.floor(min / 60) ? `${Math.floor(min / 60)} h` : '', min % 60 ? `${min % 60} min` : ''].filter(Boolean).join(' ')

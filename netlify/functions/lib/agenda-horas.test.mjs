@@ -2,42 +2,26 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { disponibilidadAgenda, duracionInstalacionMin, horasDelDia, ocupadosAgenda, perfilBodega, puedeReagendar } from './agenda-horas.mjs'
 
-// Bodega de ancho × fondo (cm) con repisas de 200 cm en los muros dados.
-const bodega = (ancho, fondo, muros, { alto = 200, largo = 200 } = {}) => ({
-  proyecto3d: { room: { backWallCm: ancho, leftWallCm: fondo, rightWallCm: fondo }, shelving: { heightCm: alto, runs: muros.map((wall, i) => ({ id: `r${i}`, wall, lengthCm: largo, heightCm: alto })) } },
-})
+const fila = (valor, unidades = 1, extra = {}) => ({ valor, unidades, ...extra })
+const cot = (...repisas) => ({ repisas })
 
-test('duracion en L segun los m² de la bodega', () => {
-  assert.equal(duracionInstalacionMin(bodega(150, 120, ['back', 'right'])), 60)   // 1,8 m²
-  assert.equal(duracionInstalacionMin(bodega(200, 250, ['back', 'right'])), 120)  // 5 m²
-  assert.equal(duracionInstalacionMin(bodega(300, 300, ['back', 'left'])), 150)   // 9 m²
-  assert.equal(duracionInstalacionMin(bodega(300, 400, ['back', 'left'])), 180)   // 12 m²
-  assert.equal(duracionInstalacionMin(bodega(400, 400, ['back', 'left'])), 240)   // 16 m²
-})
-
-test('en U suma lo que corresponde; la altura y los servicios suman; minimo 1 h', () => {
-  const U = ['back', 'left', 'right']
-  assert.equal(duracionInstalacionMin(bodega(150, 120, U)), 120)  // 1 h → 2 h
-  assert.equal(duracionInstalacionMin(bodega(200, 250, U)), 120)  // 2 h se queda
-  assert.equal(duracionInstalacionMin(bodega(300, 300, U)), 180)  // 2 h 30 → 3 h
-  assert.equal(duracionInstalacionMin(bodega(300, 400, U)), 240)  // 3 h → 4 h
-  assert.equal(duracionInstalacionMin(bodega(300, 400, ['back', 'left'], { alto: 250 })), 210)
-  assert.equal(duracionInstalacionMin(bodega(300, 400, ['back', 'left'], { alto: 300 })), 240)
-  // Retiro y orden segun el tamaño de la bodega; basura 30 min; bicicleta 15 min c/u; cajas nada.
-  assert.equal(duracionInstalacionMin(bodega(150, 120, ['back', 'right']), { qty_retiro_orden: 1 }), 90)
-  assert.equal(duracionInstalacionMin(bodega(200, 250, ['back', 'right']), { qty_retiro_orden: 1 }), 180)
-  assert.equal(duracionInstalacionMin(bodega(300, 300, ['back', 'left']), { qty_retiro_orden: 1 }), 240)
-  assert.equal(duracionInstalacionMin(bodega(200, 250, ['back', 'right']), { qty_retiro_basura: 1, qty_bici: 2, qty_cajas: 5 }), 180)
-})
-
-test('una sola muralla: 30 min por modulo de hasta 243 cm; sin modelo, los modulos de la cotizacion', () => {
-  assert.equal(duracionInstalacionMin(bodega(300, 200, ['back'], { largo: 243 })), 60)   // 1 modulo → minimo 1 h
-  assert.equal(duracionInstalacionMin(bodega(500, 200, ['back'], { largo: 486 })), 60)   // 2 modulos
-  assert.equal(duracionInstalacionMin(bodega(700, 200, ['back'], { largo: 600 })), 90)   // 3 modulos
+test('duracion segun el monto de las repisas (ajustada con las instalaciones del panel)', () => {
+  // Casos reales ya instalados (cotizacion: horas que tomo).
+  assert.equal(duracionInstalacionMin(cot(fila(80000), fila(60000))), 120)          // 1557: 2 h
+  assert.equal(duracionInstalacionMin(cot(fila(150000))), 120)                      // 1 repisa de 2,43
+  assert.equal(duracionInstalacionMin(cot(fila(160000), fila(110000), fila(110000), fila(250000))), 240) // 1629-like: 630k → 4 h
+  assert.equal(duracionInstalacionMin(cot(fila(110000), fila(60000)), { qty_retiro_orden: 1 }), 150)    // 170k + retiro
+  assert.equal(duracionInstalacionMin(cot(fila(110000, 2))), 150)                   // unidades cuentan: 220k
+  // Racks como las repisas; basura y bicicletas suman poco; cajas nada.
+  assert.equal(duracionInstalacionMin(cot(fila(700000, 1, { kind: 'rack' }))), 270)
+  assert.equal(duracionInstalacionMin(cot(fila(200000)), { qty_retiro_basura: 1, qty_bici: 2, qty_cajas: 5 }), 150)
+  // Limites: minimo 1 h, maximo la jornada.
+  assert.equal(duracionInstalacionMin(cot(fila(0))), 90)
+  assert.equal(duracionInstalacionMin({}), 90)
+  assert.equal(duracionInstalacionMin(cot(...Array(20).fill(fila(100000)))), 360)
+  // Acepta las filas abreviadas (u, v).
+  assert.equal(duracionInstalacionMin(cot({ u: 1, v: 150000 })), 120)
   assert.deepEqual(perfilBodega(null, [{ unidades: 4, alto: 2.5 }]), { m2: null, muros: 1, modulos: 4, altoCm: 250 })
-  assert.equal(duracionInstalacionMin({ repisas: [{ unidades: 4, alto: 2.5 }] }), 150)   // 4 × 30 + 30 por el alto
-  assert.equal(duracionInstalacionMin({ repisas: [{ unidades: 1 }] }, { qty_retiro_orden: 1 }), 90)
-  assert.equal(duracionInstalacionMin({ repisas: Array(20).fill({ unidades: 1 }) }), 360) // tope: la jornada
 })
 
 test('horas pegadas a cada espacio libre, y las que no cortan el dia', () => {

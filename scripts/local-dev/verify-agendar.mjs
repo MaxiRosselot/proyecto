@@ -27,7 +27,7 @@ try {
   const token = await admin.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
   const api = async (ruta, body) => (await admin.request[body ? 'post' : 'get'](base + '/.netlify/functions/' + ruta, { headers: { Authorization: 'Bearer ' + token }, ...(body ? { data: body } : {}) })).json()
 
-  // Una cotizacion por confirmar de $200.000 netos: bodega de 2 x 2,5 m (5 m2) en L, 2 h de instalacion.
+  // Una cotizacion por confirmar de $200.000 netos en repisas: 2 h de instalacion.
   const { siguiente } = await api('get-quotes')
   const guardada = await api('save-quote', { crear: true, cotNum: siguiente, nombre: 'Paula Agenda', email: 'paula@example.cl', telefono: '9 5555 4444', direccion: 'Los Leones 123', status: 'por confirmar', repisas: [{ largo: 2.43, prof: 0.48, alto: 2, niveles: 4, unidades: 1, valor: 200000 }], adicionales: {}, subtotal: 200000, iva: 38000, total: 238000,
     proyecto3d: { room: { backWallCm: 200, leftWallCm: 250, rightWallCm: 250, heightCm: 250, door: { wall: 'front', fromLeftCornerCm: 60, toRightCornerCm: 60 } }, shelving: { layout: 'manual', heightCm: 200, depthCm: 48, runs: [{ id: 'a', wall: 'back', startCm: 0, lengthCm: 200 }, { id: 'b', wall: 'right', startCm: 48, lengthCm: 150 }] } } })
@@ -68,27 +68,27 @@ try {
   await expect(cel.getByRole('heading', { name: /agenda tu instalación/ })).toBeVisible()
   await expect(cel.getByTestId('agenda-duracion')).toContainText('aprox. 2 h.')
   await expect(cel.getByTestId('agenda-total')).toContainText('$238.000')
-  // Suma retiro y orden (bodega de menos de 7,5 m2: +1 h): +$40.000 neto y la instalacion pasa a 3 h.
+  // Suma retiro y orden: +$40.000 neto y la instalacion pasa a 2 h 30.
   await cel.getByRole('checkbox', { name: 'Retiro y orden de artículos' }).check()
   await expect(cel.getByTestId('agenda-total')).toContainText('$285.600')
-  await expect(cel.getByTestId('agenda-duracion')).toContainText('3 h')
-  // El dia cerrado no aparece; el de solo tarde (13 a 16) calza justo con 3 h.
+  await expect(cel.getByTestId('agenda-duracion')).toContainText('2 h 30 min')
+  // El dia cerrado no aparece; el de solo tarde (13 a 16): al inicio o al final.
   await expect(cel.getByRole('button', { name: new RegExp(`^${fechaLarga(cerrado)} de`) })).toHaveCount(0)
   const primerDia = cel.getByTestId('dia-agenda').first()
-  await expect(primerDia.getByRole('button')).toHaveText(['13:00a 16:00'])
+  await expect(primerDia.getByRole('button')).toHaveText(['13:00a 15:30', '13:30a 16:00'])
   await cel.screenshot({ path: path.join(evidence, '01-elegir.png'), fullPage: true })
   await primerDia.getByRole('button').first().click()
   const antes = asuntos().length
   await cel.getByRole('button', { name: 'Agendar instalación' }).click()
   const listo = cel.getByTestId('agenda-lista')
-  await expect(listo).toContainText('De 13:00 a 16:00 hrs')
+  await expect(listo).toContainText('De 13:00 a 15:30 hrs')
   await expect(listo).toContainText('Te enviamos un correo')
   await expect(listo).toContainText('Te escribiremos por WhatsApp para confirmar')
   await expect(listo).toContainText('El pago es una vez terminada la instalación')
   await cel.screenshot({ path: path.join(evidence, '02-listo.png'), fullPage: true })
 
   const q = (await api('get-quotes?cotNum=' + guardada.cotNum)).quote
-  expect([q.status, q.adicionales.qty_retiro_orden, Number(q.total), q.instalacion.fecha, q.instalacion.inicio, q.instalacion.fin, q.instalacion.agendadaPorCliente]).toEqual(['confirmada', 1, 285600, soloTarde, '13:00', '16:00', true])
+  expect([q.status, q.adicionales.qty_retiro_orden, Number(q.total), q.instalacion.fecha, q.instalacion.inicio, q.instalacion.fin, q.instalacion.agendadaPorCliente]).toEqual(['confirmada', 1, 285600, soloTarde, '13:00', '15:30', true])
   const nuevos = asuntos().slice(antes).join('\n')
   expect(nuevos).toMatch(/Tu instalación quedó agendada/)
   expect(nuevos).toMatch(/📅 Agendó: Paula Agenda/)
@@ -96,7 +96,7 @@ try {
   // Al volver a entrar ve su hora, y puede cambiarla cuando quiera.
   await cel.goto(enlace.toString())
   const actual = cel.getByTestId('agenda-actual')
-  await expect(actual).toContainText('De 13:00 a 16:00 hrs')
+  await expect(actual).toContainText('De 13:00 a 15:30 hrs')
   await actual.getByRole('button', { name: 'Cambiar día u hora' }).click()
   await expect(cel.getByRole('heading', { name: 'Cambia tu día u hora' })).toBeVisible()
   await cel.getByRole('button', { name: 'Mantener mi hora actual' }).click()
