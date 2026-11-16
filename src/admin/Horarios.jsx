@@ -13,7 +13,7 @@ const RANGO_INSTALACION = { desde: '10:00', hasta: '16:00' }
 // Dos agendas: las visitas (la pagina publica) y las instalaciones (el link /agendar del cliente).
 const AGENDAS = {
   visitas: { titulo: 'Horarios de visitas', url: '', rango: RANGO_VISITA,
-    ayuda: `Define cuándo pueden agendar visitas los clientes. Se ofrecen los rangos de 3 horas (8–11, 11–14, 14–17, 17–20) que caen al menos 1 hora dentro de lo abierto. Las visitas ya agendadas no se borran al cambiar el horario.` },
+    ayuda: `Define cuándo pueden agendar visitas los clientes: en /visita eligen una hora exacta, cada media hora dentro de lo abierto, y cada hora se puede tomar una sola vez. Las visitas ya agendadas no se borran al cambiar el horario.` },
   instalaciones: { titulo: 'Horarios de instalaciones', url: '&agenda=instalaciones', rango: RANGO_INSTALACION,
     ayuda: 'Cuándo pueden agendar su instalación los clientes desde su link. Para un día que no trabajan, ciérralo en Fechas especiales; si tienen otra cosa en la mañana, deja ese día solo con la tarde. Las instalaciones ya agendadas no se mueven.' },
 }

@@ -44,6 +44,8 @@ export const SECTIONS = [
   { id: 'estadisticas',  label: 'Estadísticas',  icon: 'chart', corto: 'Stats' },
   { id: 'horarios',      label: 'Horarios',      icon: 'clock' },
   { id: 'web',           label: 'Web',           icon: 'image' },
+  // En el celular no cabe en la barra de abajo: se abre desde Inicio.
+  { id: 'pendientes',    label: 'Pendientes',    icon: 'list', soloEscritorio: true },
 ]
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }

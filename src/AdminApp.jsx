@@ -10,6 +10,7 @@ import EstadisticasSection from './admin/Instalaciones.jsx'
 import PlanillaSection from './admin/Planilla.jsx'
 import FotosWebSection from './admin/FotosWeb.jsx'
 import UsoPanel from './admin/UsoPanel.jsx'
+import PendientesSection from './admin/Pendientes.jsx'
 import { fijarSeccionUso } from './admin/registroUso.js'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
@@ -23,6 +24,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     chart:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="7" width="3" height="10" rx="1"/><rect x="16" y="4" width="3" height="13" rx="1"/></svg>),
     table:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="4" x2="9" y2="20"/></svg>),
     image:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
+    list:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
   return icons[name] || null
@@ -96,6 +98,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'horarios')     return <HorariosSection />
   if (section === 'web')          return <FotosWebSection />
   if (section === 'uso')          return <UsoPanel onVolver={() => navigateTo('inicio')} />
+  if (section === 'pendientes')   return <PendientesSection />
   return null
 }
 
@@ -186,7 +189,7 @@ export default function AdminApp() {
         <SectionContent {...contentProps} />
       </main>
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sidebar, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {SECTIONS.map(s => {
+        {SECTIONS.filter(s => !s.soloEscritorio).map(s => {
           const active = section === s.id
           return (
             <button key={s.id} onClick={() => navigateTo(s.id)} style={{
@@ -250,7 +253,7 @@ export default function AdminApp() {
           <div style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '4px 12px', borderRadius: 6, fontWeight: 500 }}>Repisas Don Maxi</div>
         </header>
         {/* La planilla de instalaciones usa todo el ancho, como el Excel; el resto, una columna legible. */}
-        <main style={{ flex: 1, padding: '28px 32px', maxWidth: section === 'instalaciones' ? 'none' : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+        <main style={{ flex: 1, padding: '28px 32px', maxWidth: ['instalaciones', 'pendientes'].includes(section) ? 'none' : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <SectionContent {...contentProps} />
         </main>
       </div>

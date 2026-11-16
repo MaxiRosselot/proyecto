@@ -18,6 +18,7 @@ import {
   DURACION_MIN, HORARIO_INSTALACIONES, aHHMM, ahoraEnZona, diasConRangos, diasDisponibles, guardarHorario, horaLocalAUTC, horaPermitida, leerHorario, sumarDias,
 } from '../../netlify/functions/lib/horarios.mjs'
 import { atenderUso } from '../../netlify/functions/lib/uso.mjs'
+import { cambiarPendientes, listarPendientes } from '../../netlify/functions/lib/pendientes.mjs'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
 import { eventoParaVista } from '../../netlify/functions/lib/calendario.mjs'
@@ -425,6 +426,14 @@ const routes = {
   'probar-correo': async () => {
     guardarCorreoLocal({ para: 'admin-local@example.com', asunto: 'Prueba de correo — Repisas Don Maxi', texto: 'Prueba local' })
     return { ok: true, para: 'admin-local@example.com', remitente: 'local' }
+  },
+  // Mismo contrato que netlify/functions/pendientes.mjs, con las filas en data.json.
+  'pendientes': async (body, _params, method) => {
+    const almacen = { async leerFilas() { return db.pendientesFilas ?? null }, async guardarFilas(f) { db.pendientesFilas = f; saveData(db) } }
+    const hoy = ahoraEnZona().fecha
+    if (method !== 'POST') return { ok: true, pendientes: await listarPendientes(almacen, hoy) }
+    try { return { ok: true, ...(await cambiarPendientes(almacen, body, hoy)) } }
+    catch (e) { if (e.estado) return { status: e.estado, ok: false, error: e.message }; throw e }
   },
   // Mismo contrato que netlify/functions/uso.mjs, con las filas en data.json.
   'uso': async (body, params, method) => {
