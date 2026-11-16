@@ -89,3 +89,22 @@ test('cancelar deja el cupo libre para otro cliente', async () => {
   assert.equal(cal.patches[0].requestBody.extendedProperties.shared.slot_key, '')
   assert.deepEqual((await horasParaReagendar(cal, 'cal', horario, ahora))[0].rangos.map(r => [r.desde, r.libres]), [['08:00', 1], ['11:00', 2]])
 })
+
+test('agendar a hora exacta (como /visita): 15 min, una por hora, solo horas del horario', async () => {
+  const { crearVisita } = await import('./visitas.mjs')
+  const eventos = [exacta('a', '2026-10-17', '09:00')]
+  const insertados = []
+  const cal = calendarFalso(eventos)
+  cal.events.insert = async ({ requestBody }) => { insertados.push(requestBody); return { data: { id: 'n', htmlLink: 'l' } } }
+  const datos = { nombre: 'Ana', apellido: 'Pérez', email: 'a@x.cl', celular: '9', direccion: 'Los Leones 123, Providencia', fechaISO: '2026-10-17', horaHHmm: '10:00' }
+  const v = await crearVisita(cal, 'c', horario, datos, ahora)
+  assert.deepEqual(v.rango, { desde: '10:00', hasta: '10:15' })
+  const ev = insertados[0]
+  assert.equal(new Date(ev.end.dateTime) - new Date(ev.start.dateTime), 15 * 60000)
+  assert.equal(new Date(ev.start.dateTime).toISOString(), new Date('2026-10-17T10:00:00-03:00').toISOString())
+  assert.equal(ev.location, 'Los Leones 123, Providencia')
+  assert.deepEqual(ev.extendedProperties.shared, { slot_key: '2026-10-17T10:00', created_by: 'agendador-netlify', rango: '08:00-11:00', hora_ruta: '10:00', comuna: 'Providencia' })
+  // La misma hora tomada, o fuera del horario: no.
+  await assert.rejects(crearVisita(cal, 'c', horario, { ...datos, horaHHmm: '09:00' }, ahora), e => e.estado === 409)
+  await assert.rejects(crearVisita(cal, 'c', horario, { ...datos, horaHHmm: '16:00' }, ahora), e => e.estado === 400)
+})

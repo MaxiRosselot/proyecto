@@ -4,7 +4,8 @@
 // rango (ej. 11:00–14:00); al fijar la ruta pasa a durar la visita (15 min) a la hora de llegada.
 // Su slot_key (fecha + rango) es lo que ocupa cupo; al cancelar se vacia.
 import { ErrorCotizacion } from './cotizaciones.mjs'
-import { CUPO_POR_DEFECTO, DURACION_MIN, ZONA, ahoraEnZona, aHHMM, diasConRangos, estadoRango, horaLocalAUTC, rangoDeHora, sumarDias } from './horarios.mjs'
+import { CUPO_POR_DEFECTO, DURACION_MIN, ZONA, ahoraEnZona, aHHMM, aMinutos, diasConRangos, estadoRango, horaLocalAUTC, horaPermitida, rangoDeHora, sumarDias } from './horarios.mjs'
+import { comunaDe } from './zonas.mjs'
 
 const DEL_AGENDADOR = 'created_by=agendador-netlify'
 
@@ -92,21 +93,46 @@ export async function liberarHoraVisita(calendar, calendarId, visitId) {
   return { liberada: true }
 }
 
-// Agenda una visita desde /visita: dia + rango, con cupo. El evento dura todo el rango hasta que
-// se arma la ruta del dia. datos: { nombre, apellido, email, celular, direccion (calle y numero),
-// depto?, comuna?, lat?, lng?, fechaISO, rango ('11:00'), note? }.
+// Las slot_key ocupadas de un dia (visitas del agendador no canceladas).
+async function slotsTomados(calendar, calendarId, fechaISO) {
+  const res = await calendar.events.list({
+    calendarId, singleEvents: true, maxResults: 250, sharedExtendedProperty: DEL_AGENDADOR,
+    timeMin: horaLocalAUTC(fechaISO, '00:00').toISOString(), timeMax: horaLocalAUTC(sumarDias(fechaISO, 1), '00:00').toISOString(),
+  })
+  return new Set((res.data.items || []).filter(ev => ev.status !== 'cancelled').map(ev => ev.extendedProperties?.shared?.slot_key).filter(Boolean))
+}
+
+// Agenda una visita desde /visita. Dos formas:
+//   · hora exacta (horaHHmm, '11:00'): la de siempre, y la que usa /visita desde 2026-11-16. Una
+//     visita por hora, de 15 min; la hora tiene que estar en Admin → Horarios.
+//   · rango (rango, '11:00' = 11 a 14) con cupo: el evento dura todo el rango hasta la ruta del dia.
+// datos: { nombre, apellido, email, celular, direccion, depto?, comuna?, lat?, lng?, fechaISO,
+// horaHHmm | rango, note? }.
 export async function crearVisita(calendar, calendarId, horario, datos, ahora = new Date()) {
   const t = (v, max) => String(v ?? '').trim().slice(0, max)
-  const { fechaISO, rango: desde } = datos
-  if (!t(datos.email, 120) || !fechaISO || !desde) throw new ErrorCotizacion(400, 'Faltan datos para agendar')
+  const { fechaISO, rango: desde, horaHHmm } = datos
+  if (!t(datos.email, 120) || !fechaISO || !(desde || horaHHmm)) throw new ErrorCotizacion(400, 'Faltan datos para agendar')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaISO)) throw new ErrorCotizacion(400, 'Fecha inválida')
-  const estado = estadoRango(horario, await visitasActivas(calendar, calendarId, fechaISO, fechaISO), fechaISO, desde, ahora)
-  if (estado === 'fuera') throw new ErrorCotizacion(400, 'Ese horario no está disponible para agendar. Elige otro.')
-  if (estado === 'lleno') throw new ErrorCotizacion(409, 'Ese horario se acaba de llenar. Elige otro.')
-  const rango = rangoDeHora(desde)
+  let rango, slotKey, inicio, fin
+  if (horaHHmm) {
+    if (!horaPermitida(horario, fechaISO, horaHHmm, ahora)) throw new ErrorCotizacion(400, 'Ese horario no está disponible para agendar. Elige otro.')
+    slotKey = `${fechaISO}T${horaHHmm}`
+    if ((await slotsTomados(calendar, calendarId, fechaISO)).has(slotKey)) throw new ErrorCotizacion(409, 'Ese horario ya fue tomado. Elige otra hora.')
+    rango = { desde: horaHHmm, hasta: aHHMM(aMinutos(horaHHmm) + DURACION_MIN) }
+    inicio = horaLocalAUTC(fechaISO, horaHHmm); fin = new Date(inicio.getTime() + DURACION_MIN * 60000)
+  } else {
+    const estado = estadoRango(horario, await visitasActivas(calendar, calendarId, fechaISO, fechaISO), fechaISO, desde, ahora)
+    if (estado === 'fuera') throw new ErrorCotizacion(400, 'Ese horario no está disponible para agendar. Elige otro.')
+    if (estado === 'lleno') throw new ErrorCotizacion(409, 'Ese horario se acaba de llenar. Elige otro.')
+    rango = rangoDeHora(desde)
+    slotKey = `${fechaISO}R${rango.desde}`
+    inicio = horaLocalAUTC(fechaISO, rango.desde); fin = horaLocalAUTC(fechaISO, rango.hasta)
+  }
   const nombre = `${t(datos.nombre, 60)} ${t(datos.apellido, 60)}`.trim()
-  const comuna = t(datos.comuna, 60), depto = t(datos.depto, 60)
-  const direccion = [t(datos.direccion, 160), comuna].filter(Boolean).join(', ')
+  // Con la direccion escrita a mano, la comuna se saca del texto si se puede (para la ruta del dia).
+  const comunaDada = t(datos.comuna, 60), depto = t(datos.depto, 60)
+  const comuna = comunaDada || (horaHHmm ? comunaDe(t(datos.direccion, 160)) || '' : '')
+  const direccion = [t(datos.direccion, 160), comunaDada].filter(Boolean).join(', ')
   const lat = Number(datos.lat), lng = Number(datos.lng)
   const conCoordenadas = datos.lat != null && datos.lng != null && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
   const { data } = await calendar.events.insert({
@@ -115,15 +141,17 @@ export async function crearVisita(calendar, calendarId, horario, datos, ahora = 
       summary: `Visita — ${nombre} (Repisas Don Maxi)`,
       description: [`Cliente: ${nombre}`, `Email: ${t(datos.email, 120)}`, `Celular: ${t(datos.celular, 40)}`, `Dirección: ${direccion}`,
         ...(depto ? [`Depto/casa: ${depto}`] : []), '', 'Notas:', t(datos.note, 1000) || '(sin notas)', '',
-        `Slot: ${fechaISO} ${rango.desde}-${rango.hasta} (hora exacta según la ruta del día)`].join('\n'),
+        horaHHmm ? `Slot: ${fechaISO} ${horaHHmm}` : `Slot: ${fechaISO} ${rango.desde}-${rango.hasta} (hora exacta según la ruta del día)`].join('\n'),
       location: direccion,
-      start: { dateTime: horaLocalAUTC(fechaISO, rango.desde).toISOString(), timeZone: ZONA },
-      end: { dateTime: horaLocalAUTC(fechaISO, rango.hasta).toISOString(), timeZone: ZONA },
+      start: { dateTime: inicio.toISOString(), timeZone: ZONA },
+      end: { dateTime: fin.toISOString(), timeZone: ZONA },
       attendees: [{ email: t(datos.email, 120) }],
       reminders: { useDefault: true },
       extendedProperties: {
         shared: {
-          slot_key: `${fechaISO}R${rango.desde}`, rango: `${rango.desde}-${rango.hasta}`, created_by: 'agendador-netlify',
+          slot_key: slotKey, created_by: 'agendador-netlify',
+          // Una de hora exacta cuenta en el cupo del rango que la contiene y ya tiene su hora de ruta.
+          ...(horaHHmm ? { ...((r) => (r ? { rango: `${r.desde}-${r.hasta}` } : {}))(rangoDeHora(horaHHmm)), hora_ruta: horaHHmm } : { rango: `${rango.desde}-${rango.hasta}` }),
           ...(comuna ? { comuna } : {}), ...(conCoordenadas ? { lat: String(lat), lng: String(lng) } : {}),
         },
       },

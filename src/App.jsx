@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { WHATSAPP } from '../netlify/functions/lib/marca.mjs'
-import DireccionVisita, { OTRA_COMUNA } from './DireccionVisita.jsx'
 
 const CONFIG = {
   timezone: 'America/Santiago',
   business: { name: 'Repisas Don Maxi', notifyPhone: WHATSAPP },
   logoUrl: '/logo.png',
   endpoints: {
-    // Dias y rangos (8–11, 11–14, 14–17, 17–20) con cupo, segun Admin → Horarios.
-    rangos: '/.netlify/functions/visitas-rangos',
+    horarios: '/.netlify/functions/horarios',
+    availability: '/.netlify/functions/get-availability',
     createEvent: '/.netlify/functions/create_event',
   }
 }
@@ -17,34 +16,36 @@ const CONFIG = {
 function parseLocalDate(iso){ const [y,m,d]=iso.split('-').map(Number); return new Date(y,(m??1)-1,d??1) }
 function prettyDate(date){ return new Intl.DateTimeFormat('es-CL',{dateStyle:'full'}).format(date) }
 function encode(data){ return new URLSearchParams(data).toString() }
-const textoRango = r => `${r.desde} a ${r.hasta}`
 
+// /visita: el cliente elige dia, hora exacta y deja sus datos con la direccion (como antes del
+// 2026-10-24; volvio el 2026-11-16 porque pedir la direccion primero bajo las visitas agendadas).
 export default function App(){
-  // Primero la direccion (con autocompletado de Google si hay clave), despues el dia y el rango:
-  // la hora exacta sale de la ruta del dia y se le avisa al cliente el dia anterior.
-  const [ubicacion, setUbicacion] = useState({ calle: '', depto: '', comuna: '', verificada: false })
-  const [ubicacionLista, setUbicacionLista] = useState(false)
+  // Dias y horas los define el admin (seccion Horarios); el servidor los entrega ya calculados.
   const [dias, setDias] = useState(null) // null = cargando
   const [diasError, setDiasError] = useState('')
   const [selectedDateISO,setSelectedDateISO]=useState('')
-  const [rango,setRango]=useState(null)
+  const [selectedSlot,setSelectedSlot]=useState('')
+  const [availability, setAvailability] = useState(null) // null = aún no cargado
+  const [loadingAvail, setLoadingAvail] = useState(false)
+  const [availError, setAvailError] = useState('')
 
-  const [form,setForm]=useState({nombre:'',apellido:'',email:'',celular:'',comentarios:''})
+  const [form,setForm]=useState({nombre:'',apellido:'',email:'',celular:'',direccion:'',comentarios:''})
   const [submitting,setSubmitting]=useState(false)
   const [toast,setToast]=useState({ type:'', msg:'' })
 
-  function cargarDias() {
-    setDias(null); setDiasError(''); setSelectedDateISO(''); setRango(null)
-    fetch(`${CONFIG.endpoints.rangos}?v=${Date.now()}`, { cache: 'no-store' })
+  useEffect(() => {
+    fetch(`${CONFIG.endpoints.horarios}?v=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(data => { if (data?.ok && Array.isArray(data.dias)) setDias(data.dias); else throw new Error() })
+      .then(data => {
+        if (data?.ok && Array.isArray(data.dias)) setDias(data.dias)
+        else { setDias([]); setDiasError('No se pudieron cargar las fechas disponibles.') }
+      })
       .catch(() => { setDias([]); setDiasError('No se pudieron cargar las fechas disponibles.') })
-  }
-  useEffect(() => { if (ubicacionLista) cargarDias() }, [ubicacionLista])
-  const diaElegido = useMemo(() => dias?.find(d => d.fecha === selectedDateISO), [dias, selectedDateISO])
+  }, [])
+  const baseSlots = useMemo(() => dias?.find(d => d.fecha === selectedDateISO)?.horas || [], [dias, selectedDateISO])
   const selectedDate = useMemo(()=>selectedDateISO?parseLocalDate(selectedDateISO):null,[selectedDateISO])
 
-  const step = useMemo(()=> !ubicacionLista ? 1 : rango ? 3 : 2, [ubicacionLista, rango])
+  const step = useMemo(()=> selectedDateISO ? (selectedSlot ? 3 : 2) : 1, [selectedDateISO, selectedSlot])
   useEffect(()=>{
     const el = document.getElementById('progress-bar')
     if(!el) return
@@ -52,44 +53,87 @@ export default function App(){
   },[step])
 
   const canSubmit = Boolean(
-    selectedDateISO && rango &&
+    selectedDateISO && selectedSlot &&
     form.nombre.trim() && form.apellido.trim() &&
     /^\S+@\S+\.\S+$/.test(form.email.trim()) &&
-    form.celular.trim() && ubicacion.calle.trim()
+    form.celular.trim() && form.direccion.trim()
   )
-  const comuna = ubicacion.comuna === OTRA_COMUNA ? '' : ubicacion.comuna
-  const direccionCompleta = [[ubicacion.calle.trim(), comuna].filter(Boolean).join(', '), ubicacion.depto.trim()].filter(Boolean).join(' · ')
+
+  // ----------- DISPONIBILIDAD -----------
+  useEffect(() => {
+    if (!selectedDateISO || baseSlots.length === 0) return
+    const controller = new AbortController()
+    setLoadingAvail(true)
+    setAvailError('')
+    setAvailability(null)
+    setSelectedSlot('')
+
+    const params = new URLSearchParams({
+      date: selectedDateISO,
+      tz: CONFIG.timezone,
+      mode: 'created-only',
+      slots: baseSlots.join(',')
+    })
+
+    const url = `${CONFIG.endpoints.availability}?${params.toString()}&v=${Date.now()}`
+    fetch(url, { signal: controller.signal, cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.ok && data.availability) {
+          setAvailability(data.availability)
+        } else {
+          setAvailError('No se pudo cargar la disponibilidad.')
+          setAvailability({})
+        }
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          setAvailError('Error al obtener la disponibilidad.')
+          setAvailability({})
+        }
+      })
+      .finally(() => setLoadingAvail(false))
+
+    return () => controller.abort()
+  }, [selectedDateISO, baseSlots])
 
   // ----------- ENVÍO DE FORMULARIO -----------
   async function handleSubmit(e){
     e.preventDefault()
-    if(!canSubmit || submitting) return
+    if(!canSubmit || submitting || loadingAvail) return
     setSubmitting(true)
     setToast({ type:'', msg:'' })
 
     try{
-      // 1) Google Calendar (el servidor revisa que el rango siga con cupo)
+      // Revalida el slot antes de enviar
+      const checkParams = new URLSearchParams({
+        date: selectedDateISO, tz: CONFIG.timezone, mode: 'created-only', slots: selectedSlot
+      })
+      const check = await fetch(`${CONFIG.endpoints.availability}?${checkParams}&v=${Date.now()}`, { cache:'no-store' })
+      const j = await check.json()
+      if (!j?.ok || j.availability?.[selectedSlot] !== true) {
+        throw new Error('El horario seleccionado ya no está disponible.')
+      }
+
+      // 1) Google Calendar
       const r2 = await fetch(CONFIG.endpoints.createEvent,{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          nombre:form.nombre, apellido:form.apellido, email:form.email, celular:form.celular,
-          direccion: ubicacion.calle.trim(), depto: ubicacion.depto.trim(), comuna,
-          ...(ubicacion.verificada ? { lat: ubicacion.lat, lng: ubicacion.lng } : {}),
-          fechaISO:selectedDateISO, rango:rango.desde, note:form.comentarios
+          nombre:form.nombre, apellido:form.apellido, email:form.email, celular:form.celular, direccion:form.direccion,
+          fechaISO:selectedDateISO, horaHHmm:selectedSlot, tz:CONFIG.timezone, note:form.comentarios
         })
       })
       if(!r2.ok){
         const j = await r2.json().catch(()=> ({}))
-        if (r2.status === 409) cargarDias()
-        throw new Error(j.message || j.error || 'No se pudo agendar la visita.')
+        throw new Error(j.message || j.error || 'No se pudo agendar la visita. Intenta de nuevo o escríbenos por WhatsApp.')
       }
 
       // 2) Netlify Forms (solo si Calendar fue OK)
       const payload = {
         'form-name':'agendador','bot-field':'',
         nombre:form.nombre,apellido:form.apellido,email:form.email,celular:form.celular,
-        direccion:direccionCompleta,comentarios:form.comentarios,
-        fecha:selectedDateISO,hora:`${rango.desde}-${rango.hasta}`,tz:CONFIG.timezone
+        direccion:form.direccion,comentarios:form.comentarios,
+        fecha:selectedDateISO,hora:selectedSlot,tz:CONFIG.timezone
       }
       await fetch('/',{
         method:'POST',
@@ -100,16 +144,16 @@ export default function App(){
       // 3) Redirección — pasamos todos los datos del cliente en la URL
       const qs = new URLSearchParams({
         date: selectedDateISO,
-        time: rango.desde,
-        hasta: rango.hasta,
+        time: selectedSlot,
         email: form.email,
         nombre: form.nombre,
         apellido: form.apellido,
         celular: form.celular,
-        direccion: direccionCompleta,
+        direccion: form.direccion,
         ...(form.comentarios ? { comentarios: form.comentarios } : {})
       })
-      window.location.replace(`${window.location.origin}/confirm.html?${qs.toString()}`)
+      const confirmUrl = `${window.location.origin}/confirm.html?${qs.toString()}`
+      window.location.replace(confirmUrl)
       setToast({ type:'ok', msg:'¡Agendado! Redirigiendo…' })
     }catch(err){
       console.error(err)
@@ -119,20 +163,6 @@ export default function App(){
 
   return (
     <div role="application" aria-label="Agendador de visitas">
-      {/* DIRECCION */}
-      <section aria-labelledby="tit-donde">
-        <h2 id="tit-donde" className="section-title">📍 ¿Dónde es la visita?</h2>
-        {ubicacionLista ? (
-          <p className="note" style={{ fontSize: 14 }}>
-            <strong>{direccionCompleta}</strong>{' '}
-            <button type="button" className="link-btn" onClick={() => setUbicacionLista(false)}>Cambiar</button>
-          </p>
-        ) : (
-          <DireccionVisita valor={ubicacion} onChange={setUbicacion} onListo={() => setUbicacionLista(true)} />
-        )}
-      </section>
-
-      {ubicacionLista && <>
       {/* FECHAS */}
       <section aria-labelledby="tit-fechas">
         <h2 id="tit-fechas" className="section-title">📅 Fechas disponibles</h2>
@@ -147,37 +177,74 @@ export default function App(){
         )}
         <div className="dates" role="listbox" aria-label="Seleccione una fecha">
           {(dias || []).map(({ fecha: date })=> {
-            const label = new Intl.DateTimeFormat('es-CL',{ weekday:'long', day:'2-digit', month:'short' }).format(parseLocalDate(date))
+            const d = parseLocalDate(date)
+            const label = new Intl.DateTimeFormat('es-CL',{ weekday:'long', day:'2-digit', month:'short' }).format(d)
             const active = selectedDateISO===date
             return (
-              <button key={date} type="button" className={`date-btn ${active?'active':''}`} aria-pressed={active}
-                onClick={()=> { setSelectedDateISO(date); setRango(null) }}>{label}</button>
+              <button
+                key={date}
+                type="button"
+                className={`date-btn ${active?'active':''}`}
+                aria-pressed={active}
+                onClick={()=> setSelectedDateISO(date)}
+              >{label}</button>
             )
           })}
         </div>
       </section>
 
-      {/* RANGOS */}
-      {selectedDate && diaElegido && (
+      {/* HORARIOS */}
+      {selectedDate && (
         <section aria-labelledby="tit-horas" style={{ marginTop: 8 }}>
-          <h2 id="tit-horas" className="section-title">⏰ ¿En qué horario te acomoda? · {prettyDate(selectedDate)}</h2>
-          <div className="slots rangos" role="listbox" aria-label="Seleccione un rango horario">
-            {diaElegido.rangos.map(r => {
-              const active = rango?.desde === r.desde
+          <h2 id="tit-horas" className="section-title">
+            ⏰ Horarios para {prettyDate(selectedDate)}
+            {loadingAvail ? ' — verificando…' : ''}
+          </h2>
+
+          {availError && (
+            <p className="note" role="alert" style={{ color:'#b91c1c' }}>
+              {availError}
+            </p>
+          )}
+
+          <div
+            className="slots"
+            role="listbox"
+            aria-label="Seleccione un horario"
+            aria-busy={loadingAvail ? 'true' : 'false'}
+            style={loadingAvail ? { opacity:.6, pointerEvents:'none', cursor:'progress' } : {}}
+          >
+            {baseSlots.map(slot=>{
+              const isFree = availability?.[slot] === true
+              const active = selectedSlot===slot
+              const disabled = loadingAvail || !isFree || !!availError
               return (
-                <button key={r.desde} type="button" className={`slot ${active?'active':''}`} aria-pressed={active} onClick={()=> setRango(r)}>
-                  {textoRango(r)}
-                  {r.libres <= 2 && <small>{r.libres === 1 ? 'Último cupo' : 'Últimos cupos'}</small>}
+                <button
+                  key={slot}
+                  type="button"
+                  className={`slot ${active?'active':''}`}
+                  aria-pressed={active}
+                  aria-disabled={disabled}
+                  disabled={disabled}
+                  onClick={()=> !disabled && setSelectedSlot(slot)}
+                  title={loadingAvail ? 'Verificando…' : (isFree ? 'Disponible' : 'No disponible')}
+                >
+                  {slot}
                 </button>
               )
             })}
           </div>
-          <p className="note">La visita dura unos 15 minutos. El día anterior te confirmamos por WhatsApp la hora exacta de llegada dentro de ese horario, según la ruta del día.</p>
+
+          {selectedSlot && !loadingAvail && (
+            <p className="note" aria-live="polite" style={{ marginTop: 8 }}>
+              Seleccionaste <strong>{prettyDate(selectedDate)}</strong> a las <strong>{selectedSlot}</strong>.
+            </p>
+          )}
         </section>
       )}
 
       {/* FORMULARIO */}
-      {rango && (
+      {selectedSlot && !loadingAvail && (
         <section aria-labelledby="tit-datos" style={{ marginTop: 10 }}>
           <h2 id="tit-datos" className="section-title">🧾 Tus datos</h2>
           <form onSubmit={handleSubmit} noValidate>
@@ -186,15 +253,21 @@ export default function App(){
               <div><label>Apellido</label><input value={form.apellido} onChange={e=>setForm({...form,apellido:e.target.value})} required /></div>
               <div><label>Correo</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required /></div>
               <div><label>Celular</label><input type="tel" value={form.celular} onChange={e=>setForm({...form,celular:e.target.value})} required /></div>
+              <div><label>Dirección</label><input value={form.direccion} onChange={e=>setForm({...form,direccion:e.target.value})} placeholder="Calle, número y comuna" autoComplete="street-address" required /></div>
               <div><label>Comentarios</label><input value={form.comentarios} onChange={e=>setForm({...form,comentarios:e.target.value})} placeholder="Opcional" /></div>
             </div>
 
             <div style={{ marginTop: 14 }}>
-              <button className="btn" type="submit" disabled={!canSubmit || submitting} aria-busy={submitting ? 'true' : 'false'}>
-                {submitting ? 'Agendando…' : `Agendar visita · ${textoRango(rango)}`}
+              <button
+                className="btn"
+                type="submit"
+                disabled={!canSubmit || submitting || loadingAvail}
+                aria-busy={submitting ? 'true' : 'false'}
+              >
+                {submitting ? 'Agendando…' : 'Agendar visita (15 min)'}
               </button>
               <p className="note">
-                Al agendar recibirás una invitación en tu correo con el horario elegido.
+                Al agendar recibirás una invitación directamente en tu correo.
                 Por favor asegúrate de haberlo escrito correctamente.
               </p>
             </div>
@@ -204,8 +277,6 @@ export default function App(){
           </form>
         </section>
       )}
-
-      </>}
 
       <footer style={{ textAlign:'center', marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
         Zona horaria: {CONFIG.timezone}
