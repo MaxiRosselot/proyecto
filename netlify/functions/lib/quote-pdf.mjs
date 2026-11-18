@@ -14,7 +14,7 @@ const money = value => '$' + Math.round(value).toLocaleString('es-CL');
 const metres = value => (Number.isInteger(value) ? String(value) : value.toFixed(2)) + ' m';
 const services = SERVICIOS;
 const SERVICES_BAND = 16;
-const faq = [
+export const FAQ = [
   ['¿Qué pasa si las medidas varían en terreno?', 'No hay problema: llevamos el material sobredimensionado para ajustarlo perfectamente a tu espacio al momento de instalar.'],
   ['¿Las repisas son desmontables?', 'Sí. Si te cambias de domicilio puedes llevártelas contigo — te ayudamos con el proceso de desmontaje.'],
   ['¿De qué material están hechas?', 'Terciado estructural de 18mm (idéntico al de mueblería) y pino cepillado 2×2, pensado para resistir peso y humedad.'],
@@ -267,7 +267,7 @@ export async function generateQuotePdf(data, { now = new Date(), functionsDir = 
   // Page 4: FAQ.
   page('¿Otra duda? Escríbenos por WhatsApp', 'Preguntas frecuentes', undefined, 16.5);
   y = 102.9;
-  for (const [q, a] of faq) {
+  for (const [q, a] of FAQ) {
     text(q, L, y, W, 10.12, C.ink, F.serif);
     text(a, L, y + 17.4, W, 9, C.sub, F.sans, { lineGap: .45 });
     y = doc.y + 9; rule(y, C.rowLine); y += 10.5;

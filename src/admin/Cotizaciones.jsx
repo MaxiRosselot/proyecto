@@ -10,6 +10,7 @@ import { cambiarAOpcion, regenerarPdf } from './regenerarPdf.js'
 import EnviarCotizacion, { CopiarHorarios, CopiarLink, CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
 import FichaMaestro from './FichaMaestro.jsx'
 import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
+import PanelJuntar from './JuntarCotizaciones.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { porcentajeDescuento, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 
@@ -108,6 +109,11 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [masId, setMasId]               = useState(null)
   const [pdfEnCurso, setPdfEnCurso]     = useState(null)   // { cotNum, etapa }
   const [pdfNuevo, setPdfNuevo]         = useState({})     // cotNum -> 'sugerido' | { blobUrl } | { error }
+  // Juntar cotizaciones en un presupuesto: las elegidas, en orden.
+  const [juntando, setJuntando]         = useState(false)
+  const [elegidas, setElegidas]         = useState([])
+  const alternarElegida = n => setElegidas(l => (l.includes(n) ? l.filter(x => x !== n) : [...l, n]))
+  const moverElegida = (n, d) => setElegidas(l => { const i = l.indexOf(n), j = i + d; if (i < 0 || j < 0 || j >= l.length) return l; const c = [...l]; [c[i], c[j]] = [c[j], c[i]]; return c })
   const actualizarLocal = (cotNum, cambios) => setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
 
   const load = useCallback(async () => {
@@ -374,9 +380,13 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
             <input type="file" accept=".json,application/json" style={{ display: 'none' }} data-testid="importar-cotizaciones"
               onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importar(f) }} />
           </label>
+          <button onClick={() => { setJuntando(v => !v); setElegidas([]) }} aria-pressed={juntando} style={{ ...styles.btnSecondary, ...(juntando ? { borderColor: C.orange, color: C.orangeDark } : {}) }}
+            title="Arma un solo presupuesto con varias cotizaciones (por ejemplo, varias bodegas de un mismo cliente)">Juntar cotizaciones</button>
           <button onClick={load} style={styles.btnSecondary}>Actualizar</button>
         </div>
       </div>
+
+      {juntando && <PanelJuntar elegidas={elegidas} quotes={quotes} onQuitar={alternarElegida} onMover={moverElegida} onCancelar={() => { setJuntando(false); setElegidas([]) }} />}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -425,6 +435,10 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                 onClick={() => !isEdit && setExpanded(isExp ? null : q.cotNum)}
                 style={{ cursor: isEdit ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}
               >
+                {juntando && (
+                  <input type="checkbox" checked={elegidas.includes(q.cotNum)} onClick={e => e.stopPropagation()} onChange={() => alternarElegida(q.cotNum)}
+                    aria-label={`Juntar N${q.cotNum}`} style={{ width: 20, height: 20, margin: 0, flex: 'none', accentColor: C.orange }} />
+                )}
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
                     <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{q.nombre}</span>

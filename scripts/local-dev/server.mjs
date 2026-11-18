@@ -559,6 +559,7 @@ const server = http.createServer(async (req, res) => {
   try {
     // Estas rutas corren el handler real de produccion, no una version local.
     const handlerReal = name === 'generate-quote' ? (await import('../../netlify/functions/generate-quote.mjs')).handler
+      : name === 'presupuesto-conjunto' ? (await import('../../netlify/functions/presupuesto-conjunto.mjs')).handler
       : name === 'admin-login' ? (await import('../../netlify/functions/admin-login.mjs')).handler
       : null
     if (handlerReal) {
