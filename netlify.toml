@@ -58,6 +58,11 @@
   external_node_modules = ["pdfkit"]
   included_files = ["netlify/functions/quote-assets/**"]
 
+# El presupuesto conjunto (Cotizaciones → Juntar cotizaciones) usa el mismo PDF y los mismos archivos.
+[functions.presupuesto-conjunto]
+  external_node_modules = ["pdfkit"]
+  included_files = ["netlify/functions/quote-assets/**"]
+
 [functions.send-reminders]
   schedule = "0 13 * * *"
 
