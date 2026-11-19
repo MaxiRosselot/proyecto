@@ -16,7 +16,7 @@ export function filasDeModulos(modulos, anteriores, tabla) {
     if (k < 0 && m.kind !== 'rack') k = libres.findIndex(r => (r.kind || 'shelf') === 'shelf' && igual(r, m, medidas))
     const previo = k >= 0 ? libres.splice(k, 1)[0] : null
     const mismo = previo && igual(previo, m, medidas) && Number(previo.v) > 0
-    const lista = precioRepisa(medidas, tabla)
+    const lista = precioRepisa({ ...medidas, niveles: m.levels }, tabla)
     return {
       id: m.sourceModuleId || `modulo-${i}`, sourceModuleId: m.sourceModuleId,
       kind: m.kind || 'shelf', modelId: m.modelId, label: m.label,

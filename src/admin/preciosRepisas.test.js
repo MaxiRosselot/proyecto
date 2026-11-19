@@ -63,5 +63,27 @@ test('devuelve null en vez de inventar un precio fuera de la tabla', () => {
   assert.equal(precioRepisa({ largoM: 2.6, profM: 0.48, altoM: 2 }), null, 'largo sobre 2.43 m')
   assert.equal(precioRepisa({ largoM: 0.4, profM: 0.48, altoM: 2 }), null, 'largo bajo 0.5 m')
   assert.equal(precioRepisa({ largoM: 1.5, profM: 0.58, altoM: 2 }), null, 'profundidad no estandar')
-  assert.equal(precioRepisa({ largoM: 1.5, profM: 0.48, altoM: 2.2 }), null, 'alto no estandar')
+  assert.equal(precioRepisa({ largoM: 1.5, profM: 0.48, altoM: 2.2 }), null, 'alto no estandar sin niveles: no se inventa')
+})
+
+test('el precio por material reproduce toda la tabla (desde y hasta de cada rango)', async () => {
+  const { precioPorMaterial } = await import('./preciosRepisas.js')
+  for (const f of TABLA_PRECIOS) {
+    const niveles = f.alto / 50
+    for (const largo of [f.desde, f.hasta]) {
+      assert.equal(precioPorMaterial({ largoM: largo / 100, profM: (f.prof + 8) / 100, altoM: f.alto / 100, niveles }), f.precio, `${f.alto}x${f.prof} largo ${largo}`)
+    }
+  }
+})
+
+test('repisas fuera de la tabla (otra separacion o a medida) se calculan por material', async () => {
+  const { precioPorMaterial } = await import('./preciosRepisas.js')
+  // 230 cm con 4 niveles: entre la de 200 (4 niveles) y la de 250 (5 niveles).
+  const p230 = precioRepisa({ largoM: 2.43, profM: 0.68, altoM: 2.3, niveles: 4 })
+  assert.equal(p230, precioPorMaterial({ largoM: 2.43, profM: 0.68, altoM: 2.3, niveles: 4 }))
+  assert.ok(p230 >= precioRepisa({ largoM: 2.43, profM: 0.68, altoM: 2 }) && p230 <= precioRepisa({ largoM: 2.43, profM: 0.68, altoM: 2.5 }), String(p230))
+  // Mas niveles, mas caro.
+  assert.ok(precioRepisa({ largoM: 1.5, profM: 0.48, altoM: 2.4, niveles: 8 }) > precioRepisa({ largoM: 1.5, profM: 0.48, altoM: 2.4, niveles: 4 }))
+  // Fuera de 50–243 cm de largo, no.
+  assert.equal(precioRepisa({ largoM: 2.6, profM: 0.48, altoM: 2.3, niveles: 4 }), null)
 })

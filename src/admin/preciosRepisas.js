@@ -116,8 +116,42 @@ export const LATERAL_EXTRA_NETO = 10000
 export const MAX_LATERALES_EXTRA = 4
 export const lateralesExtraDe = r => Math.min(MAX_LATERALES_EXTRA, Math.max(0, Math.round(Number(r?.lateralesExtra) || 0)))
 
-export function precioRepisa({ largoM, profM, altoM }, tabla = TABLA_PRECIOS) {
-  return filaPrecioRepisa({ largoM, profM, altoM }, tabla)?.precio ?? null
+// Precio por material, con los supuestos de la hoja "Supuestos" de repisas-tabla-precios.xlsx
+// (reproduce exacto las 88 filas de la tabla). Sirve para cualquier alto y cantidad de niveles
+// (repisas cada 30/40/60 o a medida en el 3D):
+//   · laterales: 2 si el largo es hasta 121 cm, 3 si es mas;
+//   · cada lateral: 2 postes del alto + un travesano del fondo util por nivel, en palo 2x2;
+//   · cada nivel: una tira de terciado del fondo util (las que salen de una plancha de 122);
+//     si sobran 50 cm o mas se cobra proporcional al largo, si no la tira completa;
+//   · fijaciones: 2 tirafondos + 2 tornillos por nivel y lateral; mano de obra por lateral;
+//   · precio = costo × (1 + margen), redondeado hacia arriba a $10.000.
+export const COSTOS = {
+  paloPorCm: 3110 / 320,          // palo 2x2 de 320 cm a $3.110
+  plancha: 19835, planchaAnchoCm: 122, planchaLargoCm: 243,
+  tirafondo: 69.9, tornillo: 6.78, manoDeObraLateral: 1000,
+  margen: 1.3, redondeo: 10000, remanenteMinCm: 50,
+}
+export function costoRepisa({ largoCm, fondoUtilCm, altoCm, niveles }, k = COSTOS) {
+  if (!(largoCm >= 50 && largoCm <= k.planchaLargoCm) || !(fondoUtilCm > 0 && fondoUtilCm <= k.planchaAnchoCm) || !(altoCm > 0) || !(niveles >= 1)) return null
+  const laterales = largoCm <= 121 ? 2 : 3
+  const palos = laterales * (2 * altoCm + niveles * fondoUtilCm) * k.paloPorCm
+  const tira = k.plancha / Math.floor(k.planchaAnchoCm / fondoUtilCm)
+  const terciado = niveles * tira * (k.planchaLargoCm - largoCm >= k.remanenteMinCm ? largoCm / k.planchaLargoCm : 1)
+  const fijaciones = niveles * laterales * (2 * k.tirafondo + 2 * k.tornillo)
+  return palos + terciado + fijaciones + laterales * k.manoDeObraLateral
+}
+export function precioPorMaterial({ largoM, profM, altoM, niveles }, k = COSTOS) {
+  const costo = costoRepisa({ largoCm: Math.round(largoM * 100), fondoUtilCm: Math.round(profM * 100) - PILAR_CM * 2, altoCm: Math.round(altoM * 100), niveles: Math.round(Number(niveles)) }, k)
+  return costo === null ? null : Math.ceil(costo * (1 + k.margen) / k.redondeo - 1e-9) * k.redondeo
+}
+
+// Precio de UNA repisa: el de la tabla si esas medidas estan (la tabla manda: puede tener precios
+// editados a mano); si no, por material con sus niveles. null si ni asi se puede (largo fuera de
+// 50–243 cm, o sin niveles).
+export function precioRepisa({ largoM, profM, altoM, niveles }, tabla = TABLA_PRECIOS) {
+  const fila = filaPrecioRepisa({ largoM, profM, altoM }, tabla)
+  if (fila) return fila.precio
+  return niveles ? precioPorMaterial({ largoM, profM, altoM, niveles }) : null
 }
 
 export function filaPrecioRepisa({ largoM, profM, altoM }, tabla = TABLA_PRECIOS) {

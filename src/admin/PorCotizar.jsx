@@ -15,7 +15,7 @@ const ADICIONALES_INICIALES = Object.fromEntries(SERVICIOS.flatMap(([clave, , pr
 
 function repisaPorDefecto(tabla) {
   const { l, p, a } = DEFAULTS_REPISA
-  return { ...DEFAULTS_REPISA, id: Date.now(), v: precioRepisa({ largoM: l, profM: p, altoM: a }, tabla) ?? 0 }
+  return { ...DEFAULTS_REPISA, id: Date.now(), v: precioRepisa({ largoM: l, profM: p, altoM: a, niveles: DEFAULTS_REPISA.n }, tabla) ?? 0 }
 }
 
 function SelectOrFree({ options, value, onChange, step = 0.01 }) {
@@ -85,8 +85,8 @@ function Grafica3D({ project, onProject, onModulos, frameRef }) {
   // El escuchador se registra una sola vez, asi que no puede cerrar sobre las funciones de
   // este render: onModulos arrastra la tabla de precios, y congelarla dejaba las filas del 3D
   // valorizadas con el respaldo del bundle en vez de la planilla del cliente.
-  const avisar = useRef({ onProject, onModulos })
-  avisar.current = { onProject, onModulos }
+  const avisar = useRef({ onProject, onModulos, setAviso3d })
+  avisar.current = { onProject, onModulos, setAviso3d }
   // Ventana que origino el ultimo cambio. A esa no se le devuelve el proyecto: el configurador
   // avisa 'project-changed' cada vez que su estado cambia, incluido al recibir 'load-project',
   // asi que devolverselo lo haria rebotar sin fin.
@@ -117,7 +117,9 @@ function Grafica3D({ project, onProject, onModulos, frameRef }) {
         avisar.current.onProject(msg.payload.project)
       }
       // El acuse si trae los modulos ya planificados, que es con lo que se arma la tabla.
-      if (msg.type === 'repisas:project-loaded' && msg.payload?.modules) avisar.current.onModulos(msg.payload.modules)
+      if (msg.type === 'repisas:project-loaded' && msg.payload?.modules) { avisar.current.setAviso3d(''); avisar.current.onModulos(msg.payload.modules) }
+      if (msg.type === 'repisas:project-invalid' || msg.type === 'repisas:error')
+        avisar.current.setAviso3d('El modelo 3D no se pudo leer y las repisas no pasaron a la tabla. Recarga la página (Ctrl+R o deslizar hacia abajo) y vuelve a abrir el 3D; si sigue, avísale a Claude.')
     }
     window.addEventListener('message', recibir)
     return () => window.removeEventListener('message', recibir)
@@ -223,6 +225,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   const [preciosDeRespaldo, setPreciosDeRespaldo] = useState(true)
   const [actualizandoPrecio, setActualizandoPrecio] = useState(false)
   const [mensajePrecio, setMensajePrecio] = useState('')
+  // Si el 3D no pudo leer el modelo, la tabla no se llena: se avisa en vez de dejarla vacia.
+  const [aviso3d, setAviso3d] = useState('')
   const [repisas, setRepisas]             = useState(saved?.repisas || [repisaPorDefecto(TABLA_PRECIOS)])
   const [adicionales, setAdicionales]     = useState(saved?.adicionales || ADICIONALES_INICIALES)
   // Proyecto que se arma en el configurador 3D. Sus vistas van en la pagina 1 del PDF.
@@ -361,7 +365,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       const next = { ...r, [field]: parseFloat(String(val).replace(',', '.')) || 0 }
       // El valor sale solo de la tabla al cambiar las medidas. Si se edita a mano manda lo
       // escrito, y vale solo para esta cotizacion: la tabla no se toca.
-      if (['l', 'p', 'a'].includes(field)) next.v = precioRepisa({ largoM: next.l, profM: next.p, altoM: next.a }, tablaPrecios) ?? 0
+      if (['l', 'p', 'a', 'n'].includes(field)) next.v = precioRepisa({ largoM: next.l, profM: next.p, altoM: next.a, niveles: next.n }, tablaPrecios) ?? 0
       return next
     }))
   }
@@ -720,7 +724,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
                   <td style={{ padding: '5px 4px' }}>
                     <div className="quote-price-field">
                     <input type="number" value={r.v} step="1000" onChange={e => updRep(r.id, 'v', e.target.value)}
-                      title={r.kind === 'rack' ? 'Precio neto del rack completo, con cajas incluidas' : r.v ? '' : 'Esa combinacion de medidas no esta en la tabla de precios: ingresa el valor a mano'}
+                      title={r.kind === 'rack' ? 'Precio neto del rack completo, con cajas incluidas' : !r.v ? 'Esa combinacion de medidas no se puede calcular: ingresa el valor a mano'
+                        : filaPrecioRepisa({ largoM: r.l, profM: r.p, altoM: r.a }, tablaPrecios) ? '' : 'Alto fuera de la tabla: precio calculado por material (palo, terciado, fijaciones y mano de obra, con el margen de la tabla). Puedes cambiarlo a mano.'}
                       style={r.v ? inputStyle : { ...inputStyle, border: '1.5px solid #D9534F', background: '#FFF6F6' }} />
                     {r.kind !== 'rack' && <button type="button" disabled={actualizandoPrecio || preciosDeRespaldo || !filaPrecioRepisa({ largoM: r.l, profM: r.p, altoM: r.a }, tablaPrecios)}
                       className="quote-price-save" title="Actualizar valor en tabla" aria-label="Actualizar valor en tabla"
@@ -744,6 +749,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
             </tbody>
           </table>
         </div>
+        {aviso3d && <div role="alert" style={{ ...styles.errorBox, marginTop: 10 }}>{aviso3d}</div>}
         {repisas.length < 100 && (
           <button onClick={addRepisa}
             style={{ marginTop: 10, width: '100%', background: 'none', border: '2px dashed ' + C.orange + '60', color: C.orange, padding: '9px', borderRadius: 9, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
