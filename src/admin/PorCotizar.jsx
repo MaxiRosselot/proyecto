@@ -76,7 +76,7 @@ function bytesABase64(buffer) {
 
 // Visor en vivo + modal a pantalla completa con el configurador entero.
 // El proyecto viaja por postMessage: la ventana chica lo muestra, el modal lo edita.
-function Grafica3D({ project, onProject, onModulos, frameRef }) {
+function Grafica3D({ project, onProject, onModulos, onAviso3d = () => {}, frameRef }) {
   const [ampliado, setAmpliado] = useState(false)
   const enCelular = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches
   const modalRef = useRef(null)
@@ -85,8 +85,8 @@ function Grafica3D({ project, onProject, onModulos, frameRef }) {
   // El escuchador se registra una sola vez, asi que no puede cerrar sobre las funciones de
   // este render: onModulos arrastra la tabla de precios, y congelarla dejaba las filas del 3D
   // valorizadas con el respaldo del bundle en vez de la planilla del cliente.
-  const avisar = useRef({ onProject, onModulos, setAviso3d })
-  avisar.current = { onProject, onModulos, setAviso3d }
+  const avisar = useRef({ onProject, onModulos, setAviso3d: onAviso3d })
+  avisar.current = { onProject, onModulos, setAviso3d: onAviso3d }
   // Ventana que origino el ultimo cambio. A esa no se le devuelve el proyecto: el configurador
   // avisa 'project-changed' cada vez que su estado cambia, incluido al recibir 'load-project',
   // asi que devolverselo lo haria rebotar sin fin.
@@ -764,7 +764,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           {mensajePrecio.texto}
         </div>
       )}
-      <Grafica3D project={project3d} onProject={setProject3d} onModulos={filasDesde3d} frameRef={frame3dRef} />
+      <Grafica3D project={project3d} onProject={setProject3d} onModulos={filasDesde3d} onAviso3d={setAviso3d} frameRef={frame3dRef} />
 
       {/* Adicionales */}
       <div style={{ ...styles.card, marginBottom: 14, overflowX: 'auto' }}>
