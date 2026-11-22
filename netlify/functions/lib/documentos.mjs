@@ -10,6 +10,9 @@ export const CODIGOS_DOCUMENTO = ['B', 'B*', 'F', 'F*', 'M', 'M/B', 'M/B*', 'M/F
 
 export const porEmitir = codigo => String(codigo || '').includes('*')
 
+// Al emitir el documento: "B*" → "B", "M/F*" → "M/F".
+export const emitido = codigo => String(codigo || '').replace(/\*/g, '')
+
 // Normaliza lo escrito a mano: "b/m" → "M/B", "W-B" → "W/B", "-" o "SI" → "".
 export function normalizarDocumento(texto) {
   const limpio = String(texto ?? '').toUpperCase().replace(/\s+/g, '').replace(/[-–]/g, '/').replace(/\/+/g, '/').replace(/^\/|\/$/g, '')

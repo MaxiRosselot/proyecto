@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona } from '../../netlify/functions/lib/horarios.mjs'
 import { CONCEPTOS, TIPOS_TRABAJO, documentosPorEmitir, resumenMes, sumarMeses } from '../../netlify/functions/lib/resumen-instalaciones.mjs'
+import { emitido } from '../../netlify/functions/lib/documentos.mjs'
 
 // Colores fijos por concepto y por tipo de trabajo: los mismos en barras, leyendas y tabla.
 const COLOR = {
@@ -183,6 +184,25 @@ export default function InstalacionesSection({ onVerCotizacion }) {
   // Documentos por emitir (B*, F*...): se marcan como emitidos en la planilla de Instalaciones.
   const porEmitir = useMemo(() => documentosPorEmitir(cotizaciones), [cotizaciones])
   const [verDocumentos, setVerDocumentos] = useState(false)
+  // Marcar un documento como emitido (B* → B) desde la lista, sin ir a la planilla. Se puede deshacer.
+  const [emitiendo, setEmitiendo] = useState('')
+  const [ultimoEmitido, setUltimoEmitido] = useState(null)
+  async function marcarDocumento(cotNum, documento) {
+    setEmitiendo(cotNum); setError('')
+    try {
+      const res = await apiFetch('/.netlify/functions/planilla', { method: 'POST', body: JSON.stringify({ accion: 'actualizar', cotNum, cambios: { documento } }) })
+      if (!res.ok) throw new Error(res.error || 'No se pudo guardar')
+      setCotizaciones(prev => prev.map(c => (c.cotNum === cotNum ? res.cotizacion : c)))
+      return true
+    } catch (e) { setError(e.message); return false } finally { setEmitiendo('') }
+  }
+  async function emitir(p) {
+    if (await marcarDocumento(p.cotNum, emitido(p.documento))) setUltimoEmitido(p)
+  }
+  async function deshacerEmitido() {
+    const p = ultimoEmitido
+    if (p && await marcarDocumento(p.cotNum, p.documento)) setUltimoEmitido(null)
+  }
   const t = r.totales
   const v = (total, neto) => (conIva ? total : neto)
   const lista = r.instalaciones.filter(i => filtro === 'todas' || (filtro === 'por_cobrar' ? i.saldo > 0 : i.tipo === filtro))
@@ -219,12 +239,18 @@ export default function InstalacionesSection({ onVerCotizacion }) {
 
       {error && <div style={styles.errorBox}>{error}</div>}
 
-      {porEmitir.length > 0 && (
+      {(porEmitir.length > 0 || ultimoEmitido) && (
         <div data-testid="documentos-por-emitir" style={{ ...styles.card, padding: '12px 18px', marginBottom: 14, border: '1px solid #FCD34D', background: '#FFFBEB' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13.5, color: '#92400E' }}>🧾 <strong>{porEmitir.length} {porEmitir.length === 1 ? 'documento' : 'documentos'} por emitir</strong> · {fmt(porEmitir.reduce((s, p) => s + p.total, 0))} con IVA. Márcalos como emitidos en Instalaciones.</span>
+            <span style={{ fontSize: 13.5, color: '#92400E' }}>🧾 <strong>{porEmitir.length ? `${porEmitir.length} ${porEmitir.length === 1 ? 'documento' : 'documentos'} por emitir` : 'Todo emitido'}</strong>{porEmitir.length > 0 && <> · {fmt(porEmitir.reduce((s, p) => s + p.total, 0))} con IVA. Apenas emitas uno, tócale "Emitida".</>}</span>
             <button onClick={() => setVerDocumentos(v => !v)} style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 12px' }}>{verDocumentos ? 'Ocultar' : 'Ver'}</button>
           </div>
+          {ultimoEmitido && (
+            <div style={{ marginTop: 8, fontSize: 12.5, color: C.green, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ✓ {ultimoEmitido.cliente} (N° {ultimoEmitido.cotNum}) quedó como {emitido(ultimoEmitido.documento)}.
+              <button onClick={deshacerEmitido} disabled={Boolean(emitiendo)} style={{ ...styles.btnSecondary, fontSize: 11.5, padding: '3px 10px' }}>Deshacer</button>
+            </div>
+          )}
           {verDocumentos && (
             <div style={{ marginTop: 10, display: 'grid', gap: 2 }}>
               {porEmitir.map(p => (
@@ -233,6 +259,10 @@ export default function InstalacionesSection({ onVerCotizacion }) {
                   <strong style={{ minWidth: 40, color: C.red }}>{p.documento}</strong>
                   <strong style={{ minWidth: 86 }}>{fmt(p.total)}</strong>
                   <span style={{ flex: 1, minWidth: 140, color: C.textSub }}>{p.cliente} · N° {p.cotNum}</span>
+                  <button onClick={() => emitir(p)} disabled={Boolean(emitiendo)} aria-label={`Marcar ${p.documento} de ${p.cliente} como emitida`}
+                    style={{ ...styles.btnSecondary, fontSize: 12, padding: '5px 12px', color: C.green, borderColor: C.green, opacity: emitiendo && emitiendo !== p.cotNum ? 0.5 : 1 }}>
+                    {emitiendo === p.cotNum ? 'Guardando...' : `✓ Emitida (${emitido(p.documento)})`}
+                  </button>
                 </div>
               ))}
             </div>
