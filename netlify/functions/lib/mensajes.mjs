@@ -152,18 +152,41 @@ export function correoReservaConfirmada({ nombre, email, cotNum, direccion }, in
   }
 }
 
+// Como sale una repisa en el cobro: sus medidas y niveles, para que el cliente reconozca cada una.
+// r: fila de la cotizacion (largo, prof y alto en metros).
+const medida = m => {
+  const n = Number(m) || 0
+  if (!n) return ''
+  return n < 1 ? `${Math.round(n * 100)} cm` : `${n.toFixed(2).replace(/\.?0+$/, '').replace('.', ',')} m`
+}
+export function nombreRepisaCobro(r) {
+  const unidades = Number(r.unidades ?? 1) || 0
+  const cant = unidades > 1 ? `${unidades} × ` : ''
+  if (r.kind === 'rack') return `${cant}${r.label || 'Rack'} (cajas incluidas)`
+  const medidas = [r.largo && `${medida(r.largo)} de largo`, r.prof && `${medida(r.prof)} de fondo`, r.alto && `${medida(r.alto)} de alto`].filter(Boolean)
+  const extras = [
+    Number(r.niveles) > 0 && `${r.niveles} nivel${Number(r.niveles) > 1 ? 'es' : ''}`,
+    (r.colgador || /colgador/i.test(r.label || '')) && 'con colgador',
+    Number(r.lateralesExtra) > 0 && `${r.lateralesExtra} lateral${r.lateralesExtra > 1 ? 'es' : ''} extra`,
+  ].filter(Boolean)
+  const base = `${cant}${unidades > 1 ? 'Repisas' : 'Repisa'}${medidas.length ? ' ' + medidas.join(' × ') : ''}`
+  return extras.length ? `${base} · ${extras.join(' · ')}` : (medidas.length ? base : `${cant}${r.label || 'Repisa'}`)
+}
+
 // Cobro de una instalacion ya hecha: detalle de lo instalado, lo pagado y el saldo.
-// lineas: [{ nombre, monto }] en neto; totales: { subtotal, iva, total }; pago: { pagado, saldo }.
-// Para cobrar: el detalle de lo que se hizo y el monto final. Sin datos bancarios
-// (esos los manda el admin aparte).
+// lineas: [{ nombre, monto }] en neto; totales: { subtotal, iva, total, recargo?, recargoPct? };
+// pago: { pagado, saldo }. El recargo de sabado sale como su propia linea; lo que falte para
+// llegar al neto es descuento. Sin datos bancarios (esos los manda el admin aparte).
 export function mensajeCobro({ nombre, fecha }, lineas, totales, pago) {
-  const descuento = lineas.reduce((s, l) => s + l.monto, 0) - totales.subtotal
+  const recargo = Number(totales.recargo) || 0
+  const descuento = lineas.reduce((s, l) => s + l.monto, 0) + recargo - totales.subtotal
   return [
     `${saludo(nombre)} Le escribimos de Repisas Don Maxi por el pago de su instalación${fecha ? ` del ${fechaLarga(fecha).toLowerCase()}` : ''} 🙌`,
     '',
     'Detalle (valores netos):',
     ...lineas.map(l => `• ${l.nombre}: ${pesos(l.monto)}`),
     ...(descuento > 0 ? [`• Descuento: −${pesos(descuento)}`] : []),
+    ...(recargo > 0 ? [`• Recargo instalación en sábado${totales.recargoPct ? ` (${totales.recargoPct}%)` : ''}: ${pesos(recargo)}`] : []),
     '',
     `Neto ${pesos(totales.subtotal)} + IVA ${pesos(totales.iva)} = ${pesos(totales.total)}`,
     ...(pago.pagado ? [`Ya pagado: ${pesos(pago.pagado)}`] : []),

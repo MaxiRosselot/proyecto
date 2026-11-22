@@ -3,7 +3,7 @@ import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
-import { mensajeCobro, mensajeConfirmarInstalacion, mensajeInstalacion } from '../../netlify/functions/lib/mensajes.mjs'
+import { mensajeCobro, mensajeConfirmarInstalacion, mensajeInstalacion, nombreRepisaCobro } from '../../netlify/functions/lib/mensajes.mjs'
 import CopiarMensaje from './CopiarMensaje.jsx'
 import FichaMaestro from './FichaMaestro.jsx'
 import { textoMateriales, ventasPorInstalar } from './materiales.js'
@@ -159,12 +159,15 @@ function Pagado({ fila, onRegistrar, onAbrir }) {
 function lineasCobro(q) {
   const m = columnas(q)
   return [
-    ...(q.repisas || []).filter(r => (Number(r.unidades ?? 1) || 0) > 0 && Number(r.valor) > 0).map(r => ({ nombre: (Number(r.unidades) > 1 ? `${r.unidades} × ` : '') + (r.kind === 'rack' ? r.label || 'Rack' : r.label || 'Repisa'), monto: (Number(r.unidades ?? 1) || 0) * (Number(r.valor) || 0) })),
+    ...(q.repisas || []).filter(r => (Number(r.unidades ?? 1) || 0) > 0 && Number(r.valor) > 0).map(r => ({ nombre: nombreRepisaCobro(r), monto: (Number(r.unidades ?? 1) || 0) * (Number(r.valor) || 0) })),
     ...SERV.filter(s => m[s.clave] > 0).map(s => ({ nombre: nombreServicio(q.adicionales, s.clave), monto: m[s.clave] })),
     ...(m.despacho ? [{ nombre: 'Despacho', monto: m.despacho }] : []),
   ]
 }
-const textoCobro = q => mensajeCobro({ nombre: q.nombre, fecha: q.instalacion?.fecha }, lineasCobro(q), { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 }, resumenPagos(q.total, q.pagos))
+const textoCobro = q => {
+  const t = totalesCotizacion(q.repisas || [], q.adicionales || {})
+  return mensajeCobro({ nombre: q.nombre, fecha: q.instalacion?.fecha }, lineasCobro(q), { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0, recargo: t.recargo, recargoPct: t.recargoPct }, resumenPagos(q.total, q.pagos))
+}
 
 // ── Detalle de una venta (panel lateral) ─────────────────────────────────────
 
