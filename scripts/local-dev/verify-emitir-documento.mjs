@@ -16,7 +16,8 @@ try {
   const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
   const api = async (ruta, data) => (await page.request.fetch(base + '/.netlify/functions/' + ruta, { method: data ? 'POST' : 'GET', data, headers: { Authorization: 'Bearer ' + token } })).json()
   const hoy = ahoraEnZona().fecha
-  const creada = await api('planilla', { accion: 'crear', nombre: 'Elena Prueba Boleta', fecha: hoy, inicio: '10:00', fin: '12:00' })
+  const nombre = 'Elena Prueba ' + Date.now().toString(36)
+  const creada = await api('planilla', { accion: 'crear', nombre, fecha: hoy, inicio: '10:00', fin: '12:00' })
   if (!creada.ok) throw new Error('crear: ' + JSON.stringify(creada))
   const q = creada.cotizacion
   const up = await api('planilla', { accion: 'actualizar', cotNum: q.cotNum, cambios: { documento: 'B*' } })
@@ -25,14 +26,14 @@ try {
   await page.getByRole('navigation').getByRole('button', { name: 'Estadísticas' }).click()
   const caja = page.getByTestId('documentos-por-emitir')
   await caja.getByRole('button', { name: 'Ver' }).click()
-  await caja.getByRole('button', { name: 'Marcar B* de Elena Prueba Boleta como emitida' }).click()
+  await caja.getByRole('button', { name: `Marcar B* de ${nombre} como emitida` }).click()
   await expect(caja.getByText('quedó como B')).toBeVisible()
-  await expect(caja.getByRole('button', { name: /Elena Prueba Boleta/ })).toHaveCount(0)
+  await expect(caja.getByRole('button', { name: new RegExp(nombre) })).toHaveCount(0)
   await page.screenshot({ path: process.env.SHOT || 'emitir.png', clip: { x: 0, y: 0, width: 1100, height: 450 } })
   const guardada = (await api('get-quotes')).quotes.find(x => x.cotNum === q.cotNum)
   if (guardada.instalacion.documento !== 'B') throw new Error('quedó ' + guardada.instalacion.documento)
   await caja.getByRole('button', { name: 'Deshacer' }).click()
-  await expect(caja.getByRole('button', { name: 'Marcar B* de Elena Prueba Boleta como emitida' })).toBeVisible()
+  await expect(caja.getByRole('button', { name: `Marcar B* de ${nombre} como emitida` })).toBeVisible()
   if (errors.length) throw new Error(errors.join('\n'))
   console.log('ok: emitida y deshecha')
 } finally { await browser.close() }
