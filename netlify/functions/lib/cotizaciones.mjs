@@ -16,9 +16,10 @@ export const NUMERO_INICIAL = 1421
 // T: la reserva que hizo el cliente desde su link (dia elegido y pago por verificar o en curso), en JSON.
 // U: las alternativas ofrecidas en la pagina 5 del PDF (repisas, totales y su proyecto 3D), en JSON
 //    (comprimido si no cabe, como el proyecto). En la lista van sin su proyecto.
-export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D', 'Instalación (JSON)', 'Pagos (JSON)', 'Reserva (JSON)', 'Alternativas (JSON)']
-export const ULTIMA_COLUMNA = 'U'
-const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d', 'instalacion', 'pagos', 'reserva', 'alternativas']
+// V: el seguimiento por WhatsApp que hace Maxi a mano: { preguntas: ['AAAA-MM-DD', ...], respondio? }.
+export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D', 'Instalación (JSON)', 'Pagos (JSON)', 'Reserva (JSON)', 'Alternativas (JSON)', 'Seguimiento WhatsApp (JSON)']
+export const ULTIMA_COLUMNA = 'V'
+const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d', 'instalacion', 'pagos', 'reserva', 'alternativas', 'seguimiento']
 // Lo que se puede cambiar al actualizar. El numero identifica la fila y la fecha de creacion
 // es historia: ninguno de los dos se reescribe.
 const EDITABLES = CAMPOS.filter(c => c !== 'cotNum' && c !== 'creado')
@@ -105,6 +106,7 @@ export function filaACotizacion(valores, { conProyecto = false } = {}) {
     pagos: jsonOr(v(18), []),
     reserva: jsonOr(v(19), null),
     alternativas: [],
+    seguimiento: jsonOr(v(21), null),
   }
   try {
     const alternativas = decodificarProyecto(v(20)) || []
@@ -128,6 +130,7 @@ export function cotizacionAFila(c) {
     c.pagos?.length ? JSON.stringify(c.pagos) : '',
     c.reserva ? JSON.stringify(c.reserva) : '',
     c.alternativas?.length ? codificarProyecto(c.alternativas) : '',
+    c.seguimiento?.preguntas?.length ? JSON.stringify(c.seguimiento) : '',
   ]
 }
 

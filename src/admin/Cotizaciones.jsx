@@ -13,6 +13,8 @@ import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
 import PanelJuntar from './JuntarCotizaciones.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { porcentajeDescuento, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
+import { estadoSeguimiento, mensajePregunta, registrarPregunta, registrarRespuesta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
+import { linkWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 const AMBAR = '#D97706'
@@ -27,6 +29,30 @@ function driveFileId(url) {
   if (!url) return ''
   const m = url.match(/\/d\/([^/]+)/)
   return m ? m[1] : ''
+}
+
+// Seguimiento por WhatsApp (a mano): "Preguntar" abre el chat con el mensaje listo y anota el dia;
+// "Ya le pregunte" solo lo anota; "Respondio" marca que contesto sin decidir. Ambar si toca preguntar.
+function SeguimientoWhatsapp({ q, onGuardar }) {
+  const hoy = ahoraEnZona().fecha
+  const e = estadoSeguimiento(q, hoy)
+  const [guardando, setGuardando] = useState(false)
+  const guardar = async seguimiento => { setGuardando(true); try { await onGuardar(seguimiento) } finally { setGuardando(false) } }
+  const parar = fn => ev => { ev.stopPropagation(); fn() }
+  const hace = d => (d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`)
+  const texto = e.respondio ? `💬 Respondió ${hace(Math.round((Date.parse(hoy) - Date.parse(e.respondio)) / 864e5))}`
+    : e.veces ? `📲 Preguntado ${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${hace(e.diasDesdeUltima)}` : '📲 Sin preguntar'
+  const color = e.respondio ? C.green : e.tocaPreguntar ? AMBAR : C.textMuted
+  const boton = { border: '1px solid ' + C.border, background: 'white', borderRadius: 99, padding: '2px 9px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: C.textSub }
+  return (
+    <span data-testid="seguimiento-whatsapp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10, flexWrap: 'wrap' }} onClick={ev => ev.stopPropagation()}>
+      <span style={styles.badge(color)}>{texto}{e.tocaPreguntar ? ' · toca preguntar' : ''}</span>
+      {q.telefono && <button type="button" disabled={guardando} style={{ ...boton, color: '#15803d', borderColor: '#86efac' }} title="Abre WhatsApp con el mensaje listo y lo anota"
+        onClick={parar(() => { window.open(linkWhatsapp(q.telefono, mensajePregunta(q)), '_blank'); guardar(registrarPregunta(q.seguimiento, hoy)) })}>Preguntar</button>}
+      <button type="button" disabled={guardando} style={boton} onClick={parar(() => guardar(registrarPregunta(q.seguimiento, hoy)))}>✓ Ya le pregunté</button>
+      {e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} onClick={parar(() => guardar(registrarRespuesta(q.seguimiento, hoy)))}>Respondió</button>}
+    </span>
+  )
 }
 
 // Hace cuanto se envio una cotizacion por confirmar, para priorizar: ambar desde los 3 dias, rojo
@@ -103,6 +129,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [confirmDel, setConfirmDel]     = useState(null)
   const [buscar, setBuscar]             = useState('')
   const [antiguasPrimero, setAntiguasPrimero] = useState(false)
+  const [soloTocaPreguntar, setSoloTocaPreguntar] = useState(false)
   const [abriendo, setAbriendo]         = useState(null)
   const [probandoCorreo, setProbandoCorreo] = useState(false)
   const [agendandoId, setAgendandoId]   = useState(null)
@@ -355,6 +382,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const ordenadas = quotes
     .filter(enTab)
     .filter(q => !bq || (q.nombre || '').toLowerCase().includes(bq) || String(q.cotNum).includes(bq))
+    .filter(q => !(tab === 'por confirmar' && soloTocaPreguntar) || estadoSeguimiento(q, ahoraEnZona().fecha).tocaPreguntar)
     .sort((a, b) => (tab === 'por confirmar' && antiguasPrimero ? -porCreacion(a, b) : porCreacion(a, b)))
   // Las del mismo cliente, juntas (donde aparece la primera de ellas).
   const filtered = []
@@ -405,7 +433,14 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
           </button>
         ))}
         {tab === 'por confirmar' && (
-          <button type="button" onClick={() => setAntiguasPrimero(v => !v)} style={{ ...styles.tab, marginLeft: 'auto' }} title="Para priorizar a quién hacerle seguimiento">
+          <button type="button" onClick={() => setSoloTocaPreguntar(v => !v)} aria-pressed={soloTocaPreguntar}
+            style={{ ...styles.tab, marginLeft: 'auto', ...(soloTocaPreguntar ? { background: AMBAR, borderColor: AMBAR, color: 'white' } : {}) }}
+            title={`Nunca preguntadas (desde los 2 días de enviada) o sin respuesta hace 3 días o más`}>
+            📲 Toca preguntar · {quotes.filter(q => estadoSeguimiento(q, ahoraEnZona().fecha).tocaPreguntar).length}
+          </button>
+        )}
+        {tab === 'por confirmar' && (
+          <button type="button" onClick={() => setAntiguasPrimero(v => !v)} style={styles.tab} title="Para priorizar a quién hacerle seguimiento">
             {antiguasPrimero ? '↑ Más antiguas primero' : '↓ Más nuevas primero'}
           </button>
         )}
@@ -453,6 +488,11 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
                     {q.direccion && <span style={{ marginLeft: 10, color: C.textMuted }}>{q.direccion}</span>}
                     {q.creado && <span style={{ marginLeft: 10, color: C.textMuted }}>Creada {String(q.creado).split(/[ ,]/)[0]}</span>}
                     {q.status === 'por confirmar' && <Antiguedad q={q} />}
+                    {q.status === 'por confirmar' && <SeguimientoWhatsapp q={q} onGuardar={async seguimiento => {
+                      const r = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ cotNum: q.cotNum, seguimiento }) })
+                      if (!r.ok) { window.alert('No se pudo anotar: ' + (r.error || 'error')); return }
+                      actualizarLocal(q.cotNum, { seguimiento })
+                    }} />}
                     {q.tieneProyecto3d && <span style={{ ...styles.badge(C.purple), marginLeft: 10 }}>Modelo 3D</span>}
                     <BadgePago quote={q} />
                     {q.instalacion?.fecha && <span style={{ ...styles.badge(C.green), marginLeft: 10 }}>Instalación {fechaLarga(q.instalacion.fecha).split(',')[1]?.trim()} · {q.instalacion.inicio}</span>}
