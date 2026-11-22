@@ -225,6 +225,7 @@ function Montos({ q, onGuardar }) {
   const [ad, setAd] = useState(() => ({ ...q.adicionales, ...Object.fromEntries(SERVICIOS.flatMap(([c, , lista]) => [[`qty_${c}`, Number(q.adicionales?.[`qty_${c}`]) || 0], [`precio_${c}`, Number(q.adicionales?.[`precio_${c}`] ?? lista) || 0]])) }))
   const [guardando, setGuardando] = useState(false)
   const t = totalesCotizacion(repisas, ad)
+  const recargoOriginal = Number(q.adicionales?.recargo_pct) || 0
   const num = (v, max = 1e8) => Math.min(max, Number(String(v).replace(/\D/g, '')) || 0)
   const campo = { ...styles.input, padding: '5px 6px', fontSize: 12.5, textAlign: 'center' }
   const fila = (etiqueta, qty, precio, cambiarQty, cambiarPrecio, key) => (
@@ -253,7 +254,14 @@ function Montos({ q, onGuardar }) {
         <span style={{ fontSize: 12.5 }}>Descuento %</span><span />
         <input inputMode="numeric" aria-label="Descuento %" value={ad.descuento_pct || 0} onFocus={e => e.target.select()} onChange={e => setAd(a => ({ ...a, descuento_pct: num(e.target.value, DESCUENTO_MAX) }))} style={campo} />
         <span style={{ fontSize: 12.5, textAlign: 'right', color: C.green }}>{t.descuento ? '-' + fmt(t.descuento) : ''}</span>
-        {t.recargo > 0 && <><span style={{ fontSize: 12.5 }}>Recargo sábado</span><span /><span style={{ fontSize: 12.5, textAlign: 'center' }}>{t.recargoPct}%</span><span style={{ fontSize: 12.5, textAlign: 'right', fontWeight: 700 }}>+{fmt(t.recargo)}</span></>}
+        {/* Recargo de sabado: se puede quitar (o volver a poner) a mano; solo se recalcula si cambia el dia. */}
+        {recargoOriginal > 0 && <>
+          <span style={{ fontSize: 12.5, color: t.recargo ? C.text : C.textMuted }}>Recargo sábado</span><span />
+          <button type="button" onClick={() => setAd(a => ({ ...a, recargo_pct: t.recargo ? 0 : recargoOriginal }))}
+            aria-label={t.recargo ? 'Quitar recargo de sábado' : 'Poner recargo de sábado'}
+            style={{ ...campo, cursor: 'pointer', fontWeight: 700, color: t.recargo ? C.red : C.green, background: 'white' }}>{t.recargo ? `Quitar ${recargoOriginal}%` : `Poner ${recargoOriginal}%`}</button>
+          <span style={{ fontSize: 12.5, textAlign: 'right', fontWeight: 700 }}>{t.recargo ? '+' + fmt(t.recargo) : ''}</span>
+        </>}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13 }}>Neto <strong>{fmt(t.subtotal)}</strong> · Bruto <strong style={{ color: C.orangeDark }}>{fmt(t.total)}</strong></span>

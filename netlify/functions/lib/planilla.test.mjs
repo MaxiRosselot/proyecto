@@ -207,3 +207,17 @@ test('mover la instalacion a un sabado suma 5% y volverla a la semana lo quita',
   const lunes = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { fecha: '2026-11-02' })
   assert.deepEqual([lunes.cotizacion.adicionales.recargo_pct, Number(lunes.cotizacion.subtotal)], [undefined, 80000])
 })
+
+test('el recargo de sabado se puede quitar a mano y no vuelve mientras no cambie el dia', async () => {
+  const almacen = almacenEnMemoria(), calendar = calendarFalso()
+  const { cotizacion } = await crearInstalacion(almacen, calendar, 'cal', { nombre: 'Sara Sabado', fecha: '2026-10-26', inicio: '10:00', fin: '12:00' })
+  await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { adicionales: { despacho: 80000 } })
+  const sabado = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { fecha: '2026-10-31' })
+  assert.equal(sabado.cotizacion.adicionales.recargo_pct, 5)
+  // Guardar montos con el recargo quitado.
+  const sin = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { adicionales: { ...sabado.cotizacion.adicionales, recargo_pct: 0 } })
+  assert.deepEqual([sin.cotizacion.adicionales.recargo_pct, Number(sin.cotizacion.subtotal)], [undefined, 80000])
+  // Otro cambio (una nota, la hora) no lo vuelve a poner.
+  const nota = await actualizarFila(almacen, calendar, 'cal', cotizacion.cotNum, { nota: 'cliente pidio sin recargo', inicio: '11:00', fin: '13:00' })
+  assert.deepEqual([nota.cotizacion.adicionales.recargo_pct, Number(nota.cotizacion.subtotal)], [undefined, 80000])
+})
