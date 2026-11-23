@@ -114,6 +114,14 @@ export function resumenMes(cotizaciones, mes, hoy, { mesesTendencia = 6 } = {}) 
 export function documentosPorEmitir(cotizaciones) {
   return cotizaciones
     .filter(c => c.status !== 'rechazada' && porEmitir(c.instalacion?.documento))
-    .map(c => ({ cotNum: c.cotNum, cliente: c.nombre, fecha: c.instalacion.fecha || '', documento: c.instalacion.documento, total: Number(c.total) || 0 }))
+    .map(c => ({ cotNum: c.cotNum, cliente: c.nombre, email: c.email || '', fecha: c.instalacion.fecha || '', documento: c.instalacion.documento, total: Number(c.total) || 0 }))
     .sort((a, b) => (a.fecha || '9999').localeCompare(b.fecha || '9999'))
+}
+
+// Documentos ya emitidos y anotados en el panel (con folio y PDF), del mas nuevo al mas antiguo.
+export function documentosEmitidos(cotizaciones) {
+  return cotizaciones
+    .filter(c => c.instalacion?.dte?.folio)
+    .map(c => ({ cotNum: c.cotNum, cliente: c.nombre, documento: c.instalacion.documento, ...c.instalacion.dte }))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.folio - a.folio)
 }

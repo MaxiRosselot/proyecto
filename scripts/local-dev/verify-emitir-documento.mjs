@@ -1,4 +1,5 @@
-// Prueba E2E: en Estadisticas, "Emitida" pasa un documento de B* a B, y "Deshacer" lo devuelve.
+// Prueba E2E: en DTE, "Emitida" pasa un documento de B* a B y "Deshacer" lo devuelve; un
+// documento con folio y PDF sale en Emitidos con su boton de descarga.
 // Contra el entorno local (start-native.mjs).   node scripts/local-dev/verify-emitir-documento.mjs
 import { chromium, expect } from '@playwright/test'
 import { ahoraEnZona } from '../../netlify/functions/lib/horarios.mjs'
@@ -23,17 +24,23 @@ try {
   const up = await api('planilla', { accion: 'actualizar', cotNum: q.cotNum, cambios: { documento: 'B*' } })
   if (!up.ok) throw new Error('actualizar: ' + JSON.stringify(up))
 
-  await page.getByRole('navigation').getByRole('button', { name: 'Estadísticas' }).click()
-  const caja = page.getByTestId('documentos-por-emitir')
-  await caja.getByRole('button', { name: 'Ver' }).click()
+  await page.getByRole('navigation').getByRole('button', { name: 'DTE' }).click()
+  const caja = page.getByTestId('dte-por-emitir')
   await caja.getByRole('button', { name: `Marcar B* de ${nombre} como emitida` }).click()
   await expect(caja.getByText('quedó como B')).toBeVisible()
   await expect(caja.getByRole('button', { name: new RegExp(nombre) })).toHaveCount(0)
-  await page.screenshot({ path: process.env.SHOT || 'emitir.png', clip: { x: 0, y: 0, width: 1100, height: 450 } })
   const guardada = (await api('get-quotes')).quotes.find(x => x.cotNum === q.cotNum)
   if (guardada.instalacion.documento !== 'B') throw new Error('quedó ' + guardada.instalacion.documento)
   await caja.getByRole('button', { name: 'Deshacer' }).click()
   await expect(caja.getByRole('button', { name: `Marcar B* de ${nombre} como emitida` })).toBeVisible()
+  // Con folio y PDF anotados: aparece en Emitidos.
+  const conFolio = await api('planilla', { accion: 'actualizar', cotNum: q.cotNum, cambios: { documento: 'B', dte: { folio: 9001, fecha: hoy, monto: 100, detalle: 'Repisas de madera para bodega - ' + nombre, via: 'e-Boleta SII', pdf: 'https://example.com/b.pdf' } } })
+  if (!conFolio.ok) throw new Error('dte: ' + JSON.stringify(conFolio))
+  await page.getByRole('button', { name: 'Actualizar' }).click()
+  const emitidos = page.getByTestId('dte-emitidos')
+  await expect(emitidos.getByText('Boleta N° 9001')).toBeVisible()
+  await expect(emitidos.getByRole('link', { name: 'Descargar PDF' }).first()).toBeVisible()
+  await page.screenshot({ path: process.env.SHOT || 'emitir.png', fullPage: true })
   if (errors.length) throw new Error(errors.join('\n'))
   console.log('ok: emitida y deshecha')
 } finally { await browser.close() }

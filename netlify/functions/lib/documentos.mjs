@@ -10,6 +10,29 @@ export const CODIGOS_DOCUMENTO = ['B', 'B*', 'F', 'F*', 'M', 'M/B', 'M/B*', 'M/F
 
 export const porEmitir = codigo => String(codigo || '').includes('*')
 
+// El documento tributario ya emitido, guardado en la instalacion: folio, fecha, monto, detalle,
+// por donde se emitio (p. ej. "e-Boleta SII", el portal gratis) y el link al PDF.
+export const VIAS_DTE = ['e-Boleta SII', 'Facturación SII', 'Mercado Pago', 'Otro']
+export function limpiarDte(dte) {
+  if (!dte) return null
+  const folio = Math.round(Number(dte.folio))
+  if (!Number.isInteger(folio) || folio <= 0) throw Object.assign(new Error('Falta el número (folio) del documento'), { status: 400 })
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(dte.fecha || '') ? dte.fecha : ''
+  if (!fecha) throw Object.assign(new Error('Falta la fecha del documento'), { status: 400 })
+  const pdf = /^https:\/\/[^\s]+$/.test(String(dte.pdf || '')) ? String(dte.pdf).slice(0, 1500) : ''
+  return {
+    tipo: dte.tipo === 'factura' ? 'factura' : 'boleta', folio, fecha,
+    monto: Math.max(0, Math.round(Number(dte.monto) || 0)),
+    detalle: String(dte.detalle || '').trim().slice(0, 80),
+    via: String(dte.via || 'Otro').trim().slice(0, 40),
+    ...(pdf ? { pdf } : {}),
+    ...(dte.receptor ? { receptor: String(dte.receptor).trim().slice(0, 120) } : {}),
+  }
+}
+
+// El detalle con que sale la boleta: "Repisas de madera para bodega - Nombre" (max 80 en e-Boleta).
+export const detalleBoleta = nombre => `Repisas de madera para bodega - ${String(nombre || '').trim().replace(/\s+/g, ' ')}`.slice(0, 80).trim()
+
 // Al emitir el documento: "B*" → "B", "M/F*" → "M/F".
 export const emitido = codigo => String(codigo || '').replace(/\*/g, '')
 

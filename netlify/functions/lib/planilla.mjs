@@ -6,7 +6,7 @@
 // interna (columna A del Excel), codigo de documento (B, B*, M...) y el evento de Calendar.
 // Calendar y la planilla se inyectan: en Netlify son Google; en local y en los tests, falsos.
 import { ErrorCotizacion, actualizarCotizacion, crearCotizacion, obtenerCotizacion } from './cotizaciones.mjs'
-import { normalizarDocumento } from './documentos.mjs'
+import { limpiarDte, normalizarDocumento } from './documentos.mjs'
 import { MARCA_EVENTO, eventoInstalacion, limpiarAdicionales, limpiarRepisas, validarHorario } from './instalaciones.mjs'
 import { mismoNombre } from './leer-ventas.mjs'
 import { conRecargoSabado, totalesCotizacion } from './totales.mjs'
@@ -66,6 +66,7 @@ export async function actualizarFila(almacen, calendar, calendarId, cotNum, camb
   if (datos.nombre === '') falla('El nombre no puede quedar vacío')
   if (cambios.nota !== undefined) instalacion.nota = texto(cambios.nota, 300)
   if (cambios.documento !== undefined) instalacion.documento = normalizarDocumento(cambios.documento)
+  if (cambios.dte !== undefined) { const dte = limpiarDte(cambios.dte); if (dte) instalacion.dte = dte; else delete instalacion.dte }
   if (cambios.instalada !== undefined) instalacion.instalada = cambios.instalada === true
   for (const campo of ['fecha', 'inicio', 'fin']) if (cambios[campo] !== undefined) instalacion[campo] = texto(cambios[campo], 10)
 

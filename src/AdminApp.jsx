@@ -7,6 +7,7 @@ import CotizacionesSection from './admin/Cotizaciones.jsx'
 import HorariosSection     from './admin/Horarios.jsx'
 import CalendarioSection   from './admin/Calendario.jsx'
 import EstadisticasSection from './admin/Instalaciones.jsx'
+import DteSection from './admin/Dte.jsx'
 import PlanillaSection from './admin/Planilla.jsx'
 import FotosWebSection from './admin/FotosWeb.jsx'
 import UsoPanel from './admin/UsoPanel.jsx'
@@ -94,7 +95,8 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'cotizaciones') return <CotizacionesSection onAbrirEnCotizador={abrirCotizacion} enfocar={cotizacionEnfocada} />
   if (section === 'calendario')   return <CalendarioSection onVerCotizacion={verCotizacion} />
   if (section === 'instalaciones') return <PlanillaSection onVerCotizacion={verCotizacion} />
-  if (section === 'estadisticas') return <EstadisticasSection onVerCotizacion={verCotizacion} />
+  if (section === 'estadisticas') return <EstadisticasSection onVerCotizacion={verCotizacion} navigateTo={navigateTo} />
+  if (section === 'dte')          return <DteSection />
   if (section === 'horarios')     return <HorariosSection />
   if (section === 'web')          return <FotosWebSection />
   if (section === 'uso')          return <UsoPanel onVolver={() => navigateTo('inicio')} />
