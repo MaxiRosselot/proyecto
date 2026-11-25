@@ -13,7 +13,7 @@ import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
 import PanelJuntar from './JuntarCotizaciones.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { porcentajeDescuento, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
-import { estadoSeguimiento, mensajePregunta, registrarPregunta, registrarRespuesta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
+import { estadoSeguimiento, mensajePregunta, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import { linkWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
@@ -37,8 +37,20 @@ function SeguimientoWhatsapp({ q, onGuardar }) {
   const hoy = ahoraEnZona().fecha
   const e = estadoSeguimiento(q, hoy)
   const [guardando, setGuardando] = useState(false)
+  // Anotar con fecha: "Ya le pregunté" y "Respondió" abren un selector de fecha (hoy por defecto)
+  // para registrar tambien lo de antes de que existiera el seguimiento.
+  const [anotando, setAnotando] = useState(null) // 'pregunta' | 'respuesta' | null
+  const [dia, setDia] = useState(hoy)
+  const [verFechas, setVerFechas] = useState(false)
   const guardar = async seguimiento => { setGuardando(true); try { await onGuardar(seguimiento) } finally { setGuardando(false) } }
   const parar = fn => ev => { ev.stopPropagation(); fn() }
+  const abrir = tipo => { setDia(hoy); setAnotando(tipo) }
+  const anotar = async () => {
+    if (!dia || dia > hoy) return
+    await guardar(anotando === 'respuesta' ? registrarRespuesta(q.seguimiento, dia) : registrarPregunta(q.seguimiento, dia))
+    setAnotando(null)
+  }
+  const fechaCorta = f => new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(f + 'T12:00:00Z'))
   const hace = d => (d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`)
   const texto = e.respondio ? `💬 Respondió ${hace(Math.round((Date.parse(hoy) - Date.parse(e.respondio)) / 864e5))}`
     : e.veces ? `📲 Preguntado ${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${hace(e.diasDesdeUltima)}` : '📲 Sin preguntar'
@@ -46,11 +58,35 @@ function SeguimientoWhatsapp({ q, onGuardar }) {
   const boton = { border: '1px solid ' + C.border, background: 'white', borderRadius: 99, padding: '2px 9px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: C.textSub }
   return (
     <span data-testid="seguimiento-whatsapp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10, flexWrap: 'wrap' }} onClick={ev => ev.stopPropagation()}>
-      <span style={styles.badge(color)}>{texto}{e.tocaPreguntar ? ' · toca preguntar' : ''}</span>
+      <span style={{ ...styles.badge(color), cursor: e.veces || e.respondio ? 'pointer' : 'default' }} title={e.veces ? 'Ver o corregir las fechas' : undefined}
+        onClick={parar(() => (e.veces || q.seguimiento?.respondio) && setVerFechas(v => !v))}>{texto}{e.tocaPreguntar ? ' · toca preguntar' : ''}</span>
       {q.telefono && <button type="button" disabled={guardando} style={{ ...boton, color: '#15803d', borderColor: '#86efac' }} title="Abre WhatsApp con el mensaje listo y lo anota"
         onClick={parar(() => { window.open(linkWhatsapp(q.telefono, mensajePregunta(q)), '_blank'); guardar(registrarPregunta(q.seguimiento, hoy)) })}>Preguntar</button>}
-      <button type="button" disabled={guardando} style={boton} onClick={parar(() => guardar(registrarPregunta(q.seguimiento, hoy)))}>✓ Ya le pregunté</button>
-      {e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} onClick={parar(() => guardar(registrarRespuesta(q.seguimiento, hoy)))}>Respondió</button>}
+      {!anotando && <button type="button" disabled={guardando} style={boton} onClick={parar(() => abrir('pregunta'))}>✓ Ya le pregunté</button>}
+      {!anotando && e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} onClick={parar(() => abrir('respuesta'))}>Respondió</button>}
+      {anotando && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          {anotando === 'respuesta' ? 'Respondió el' : 'Le pregunté el'}
+          <input type="date" value={dia} max={hoy} onChange={ev => setDia(ev.target.value)} aria-label={anotando === 'respuesta' ? 'Fecha de la respuesta' : 'Fecha de la pregunta'}
+            style={{ fontSize: 12, padding: '2px 6px', border: '1px solid ' + C.border, borderRadius: 6, fontFamily: 'inherit' }} />
+          <button type="button" disabled={guardando || !dia || dia > hoy} style={{ ...boton, color: '#15803d', borderColor: '#86efac' }} onClick={parar(anotar)}>{guardando ? 'Guardando...' : 'Anotar'}</button>
+          <button type="button" style={boton} onClick={parar(() => setAnotando(null))}>Cancelar</button>
+        </span>
+      )}
+      {verFechas && (
+        <span data-testid="fechas-seguimiento" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, width: '100%', fontSize: 11.5, color: C.textSub }}>
+          {(q.seguimiento?.preguntas || []).map(f => (
+            <span key={f} style={{ ...boton, cursor: 'default', display: 'inline-flex', gap: 4 }}>📲 {fechaCorta(f)}
+              <button type="button" disabled={guardando} aria-label={'Quitar la pregunta del ' + f} onClick={parar(() => guardar(quitarPregunta(q.seguimiento, f)))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.red, padding: 0, fontSize: 12 }}>✕</button>
+            </span>
+          ))}
+          {q.seguimiento?.respondio && (
+            <span style={{ ...boton, cursor: 'default', display: 'inline-flex', gap: 4 }}>💬 {fechaCorta(q.seguimiento.respondio)}
+              <button type="button" disabled={guardando} aria-label="Quitar la respuesta" onClick={parar(() => guardar(quitarRespuesta(q.seguimiento)))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.red, padding: 0, fontSize: 12 }}>✕</button>
+            </span>
+          )}
+        </span>
+      )}
     </span>
   )
 }

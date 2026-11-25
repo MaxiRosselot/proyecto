@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { estadoSeguimiento, mensajePregunta, registrarPregunta, registrarRespuesta } from './seguimiento-whatsapp.mjs'
+import { estadoSeguimiento, mensajePregunta, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from './seguimiento-whatsapp.mjs'
 
 const creada = dia => Date.parse(dia + 'T15:00:00Z')
 const q = (extra = {}) => ({ cotNum: '1700', nombre: 'Carmen Pérez', status: 'por confirmar', creadoMs: creada('2026-11-10'), ...extra })
@@ -26,6 +26,16 @@ test('seguimiento whatsapp: a quien le toca preguntar', () => {
   assert.equal(estadoSeguimiento(q({ seguimiento: { preguntas: ['2026-11-12', '2026-11-18'], respondio: '2026-11-13' } }), '2026-11-22').respondio, null)
   // Confirmadas o rechazadas: nunca.
   assert.equal(estadoSeguimiento(q({ status: 'confirmada' }), '2026-11-22').tocaPreguntar, false)
+})
+
+test('seguimiento whatsapp: anotar con fecha atrasada y corregir', () => {
+  // Respondio el 20; se anota una pregunta del 18 que no estaba: la respuesta sigue valiendo.
+  const s = registrarPregunta({ preguntas: ['2026-11-15'], respondio: '2026-11-20' }, '2026-11-18')
+  assert.deepEqual(s, { preguntas: ['2026-11-15', '2026-11-18'], respondio: '2026-11-20' })
+  // Una pregunta nueva despues de la respuesta la deja atras.
+  assert.deepEqual(registrarPregunta(s, '2026-11-24'), { preguntas: ['2026-11-15', '2026-11-18', '2026-11-24'] })
+  assert.deepEqual(quitarPregunta(s, '2026-11-15'), { preguntas: ['2026-11-18'], respondio: '2026-11-20' })
+  assert.deepEqual(quitarRespuesta(s), { preguntas: ['2026-11-15', '2026-11-18'] })
 })
 
 test('seguimiento whatsapp: el mensaje usa el primer nombre y el numero', () => {

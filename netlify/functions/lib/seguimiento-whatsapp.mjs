@@ -11,13 +11,24 @@ export const DIAS_PARA_PRIMERA_PREGUNTA = 2
 
 const dias = (desde, hoy) => Math.round((Date.parse(hoy + 'T12:00:00Z') - Date.parse(desde + 'T12:00:00Z')) / 864e5)
 
-export function registrarPregunta(seguimiento, hoy) {
-  const preguntas = [...new Set([...(seguimiento?.preguntas || []), hoy])].sort()
-  return { preguntas }
+export function registrarPregunta(seguimiento, dia) {
+  const preguntas = [...new Set([...(seguimiento?.preguntas || []), dia])].sort()
+  // Una respuesta anterior a esta pregunta deja de contar; una posterior (pregunta anotada con
+  // fecha atrasada) se mantiene.
+  return seguimiento?.respondio && seguimiento.respondio >= dia ? { preguntas, respondio: seguimiento.respondio } : { preguntas }
 }
 
 export function registrarRespuesta(seguimiento, hoy) {
   return { preguntas: seguimiento?.preguntas || [], respondio: hoy }
+}
+
+// Corregir lo anotado (p. ej. preguntas de antes de que existiera el seguimiento, con su fecha).
+export function quitarPregunta(seguimiento, fecha) {
+  const preguntas = (seguimiento?.preguntas || []).filter(p => p !== fecha)
+  return { preguntas, ...(seguimiento?.respondio ? { respondio: seguimiento.respondio } : {}) }
+}
+export function quitarRespuesta(seguimiento) {
+  return { preguntas: seguimiento?.preguntas || [] }
 }
 
 // { veces, ultima, diasDesdeUltima, respondio, tocaPreguntar }
