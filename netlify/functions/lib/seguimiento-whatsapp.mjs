@@ -54,7 +54,28 @@ export function quitarDeBitacora(seguimiento, indice) {
 // Hay algo que guardar en la planilla.
 export const haySeguimiento = s => Boolean(s && (s.preguntas?.length || s.respondio || s.esperarHasta || s.bitacora?.length))
 
-// { veces, ultima, diasDesdeUltima, respondio, tocaPreguntar, esperando }
+// Clientes que ya compraron con otra cotizacion: si el mismo cliente (mismo celular, o mismo nombre
+// completo cuando falta el celular) tiene otra cotizacion confirmada, agendada, con pagos o en la
+// planilla de Instalaciones, de la fecha de esta cotizacion en adelante, no hay que preguntarle por
+// esta. Una compra anterior (un cliente antiguo que pide algo nuevo) no cuenta.
+// Devuelve las cotizaciones con yaCompro: { cotNum, fecha } en las por confirmar que corresponda.
+const ultimos8 = t => { const d = String(t || '').replace(/\D/g, ''); return d.length >= 8 ? d.slice(-8) : '' }
+const nombreCompleto = n => { const p = String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean); return p.length >= 2 ? p.slice(0, 2).join(' ') : '' }
+const diaDe = ms => (Number.isFinite(ms) ? new Date(ms - 3 * 3600e3).toISOString().slice(0, 10) : '')
+const esVenta = q => q.status === 'confirmada' || Boolean(q.instalacion?.fecha) || q.instalacion?.origen === 'excel' || (q.pagos || []).length > 0
+const fechaVenta = q => [diaDe(q.creadoMs), q.instalacion?.fecha || '', ...(q.pagos || []).map(p => p.fecha || '')].filter(Boolean).sort().at(-1) || ''
+export function marcarYaCompro(quotes) {
+  const ventas = quotes.filter(esVenta).map(v => ({ cotNum: v.cotNum, tel: ultimos8(v.telefono), nombre: nombreCompleto(v.nombre), fecha: fechaVenta(v) }))
+  return quotes.map(q => {
+    if (q.status !== 'por confirmar' || q.instalacion?.origen === 'excel') return q
+    const tel = ultimos8(q.telefono), nombre = nombreCompleto(q.nombre), desde = diaDe(q.creadoMs)
+    const v = ventas.find(v => v.cotNum !== q.cotNum && (!desde || !v.fecha || v.fecha >= desde)
+      && ((tel && v.tel === tel) || ((!tel || !v.tel) && nombre && v.nombre === nombre)))
+    return v ? { ...q, yaCompro: { cotNum: v.cotNum, fecha: v.fecha } } : q
+  })
+}
+
+// { veces, ultima, diasDesdeUltima, respondio, tocaPreguntar, esperando, yaCompro }
 // esperando: la fecha hasta la que se espera, mientras no llegue. Llegada la fecha, toca preguntar
 // (aunque haya respondido antes: posponer suele venir despues de una respuesta).
 export function estadoSeguimiento(q, hoy) {
@@ -66,10 +87,10 @@ export function estadoSeguimiento(q, hoy) {
   const hasta = q.seguimiento?.esperarHasta || null
   const esperando = hasta && hoy < hasta ? hasta : null
   const cumplioEspera = hasta && !esperando && (!ultima || ultima < hasta)
-  const tocaPreguntar = porConfirmar && !esperando && (cumplioEspera || (!respondio && (ultima
+  const tocaPreguntar = porConfirmar && !q.yaCompro && !esperando && (cumplioEspera || (!respondio && (ultima
     ? diasDesdeUltima >= DIAS_PARA_VOLVER_A_PREGUNTAR
     : (diasDesde(q.creadoMs, hoy) ?? 0) >= DIAS_PARA_PRIMERA_PREGUNTA)))
-  return { veces: preguntas.length, ultima, diasDesdeUltima, respondio, tocaPreguntar, esperando }
+  return { veces: preguntas.length, ultima, diasDesdeUltima, respondio, tocaPreguntar, esperando, yaCompro: q.yaCompro || null }
 }
 
 export function mensajePregunta(q) {

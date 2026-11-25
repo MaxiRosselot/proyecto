@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, QUOTE_STATUS_LABELS, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import {
-  anotarBitacora, esperarHasta, estadoSeguimiento, quitarDeBitacora, registrarPregunta, registrarRespuesta,
+  anotarBitacora, esperarHasta, estadoSeguimiento, marcarYaCompro, quitarDeBitacora, registrarPregunta, registrarRespuesta,
 } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import { mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
@@ -122,6 +122,7 @@ function Seguimiento({ q, hoy, onGuardar, guardando }) {
         {e.respondio && ` Respondió el ${fechaCorta(e.respondio)}.`}
         {e.esperando && <> <b style={{ color: C.text }}>Esperando hasta el {fechaCorta(e.esperando)}.</b></>}
         {e.tocaPreguntar && <b style={{ color: TONOS.ambar }}> Toca preguntar.</b>}
+        {e.yaCompro && <b style={{ color: C.green }}> Ya compró con la N° {e.yaCompro.cotNum}: no hace falta preguntarle por esta.</b>}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button type="button" disabled={guardando} style={boton} onClick={() => onGuardar(registrarPregunta(q.seguimiento, hoy))}>✓ Le pregunté hoy</button>
@@ -279,7 +280,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
         apiFetch(`/.netlify/functions/calendario?desde=${manana}&hasta=${manana}`).catch(() => ({})),
       ])
       if (!r.ok) throw new Error(r.error || 'No se pudieron cargar los clientes')
-      setQuotes(r.quotes || [])
+      setQuotes(marcarYaCompro(r.quotes || []))
       setEventos((cal.eventos || []).filter(e => e.tipo === 'instalacion' || e.tipo === 'visita'))
     } catch (e) { setError(e.message || 'No se pudo conectar') }
     finally { setCargando(false) }
@@ -305,6 +306,12 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
     window.addEventListener(EVENTO_PARA_ENVIAR, recibir)
     return () => window.removeEventListener(EVENTO_PARA_ENVIAR, recibir)
   }, [quotes])
+
+  // Tocar un cliente abre su ficha y, al tiro, su chat (si tiene celular y WhatsApp esta listo).
+  function elegir(seleccion, telefono) {
+    setSel(seleccion)
+    if (telefono && hayExtension) abrirChatEnMarco(telefono)
+  }
 
   // Se ve al instante y se guarda en la planilla por detras (tarda 1–2 s); si falla, se deshace.
   // Los guardados van en fila para que dos anotaciones seguidas no se pisen.
@@ -356,9 +363,9 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
           {!buscar.trim() && filtro === 'manana'
             ? eventos.map(e => <FilaEvento key={e.id} e={e} activo={sel?.evento?.id === e.id} onElegir={() => {
                 const c = e.cotNum && quotes.find(x => String(x.cotNum) === String(e.cotNum))
-                setSel(c ? { cotNum: c.cotNum } : { evento: e })
+                elegir(c ? { cotNum: c.cotNum } : { evento: e }, c?.telefono || e.telefono)
               }} />)
-            : lista.map(c => <FilaCliente key={c.cotNum} q={c} hoy={hoy} activo={sel?.cotNum === c.cotNum} onElegir={() => setSel({ cotNum: c.cotNum })} />)}
+            : lista.map(c => <FilaCliente key={c.cotNum} q={c} hoy={hoy} activo={sel?.cotNum === c.cotNum} onElegir={() => elegir({ cotNum: c.cotNum }, c.telefono)} />)}
           {!cargando && !error && (filtro === 'manana' && !buscar.trim() ? !eventos.length : !lista.length) && (
             <div style={{ ...styles.empty, padding: '30px 14px', fontSize: 13 }}>{buscar.trim() ? `Nadie con “${buscar}”.` : 'No hay nadie aquí 🙌'}</div>
           )}

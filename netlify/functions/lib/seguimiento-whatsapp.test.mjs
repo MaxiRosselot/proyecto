@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { anotarBitacora, esperarHasta, estadoSeguimiento, haySeguimiento, mensajePregunta, mensajesSeguimiento, quitarDeBitacora, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from './seguimiento-whatsapp.mjs'
+import { marcarYaCompro, anotarBitacora, esperarHasta, estadoSeguimiento, haySeguimiento, mensajePregunta, mensajesSeguimiento, quitarDeBitacora, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from './seguimiento-whatsapp.mjs'
 
 const creada = dia => Date.parse(dia + 'T15:00:00Z')
 const q = (extra = {}) => ({ cotNum: '1700', nombre: 'Carmen Pérez', status: 'por confirmar', creadoMs: creada('2026-11-10'), ...extra })
@@ -19,7 +19,7 @@ test('seguimiento whatsapp: a quien le toca preguntar', () => {
   assert.equal(estadoSeguimiento(q(), '2026-11-22').tocaPreguntar, true)
   // Preguntado hace 2 dias: todavia no; a los 3, si.
   const preguntado = q({ seguimiento: { preguntas: ['2026-11-12', '2026-11-20'] } })
-  assert.deepEqual(estadoSeguimiento(preguntado, '2026-11-22'), { veces: 2, ultima: '2026-11-20', diasDesdeUltima: 2, respondio: null, tocaPreguntar: false, esperando: null })
+  assert.deepEqual(estadoSeguimiento(preguntado, '2026-11-22'), { veces: 2, ultima: '2026-11-20', diasDesdeUltima: 2, respondio: null, tocaPreguntar: false, esperando: null, yaCompro: null })
   assert.equal(estadoSeguimiento(preguntado, '2026-11-23').tocaPreguntar, true)
   // Respondio despues de la ultima pregunta: no toca; si se le vuelve a preguntar despues, cuenta de nuevo.
   assert.equal(estadoSeguimiento(q({ seguimiento: { preguntas: ['2026-11-12'], respondio: '2026-11-13' } }), '2026-11-22').tocaPreguntar, false)
@@ -72,4 +72,23 @@ test('seguimiento whatsapp: mensajes a elegir', () => {
   const m = mensajesSeguimiento(q())
   assert.deepEqual(m.map(x => x.id), ['sin-respuesta', 'sigue-disponible', 'ajustes', 'pospuso'])
   assert.ok(m.every(x => x.texto.includes('N° 1700') && x.texto.startsWith('Hola Carmen')))
+})
+
+test('seguimiento whatsapp: no se pregunta por cotizaciones de clientes que ya compraron con otra', () => {
+  const qs = marcarYaCompro([
+    q({ cotNum: '10', telefono: '+56 9 1111 2222' }),
+    { cotNum: '11', nombre: 'Carmen P', telefono: '911112222', status: 'confirmada', creadoMs: creada('2026-11-12') },
+    q({ cotNum: '20', nombre: 'Luis Rojas Díaz', telefono: '' }),
+    { cotNum: '21', nombre: 'luis rojas', status: 'confirmada', instalacion: { origen: 'excel', fecha: '2026-11-20' } },
+    q({ cotNum: '30', nombre: 'Ana Soto', telefono: '933334444' }),
+    { cotNum: '31', nombre: 'Ana Soto', telefono: '933334444', status: 'confirmada', creadoMs: creada('2025-03-01'), instalacion: { fecha: '2025-03-10' } },
+    q({ cotNum: '40', nombre: 'Ana Soto', telefono: '955556666' }),
+  ])
+  const por = n => qs.find(x => x.cotNum === n)
+  assert.deepEqual(por('10').yaCompro, { cotNum: '11', fecha: '2026-11-12' })
+  assert.equal(por('20').yaCompro.cotNum, '21') // sin celular: por nombre
+  assert.equal(por('30').yaCompro, undefined) // compró antes de esta cotizacion: es un pedido nuevo
+  assert.equal(por('40').yaCompro, undefined) // mismo nombre, otro celular: otra persona
+  assert.equal(estadoSeguimiento(por('10'), '2026-11-22').tocaPreguntar, false)
+  assert.equal(estadoSeguimiento(por('30'), '2026-11-22').tocaPreguntar, true)
 })

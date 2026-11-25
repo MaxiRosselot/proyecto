@@ -44,6 +44,7 @@ export function enQueVa(q, hoy) {
     return { texto: `Instala ${fechaCorta(q.instalacion.fecha)} · ${q.instalacion.inicio}`, tono: 'verde' }
   }
   if (q.status === 'confirmada') return { texto: 'Confirmada · falta agendar', tono: 'ambar' }
+  if (q.yaCompro) return { texto: `Ya compró con la N° ${q.yaCompro.cotNum}`, tono: 'verde' }
   const e = estadoSeguimiento(q, hoy)
   if (e.esperando) return { texto: `Esperando hasta ${fechaCorta(e.esperando)}`, tono: 'gris' }
   if (e.tocaPreguntar) return { texto: e.veces ? `Toca preguntar · preguntado ${e.veces}×` : 'Toca preguntar · sin preguntar', tono: 'ambar' }

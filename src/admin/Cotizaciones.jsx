@@ -13,7 +13,7 @@ import TransferenciaPorVerificar from './TransferenciaPorVerificar.jsx'
 import PanelJuntar from './JuntarCotizaciones.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { porcentajeDescuento, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
-import { estadoSeguimiento, mensajePregunta, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
+import { estadoSeguimiento, marcarYaCompro, mensajePregunta, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import { abrirWhatsapp } from './whatsappPanel.js'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
@@ -52,9 +52,9 @@ function SeguimientoWhatsapp({ q, onGuardar }) {
   }
   const fechaCorta = f => new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(f + 'T12:00:00Z'))
   const hace = d => (d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`)
-  const texto = e.esperando ? `⏸ Esperando hasta el ${fechaCorta(e.esperando)}` : e.respondio ? `💬 Respondió ${hace(Math.round((Date.parse(hoy) - Date.parse(e.respondio)) / 864e5))}`
+  const texto = e.yaCompro ? `✓ Ya compró (N° ${e.yaCompro.cotNum})` : e.esperando ? `⏸ Esperando hasta el ${fechaCorta(e.esperando)}` : e.respondio ? `💬 Respondió ${hace(Math.round((Date.parse(hoy) - Date.parse(e.respondio)) / 864e5))}`
     : e.veces ? `📲 Preguntado ${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${hace(e.diasDesdeUltima)}` : '📲 Sin preguntar'
-  const color = e.esperando ? C.textSub : e.respondio ? C.green : e.tocaPreguntar ? AMBAR : C.textMuted
+  const color = e.yaCompro ? C.green : e.esperando ? C.textSub : e.respondio ? C.green : e.tocaPreguntar ? AMBAR : C.textMuted
   const boton = { border: '1px solid ' + C.border, background: 'white', borderRadius: 99, padding: '2px 9px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: C.textSub }
   return (
     <span data-testid="seguimiento-whatsapp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10, flexWrap: 'wrap' }} onClick={ev => ev.stopPropagation()}>
@@ -185,7 +185,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     try {
       const quotesData = await apiFetch('/.netlify/functions/get-quotes')
       // Las ventas importadas del Excel viven en Instalaciones: aca solo las cotizaciones del panel.
-      if (quotesData.ok) setQuotes(quotesData.quotes.filter(q => q.instalacion?.origen !== 'excel'))
+      // yaCompro se calcula con todas (las del Excel cuentan como compra) antes de dejarlas fuera.
+      if (quotesData.ok) setQuotes(marcarYaCompro(quotesData.quotes).filter(q => q.instalacion?.origen !== 'excel'))
       else setError(quotesData.error || 'Error')
     } catch { setError('No se pudo conectar') }
     finally { setLoading(false) }
