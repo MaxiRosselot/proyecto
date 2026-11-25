@@ -838,17 +838,24 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
 
       {error && <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div>}
 
+      {/* Barra fija abajo con lo que mas se usa (registro de uso): generar el PDF y, ya generado,
+          descargarlo y copiar el mensaje. Antes habia que bajar mas de 3 pantallas para llegar. */}
+      <div data-testid="barra-cotizar" style={{
+        position: 'sticky', bottom: window.innerWidth < 768 ? 'calc(62px + env(safe-area-inset-bottom))' : 0, zIndex: 20,
+        margin: '0 -12px', padding: '10px 12px', background: 'rgba(255,255,255,.97)', borderTop: '1px solid ' + C.border,
+        boxShadow: '0 -8px 24px rgba(17,24,39,.08)', borderRadius: '12px 12px 0 0', display: 'grid', gap: 10,
+      }}>
       <button onClick={handleGenerar}
         disabled={generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())}
         style={{
-          ...styles.btnPrimary, width: '100%', padding: '15px', fontSize: 15, borderRadius: 12, marginBottom: 14,
+          ...styles.btnPrimary, width: '100%', padding: pdfUrl ? '10px' : '13px', fontSize: 15, borderRadius: 12,
           opacity: (generating || (mode === 'visita' && !selectedVisit) || (mode === 'manual' && !manualCliente.nombre.trim())) ? .55 : 1,
         }}>
-        {generating ? 'Generando PDF...' : 'Generar Cotizacion PDF'}
+        {generating ? 'Generando PDF...' : 'Generar Cotizacion PDF · ' + fmt(totales.total)}
       </button>
 
       {pdfUrl && (
-        <div style={{ ...styles.card, borderLeft: '4px solid ' + C.green }}>
+        <div style={{ borderLeft: '4px solid ' + C.green, paddingLeft: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <p style={{ fontWeight: 700, color: autoSaved ? C.green : C.orange, marginBottom: 2, marginTop: 0 }}>
@@ -868,6 +875,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
