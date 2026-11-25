@@ -81,8 +81,25 @@ export function lugarVisible() {
 }
 let marco = null
 export const registrarMarco = el => { marco = el }
-// Abre el chat de ese numero en el WhatsApp del panel, con el texto escrito (sin enviar).
-export function abrirChatEnMarco(telefono, texto = '') { if (marco) marco.src = linkWhatsappWeb(telefono, texto) }
+// Abre el chat de ese numero en el WhatsApp del panel, con el texto escrito (sin enviar). Primero le
+// pide a la extension (1.2+) que lo abra sin recargar; si no puede (cargando, sin sesion, version
+// vieja) o no contesta, recarga WhatsApp con el chat, que tarda unos segundos mas.
+let pedidos = 0
+export async function abrirChatEnMarco(telefono, texto = '') {
+  if (!marco) return
+  const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
+  if (!ok) marco.src = linkWhatsappWeb(telefono, texto)
+}
+function pedirAlMarco(mensaje, espera = 1500) {
+  return new Promise(resolver => {
+    const id = ++pedidos
+    const listo = ok => { window.removeEventListener('message', oir); clearTimeout(reloj); resolver(ok) }
+    const oir = ev => { if (ev.source === marco?.contentWindow && ev.data?.dm === 'chat' && ev.data.id === id) listo(Boolean(ev.data.ok)) }
+    const reloj = setTimeout(() => listo(false), espera)
+    window.addEventListener('message', oir)
+    try { marco.contentWindow.postMessage({ ...mensaje, id }, 'https://web.whatsapp.com') } catch { listo(false) }
+  })
+}
 export function inicioMarco() { if (marco) marco.src = URL_WHATSAPP_WEB }
 
 // Con la ventana abierta, los botones de WhatsApp del panel no abren otra pestaña: dejan el mensaje

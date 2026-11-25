@@ -306,14 +306,23 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
     return () => window.removeEventListener(EVENTO_PARA_ENVIAR, recibir)
   }, [quotes])
 
-  async function guardarCambios(cotNum, cambios) {
+  // Se ve al instante y se guarda en la planilla por detras (tarda 1–2 s); si falla, se deshace.
+  // Los guardados van en fila para que dos anotaciones seguidas no se pisen.
+  const cola = React.useRef(Promise.resolve())
+  function guardarCambios(cotNum, cambios) {
+    const antes = quotes.find(x => x.cotNum === cotNum)
+    const previo = antes && Object.fromEntries(Object.keys(cambios).map(k => [k, antes[k]]))
+    setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
     setGuardando(true)
-    try {
-      const r = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ cotNum, ...cambios }) })
-      if (!r.ok) throw new Error(r.error || 'error')
-      setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
-    } catch (e) { window.alert('No se pudo guardar: ' + e.message) }
-    finally { setGuardando(false) }
+    cola.current = cola.current.then(async () => {
+      try {
+        const r = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ cotNum, ...cambios }) })
+        if (!r.ok) throw new Error(r.error || 'error')
+      } catch (e) {
+        if (previo) setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...previo } : x))
+        window.alert('No se pudo guardar, se deshizo: ' + e.message)
+      }
+    }).finally(() => setGuardando(false))
   }
 
   return (
@@ -371,7 +380,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
       {/* Ficha */}
       <section style={{ ...columna, overflowY: 'auto' }} aria-label="Ficha del cliente">
         {envio && <div style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ParaEnviar envio={envio} onAbrirChat={abrirChatEnMarco} onCerrar={() => setEnvio(null)} /></div>}
-        {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={guardando} onVerCotizacion={onVerCotizacion}
+        {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion}
               onGuardar={seguimiento => guardarCambios(q.cotNum, { seguimiento })}
               onEstado={(status, motivo = '') => guardarCambios(q.cotNum, { status, motivoRechazo: motivo })} />
           : sel?.evento ? <FichaEvento e={sel.evento} />
