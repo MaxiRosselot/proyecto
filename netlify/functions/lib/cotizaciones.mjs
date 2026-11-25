@@ -4,6 +4,7 @@
 // En produccion es la hoja (almacenSheets); en local y en los tests, un arreglo en memoria.
 // Asi lo que se prueba es exactamente lo que corre en Netlify.
 import { gzipSync, gunzipSync } from 'node:zlib'
+import { haySeguimiento } from './seguimiento-whatsapp.mjs'
 
 export const HOJA = 'Cotizaciones'
 // Primer numero cuando la hoja esta vacia. Es el que usaba el cotizador antes de que el
@@ -16,7 +17,8 @@ export const NUMERO_INICIAL = 1421
 // T: la reserva que hizo el cliente desde su link (dia elegido y pago por verificar o en curso), en JSON.
 // U: las alternativas ofrecidas en la pagina 5 del PDF (repisas, totales y su proyecto 3D), en JSON
 //    (comprimido si no cabe, como el proyecto). En la lista van sin su proyecto.
-// V: el seguimiento por WhatsApp que hace Maxi a mano: { preguntas: ['AAAA-MM-DD', ...], respondio? }.
+// V: el seguimiento por WhatsApp que hace Maxi a mano (lib/seguimiento-whatsapp.mjs): preguntas,
+// respuesta, espera hasta una fecha y bitacora.
 export const ENCABEZADOS = ['N° Cot', 'Nombre', 'Email', 'Teléfono', 'Dirección', 'Fecha Visita', 'Subtotal', 'IVA', 'Total', 'Estado', 'Motivo Rechazo', 'Notas', 'Repisas (JSON)', 'Adicionales (JSON)', 'Creado', 'PDF URL', 'Proyecto 3D', 'Instalación (JSON)', 'Pagos (JSON)', 'Reserva (JSON)', 'Alternativas (JSON)', 'Seguimiento WhatsApp (JSON)']
 export const ULTIMA_COLUMNA = 'V'
 const CAMPOS = ['cotNum', 'nombre', 'email', 'telefono', 'direccion', 'fechaVisita', 'subtotal', 'iva', 'total', 'status', 'motivoRechazo', 'notas', 'repisas', 'adicionales', 'creado', 'pdfUrl', 'proyecto3d', 'instalacion', 'pagos', 'reserva', 'alternativas', 'seguimiento']
@@ -130,7 +132,7 @@ export function cotizacionAFila(c) {
     c.pagos?.length ? JSON.stringify(c.pagos) : '',
     c.reserva ? JSON.stringify(c.reserva) : '',
     c.alternativas?.length ? codificarProyecto(c.alternativas) : '',
-    c.seguimiento?.preguntas?.length ? JSON.stringify(c.seguimiento) : '',
+    haySeguimiento(c.seguimiento) ? JSON.stringify(c.seguimiento) : '',
   ]
 }
 

@@ -52,9 +52,9 @@ function SeguimientoWhatsapp({ q, onGuardar }) {
   }
   const fechaCorta = f => new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(f + 'T12:00:00Z'))
   const hace = d => (d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`)
-  const texto = e.respondio ? `💬 Respondió ${hace(Math.round((Date.parse(hoy) - Date.parse(e.respondio)) / 864e5))}`
+  const texto = e.esperando ? `⏸ Esperando hasta el ${fechaCorta(e.esperando)}` : e.respondio ? `💬 Respondió ${hace(Math.round((Date.parse(hoy) - Date.parse(e.respondio)) / 864e5))}`
     : e.veces ? `📲 Preguntado ${e.veces} ${e.veces === 1 ? 'vez' : 'veces'} · ${hace(e.diasDesdeUltima)}` : '📲 Sin preguntar'
-  const color = e.respondio ? C.green : e.tocaPreguntar ? AMBAR : C.textMuted
+  const color = e.esperando ? C.textSub : e.respondio ? C.green : e.tocaPreguntar ? AMBAR : C.textMuted
   const boton = { border: '1px solid ' + C.border, background: 'white', borderRadius: 99, padding: '2px 9px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: C.textSub }
   return (
     <span data-testid="seguimiento-whatsapp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10, flexWrap: 'wrap' }} onClick={ev => ev.stopPropagation()}>

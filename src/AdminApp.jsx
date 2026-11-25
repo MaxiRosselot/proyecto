@@ -14,7 +14,9 @@ import UsoPanel from './admin/UsoPanel.jsx'
 import PendientesSection from './admin/Pendientes.jsx'
 import { fijarSeccionUso } from './admin/registroUso.js'
 import VentanaWhatsapp from './admin/VentanaWhatsapp.jsx'
-import { EVENTO_PARA_ENVIAR, leerAbierto, leerAncho, guardarAbierto, leerLinkWhatsapp, marcarVentanaAbierta } from './admin/whatsappPanel.js'
+import MarcoWhatsapp from './admin/MarcoWhatsapp.jsx'
+import ModuloWhatsapp from './admin/ModuloWhatsapp.jsx'
+import { EVENTO_PARA_ENVIAR, extensionInstalada, leerAbierto, leerAncho, guardarAbierto, leerLinkWhatsapp, marcarVentanaAbierta } from './admin/whatsappPanel.js'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -27,6 +29,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     chart:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="7" width="3" height="10" rx="1"/><rect x="16" y="4" width="3" height="13" rx="1"/></svg>),
     table:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="4" x2="9" y2="20"/></svg>),
     image:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
+    chat:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/></svg>),
     list:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
@@ -103,6 +106,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'web')          return <FotosWebSection />
   if (section === 'uso')          return <UsoPanel onVolver={() => navigateTo('inicio')} />
   if (section === 'pendientes')   return <PendientesSection />
+  if (section === 'whatsapp')     return <ModuloWhatsapp onVerCotizacion={verCotizacion} />
   return null
 }
 
@@ -121,14 +125,18 @@ export default function AdminApp() {
   const [whatsapp, setWhatsapp]                   = useState(leerAbierto)
   const [whatsappMontado, setWhatsappMontado]     = useState(leerAbierto)
   const [anchoWhatsapp, setAnchoWhatsapp]         = useState(leerAncho)
-  const whatsappVisible = whatsapp && !isMobile
+  // En la seccion WhatsApp la ventana de la derecha sobra: WhatsApp ya esta al centro.
+  const enModulo = section === 'whatsapp' && !isMobile
+  const whatsappVisible = whatsapp && !isMobile && !enModulo
+  const hayWhatsapp = whatsappVisible || enModulo
   function alternarWhatsapp(v) { setWhatsapp(v); guardarAbierto(v); if (v) setWhatsappMontado(true) }
-  useEffect(() => { marcarVentanaAbierta(whatsappVisible) }, [whatsappVisible])
+  useEffect(() => { if (enModulo) setWhatsappMontado(true) }, [enModulo])
+  useEffect(() => { marcarVentanaAbierta(hayWhatsapp) }, [hayWhatsapp])
 
   // Con WhatsApp abierto, los links de WhatsApp del panel (wa.me) no abren otra pestaña:
   // dejan el mensaje listo en la ventana.
   useEffect(() => {
-    if (!whatsappVisible) return
+    if (!hayWhatsapp) return
     const alClic = ev => {
       const a = ev.target.closest?.('a[href]')
       const link = a && leerLinkWhatsapp(a.href)
@@ -138,7 +146,7 @@ export default function AdminApp() {
     }
     document.addEventListener('click', alClic, true)
     return () => document.removeEventListener('click', alClic, true)
-  }, [whatsappVisible])
+  }, [hayWhatsapp])
 
   // Registro de uso del panel (Inicio → Uso del panel): que secciones y botones se ocupan.
   useEffect(() => { if (authed) fijarSeccionUso(section) }, [authed, section])
@@ -238,7 +246,7 @@ export default function AdminApp() {
       {menuMas && (
         <div onClick={() => setMenuMas(false)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'rgba(0,0,0,.35)' }}>
           <nav aria-label="Más secciones" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 'calc(58px + env(safe-area-inset-bottom))', background: C.sidebar, borderRadius: '16px 16px 0 0', padding: '10px 10px 6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-            {SECTIONS.filter(s => !s.barraMovil).map(s => {
+            {SECTIONS.filter(s => !s.barraMovil && !s.soloPc).map(s => {
               const active = section === s.id
               return (
                 <button key={s.id} onClick={() => { setMenuMas(false); navigateTo(s.id) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: 'none', borderRadius: 10, cursor: 'pointer', textAlign: 'left', background: active ? 'rgba(219,153,43,.18)' : 'rgba(255,255,255,.04)', color: active ? C.orange : '#D1D5DB', fontSize: 14, fontWeight: active ? 700 : 500 }}>
@@ -300,19 +308,22 @@ export default function AdminApp() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '4px 12px', borderRadius: 6, fontWeight: 500 }}>Repisas Don Maxi</div>
-            {!whatsappVisible && (
+            {!hayWhatsapp && (
               <button type="button" onClick={() => alternarWhatsapp(true)} title="Abre WhatsApp Web aquí, a la derecha"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #86efac', background: '#F0FDF4', color: '#15803d', borderRadius: 8, padding: '5px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#25D366' }} />WhatsApp
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#25D366' }} />WhatsApp al lado
               </button>
             )}
           </div>
         </header>
         {/* La planilla de instalaciones usa todo el ancho, como el Excel; el resto, una columna legible. */}
-        <main style={{ flex: 1, padding: '28px 32px', maxWidth: ['instalaciones', 'pendientes'].includes(section) ? 'none' : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+        <main style={enModulo
+          ? { height: 'calc(100vh - 56px)', width: '100%', minWidth: 0, boxSizing: 'border-box' }
+          : { flex: 1, padding: '28px 32px', maxWidth: ['instalaciones', 'pendientes'].includes(section) ? 'none' : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <SectionContent {...contentProps} />
         </main>
       </div>
+      {whatsappMontado && !isMobile && extensionInstalada() && <MarcoWhatsapp />}
       {whatsappMontado && <VentanaWhatsapp visible={whatsappVisible} ancho={anchoWhatsapp} onAncho={setAnchoWhatsapp} onCerrar={() => alternarWhatsapp(false)} />}
     </div>
   )

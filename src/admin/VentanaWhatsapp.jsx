@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { C, QUOTE_STATUS_LABELS, apiFetch, styles } from './utils.js'
+import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { mensajePregunta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import {
-  ANCHO_MAX, ANCHO_MIN, EVENTO_PARA_ENVIAR, URL_WHATSAPP_WEB, buscarClientes, extensionInstalada,
-  ZOOMS, guardarAncho, guardarZoom, leerZoom, linkWhatsappWeb, telefonoLegible,
+  ANCHO_MAX, ANCHO_MIN, EVENTO_PARA_ENVIAR, ZOOMS, abrirChatEnMarco, buscarClientes, extensionInstalada,
+  guardarAncho, guardarZoom, inicioMarco, leerZoom, suscribir, telefonoLegible,
 } from './whatsappPanel.js'
 
 const VERDE = '#15803d'
-const boton = { border: '1px solid ' + C.border, background: 'white', borderRadius: 8, padding: '4px 9px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: C.textSub, whiteSpace: 'nowrap' }
-const botonVerde = { ...boton, color: VERDE, borderColor: '#86efac' }
+export const boton = { border: '1px solid ' + C.border, background: 'white', borderRadius: 8, padding: '4px 9px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: C.textSub, whiteSpace: 'nowrap' }
+export const botonVerde = { ...boton, color: VERDE, borderColor: '#86efac' }
 
 // Boton que copia un texto y avisa "✓ Copiado" un momento.
-function Copiar({ texto, children, estilo = boton, titulo }) {
+export function Copiar({ texto, children, estilo = boton, titulo }) {
   const [listo, setListo] = useState(false)
   const copiar = async () => {
     try { await navigator.clipboard.writeText(texto); setListo(true); setTimeout(() => setListo(false), 1500) } catch { /* sin permiso de portapapeles */ }
@@ -21,7 +22,7 @@ function Copiar({ texto, children, estilo = boton, titulo }) {
 
 // Lo que mando un boton de WhatsApp del panel (Preguntar, WhatsApp al cliente, recordatorios...):
 // el mensaje queda copiado para pegarlo en el chat, o se abre su chat con el mensaje escrito.
-function ParaEnviar({ envio, onAbrirChat, onCerrar }) {
+export function ParaEnviar({ envio, onAbrirChat, onCerrar }) {
   return (
     <div data-testid="whatsapp-para-enviar" style={{ border: '1px solid #86efac', background: '#F0FDF4', borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
@@ -86,8 +87,22 @@ function BuscarCliente({ onAbrirChat }) {
   )
 }
 
+// Tamaño de WhatsApp: achicarlo deja ver la lista y el chat en poco ancho. Vale para todo el panel.
+export function ControlZoom() {
+  const [zoom, setZoom] = useState(leerZoom)
+  useEffect(() => suscribir(() => setZoom(leerZoom())), [])
+  const cambiar = paso => guardarZoom(ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, ZOOMS.indexOf(zoom) + paso))])
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title="Tamaño de WhatsApp: más chico cabe más">
+      <button type="button" onClick={() => cambiar(-1)} disabled={zoom === ZOOMS[0]} aria-label="Achicar WhatsApp" style={{ ...boton, padding: '4px 8px' }}>A−</button>
+      <span style={{ fontSize: 11, color: C.textMuted, minWidth: 30, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+      <button type="button" onClick={() => cambiar(1)} disabled={zoom === ZOOMS.at(-1)} aria-label="Agrandar WhatsApp" style={{ ...boton, padding: '4px 8px' }}>A+</button>
+    </span>
+  )
+}
+
 // Como instalar la extension, cuando falta: sin ella WhatsApp Web no se deja mostrar aqui.
-function SinExtension({ onReintentar }) {
+export function SinExtension({ onReintentar }) {
   const paso = { margin: '0 0 8px', fontSize: 13, color: C.textSub, lineHeight: 1.45 }
   return (
     <div data-testid="whatsapp-sin-extension" style={{ padding: 18, overflowY: 'auto' }}>
@@ -105,19 +120,14 @@ function SinExtension({ onReintentar }) {
 }
 
 export default function VentanaWhatsapp({ visible, ancho, onAncho, onCerrar }) {
-  const marco = useRef(null)
   const [hayExtension, setHayExtension] = useState(extensionInstalada)
   const [envio, setEnvio] = useState(null)
   const [herramientas, setHerramientas] = useState(true)
   const [arrastrando, setArrastrando] = useState(false)
-  const [zoom, setZoom] = useState(leerZoom)
-  const cambiarZoom = paso => {
-    const z = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, ZOOMS.indexOf(zoom) + paso))]
-    setZoom(z); guardarZoom(z)
-  }
 
   // Los botones de WhatsApp del panel mandan aca su mensaje: queda a la vista y copiado.
   useEffect(() => {
+    if (!visible) return
     const recibir = async ev => {
       const { telefono = '', texto = '', cliente = '' } = ev.detail || {}
       let copiado = false
@@ -127,10 +137,10 @@ export default function VentanaWhatsapp({ visible, ancho, onAncho, onCerrar }) {
     }
     window.addEventListener(EVENTO_PARA_ENVIAR, recibir)
     return () => window.removeEventListener(EVENTO_PARA_ENVIAR, recibir)
-  }, [])
+  }, [visible])
 
-  const abrirChat = (telefono, texto) => { if (marco.current) marco.current.src = linkWhatsappWeb(telefono, texto) }
-  const inicio = () => { if (marco.current) marco.current.src = URL_WHATSAPP_WEB }
+  const abrirChat = abrirChatEnMarco
+  const inicio = inicioMarco
 
   // Arrastrar el borde izquierdo cambia el ancho (mientras se arrastra, una capa evita que el
   // iframe se quede con el mouse).
@@ -155,13 +165,7 @@ export default function VentanaWhatsapp({ visible, ancho, onAncho, onCerrar }) {
         <span style={{ fontSize: 14, fontWeight: 800, color: C.text }}>WhatsApp</span>
         <button type="button" onClick={() => setHerramientas(v => !v)} aria-expanded={herramientas} style={{ ...boton, marginLeft: 8 }}>{herramientas ? 'Ocultar herramientas' : 'Herramientas'}</button>
         {hayExtension && <button type="button" onClick={inicio} title="Vuelve a la lista de chats" style={boton}>↻</button>}
-        {hayExtension && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title="Tamaño de WhatsApp: más chico cabe más">
-            <button type="button" onClick={() => cambiarZoom(-1)} disabled={zoom === ZOOMS[0]} aria-label="Achicar WhatsApp" style={{ ...boton, padding: '4px 8px' }}>A−</button>
-            <span style={{ fontSize: 11, color: C.textMuted, minWidth: 30, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-            <button type="button" onClick={() => cambiarZoom(1)} disabled={zoom === ZOOMS.at(-1)} aria-label="Agrandar WhatsApp" style={{ ...boton, padding: '4px 8px' }}>A+</button>
-          </span>
-        )}
+        {hayExtension && <ControlZoom />}
         <button type="button" onClick={onCerrar} aria-label="Cerrar WhatsApp" title="Cerrar (sigue cargado: al abrir vuelve donde estabas)" style={{ ...boton, marginLeft: 'auto' }}>✕</button>
       </div>
       {herramientas && (
@@ -171,13 +175,7 @@ export default function VentanaWhatsapp({ visible, ancho, onAncho, onCerrar }) {
         </div>
       )}
       {hayExtension
-        ? (
-          // Achicado con transform: WhatsApp cree tener mas ancho y se ve entero en la ventana.
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-            <iframe ref={marco} src={URL_WHATSAPP_WEB} title="WhatsApp Web" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; fullscreen"
-              style={{ position: 'absolute', top: 0, left: 0, width: `${100 / zoom}%`, height: `${100 / zoom}%`, border: 0, transform: `scale(${zoom})`, transformOrigin: '0 0' }} />
-          </div>
-        )
+        ? <LugarWhatsapp />
         : <SinExtension onReintentar={() => setHayExtension(extensionInstalada())} />}
     </aside>
   )

@@ -35,11 +35,12 @@ export const QUOTE_STATUS_LABELS = {
 
 // Ordenadas por uso real (registro de uso, 11–25 nov 2026): arriba lo que se abre a diario; las que
 // casi no se usan van juntas bajo "Más" (en el PC al final del menu; en el celular, en el boton Más).
-// barraMovil: las pocas que van en la barra de abajo del celular, en ese orden.
+// barraMovil: las pocas que van en la barra de abajo del celular, en ese orden. soloPc: no sale en el celular.
 // Instalaciones es la central (la planilla de ventas); Estadisticas, los graficos y resumenes.
 export const SECTIONS = [
   { id: 'inicio',        label: 'Inicio',        icon: 'home', barraMovil: 1 },
   { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files', corto: 'Cotiz.', barraMovil: 3 },
+  { id: 'whatsapp',      label: 'WhatsApp',      icon: 'chat', soloPc: true },
   { id: 'instalaciones', label: 'Instalaciones', icon: 'table', corto: 'Instal.', barraMovil: 2 },
   { id: 'cotizador',     label: 'Cotizar',       icon: 'doc'   },
   { id: 'calendario',    label: 'Calendario',    icon: 'agenda', corto: 'Agenda', barraMovil: 4 },

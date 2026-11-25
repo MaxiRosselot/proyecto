@@ -183,7 +183,8 @@ export function vistaPorCobrar({ quotes, hoy }) {
 }
 
 export function vistaSinRespuesta({ quotes, hoy }) {
-  const pendientes = quotes.filter(q => q.status === 'por confirmar')
+  // Las que el cliente pospuso ("Esperar hasta" en el panel) no aparecen hasta esa fecha.
+  const pendientes = quotes.filter(q => q.status === 'por confirmar' && !(q.seguimiento?.esperarHasta > hoy))
     .map(q => ({ cotNum: q.cotNum, nombre: q.nombre, telefono: q.telefono, total: q.total, dias: diasDesde(q.creadoMs, hoy) }))
     .filter(c => c.dias != null && c.dias >= 2 && c.dias <= 45).sort((a, b) => a.dias - b.dias).slice(0, 12)
   if (!pendientes.length) return { texto: '⏰ No hay cotizaciones esperando respuesta (de 2 a 45 días). 🙌', filas: [MENU] }

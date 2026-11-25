@@ -35,7 +35,7 @@ try {
   const q = await api('save-quote', { crear: true, nombre, telefono: '9 3333 4444', subtotal: 100000, iva: 19000, total: 119000, repisas: [{ largo: 1.2, prof: .45, alto: 2, niveles: 5, unidades: 1, valor: 100000 }], adicionales: {} })
 
   // Abrir WhatsApp: la ventana aparece a la derecha y WhatsApp Web carga dentro (pide el QR).
-  await page.getByRole('button', { name: 'WhatsApp', exact: true }).click()
+  await page.getByRole('button', { name: 'WhatsApp al lado' }).click()
   const ventana = page.getByTestId('ventana-whatsapp')
   await expect(ventana).toBeVisible()
   const marco = page.frameLocator('iframe[title="WhatsApp Web"]')
@@ -64,7 +64,7 @@ try {
   // Cerrar: el panel vuelve a todo el ancho y queda el boton para abrirla otra vez.
   await ventana.getByRole('button', { name: 'Cerrar WhatsApp' }).click()
   await expect(ventana).toBeHidden()
-  await expect(page.getByRole('button', { name: 'WhatsApp', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'WhatsApp al lado' })).toBeVisible()
   await api('delete-quote', { cotNum: q.cotNum })
   if (errors.length) throw new Error(errors.join('\n'))
 } finally { await ctx.close(); rmSync(perfil, { recursive: true, force: true }) }
@@ -74,7 +74,7 @@ const browser = await chromium.launch({ channel: 'msedge', headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   await entrar(page)
-  await page.getByRole('button', { name: 'WhatsApp', exact: true }).click()
+  await page.getByRole('button', { name: 'WhatsApp al lado' }).click()
   await expect(page.getByTestId('whatsapp-sin-extension')).toBeVisible()
   await expect(page.locator('iframe[title="WhatsApp Web"]')).toHaveCount(0)
   const zip = await page.request.get(base + '/whatsapp-en-el-panel.zip')

@@ -64,7 +64,26 @@ export const guardarAncho = v => localStorage.setItem(CLAVE_ANCHO, String(Math.r
 // Tamaño de WhatsApp dentro de la ventana: achicarlo deja ver la lista y el chat en poco ancho.
 export const ZOOMS = [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 1]
 export const leerZoom = () => { const z = Number(localStorage.getItem(CLAVE_ZOOM)); return ZOOMS.includes(z) ? z : 0.8 }
-export const guardarZoom = z => localStorage.setItem(CLAVE_ZOOM, String(z))
+export const guardarZoom = z => { localStorage.setItem(CLAVE_ZOOM, String(z)); avisar() }
+
+// Un solo WhatsApp Web cargado para todo el panel (dos a la vez se pelean la sesion): el iframe vive
+// arriba de todo (MarcoWhatsapp) y se acomoda sobre el "lugar" visible que lo pide (la seccion
+// WhatsApp o la ventana de la derecha). Asi no se recarga al cambiar de seccion.
+const lugares = new Set()
+const oyentes = new Set()
+function avisar() { oyentes.forEach(f => f()) }
+export function suscribir(fn) { oyentes.add(fn); return () => oyentes.delete(fn) }
+export function pedirLugar(el) { lugares.add(el); avisar(); return () => { lugares.delete(el); avisar() } }
+// El lugar visible mas reciente (los ocultos miden 0).
+export function lugarVisible() {
+  for (const el of [...lugares].reverse()) { const r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) return r }
+  return null
+}
+let marco = null
+export const registrarMarco = el => { marco = el }
+// Abre el chat de ese numero en el WhatsApp del panel, con el texto escrito (sin enviar).
+export function abrirChatEnMarco(telefono, texto = '') { if (marco) marco.src = linkWhatsappWeb(telefono, texto) }
+export function inicioMarco() { if (marco) marco.src = URL_WHATSAPP_WEB }
 
 // Con la ventana abierta, los botones de WhatsApp del panel no abren otra pestaña: dejan el mensaje
 // listo (y copiado) en la ventana. Si no esta abierta, se abre WhatsApp como siempre.
