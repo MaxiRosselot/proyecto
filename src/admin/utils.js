@@ -33,21 +33,24 @@ export const QUOTE_STATUS_LABELS = {
   'rechazada':     { label: 'Rechazada',     color: '#EF4444' },
 }
 
+// Ordenadas por uso real (registro de uso, 11–25 nov 2026): arriba lo que se abre a diario; las que
+// casi no se usan van juntas bajo "Más" (en el PC al final del menu; en el celular, en el boton Más).
+// barraMovil: las pocas que van en la barra de abajo del celular, en ese orden.
 // Instalaciones es la central (la planilla de ventas); Estadisticas, los graficos y resumenes.
 export const SECTIONS = [
-  { id: 'inicio',        label: 'Inicio',        icon: 'home'  },
-  { id: 'instalaciones', label: 'Instalaciones', icon: 'table', corto: 'Instal.' },
-  { id: 'calendario',    label: 'Calendario',    icon: 'agenda', corto: 'Agenda' },
-  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files', corto: 'Cotiz.' },
+  { id: 'inicio',        label: 'Inicio',        icon: 'home', barraMovil: 1 },
+  { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files', corto: 'Cotiz.', barraMovil: 3 },
+  { id: 'instalaciones', label: 'Instalaciones', icon: 'table', corto: 'Instal.', barraMovil: 2 },
   { id: 'cotizador',     label: 'Cotizar',       icon: 'doc'   },
-  { id: 'visitas',       label: 'Visitas',       icon: 'calendar' },
-  { id: 'estadisticas',  label: 'Estadísticas',  icon: 'chart', corto: 'Stats' },
-  { id: 'horarios',      label: 'Horarios',      icon: 'clock' },
-  { id: 'web',           label: 'Web',           icon: 'image' },
-  // En el celular no cabe en la barra de abajo: se abre desde Inicio.
-  { id: 'pendientes',    label: 'Pendientes',    icon: 'list', soloEscritorio: true },
-  { id: 'dte',           label: 'DTE',           icon: 'doc', soloEscritorio: true },
+  { id: 'calendario',    label: 'Calendario',    icon: 'agenda', corto: 'Agenda', barraMovil: 4 },
+  { id: 'dte',           label: 'DTE',           icon: 'doc' },
+  { id: 'visitas',       label: 'Visitas',       icon: 'calendar', mas: true },
+  { id: 'estadisticas',  label: 'Estadísticas',  icon: 'chart', corto: 'Stats', mas: true },
+  { id: 'horarios',      label: 'Horarios',      icon: 'clock', mas: true },
+  { id: 'pendientes',    label: 'Pendientes',    icon: 'list', mas: true },
+  { id: 'web',           label: 'Web',           icon: 'image', mas: true },
 ]
+export const BARRA_MOVIL = SECTIONS.filter(s => s.barraMovil).sort((a, b) => a.barraMovil - b.barraMovil)
 
 export const DEFAULTS_REPISA = { l: 2.43, p: 0.48, a: 2, n: 4, u: 1, v: 130000 }
 

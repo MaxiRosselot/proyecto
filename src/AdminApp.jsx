@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { SECTIONS, SESSION_EXPIRED_EVENT, C, styles, leerSesion, guardarSesion, cerrarSesion } from './admin/utils.js'
+import { BARRA_MOVIL, SECTIONS, SESSION_EXPIRED_EVENT, C, styles, leerSesion, guardarSesion, cerrarSesion } from './admin/utils.js'
 import DashboardSection    from './admin/Dashboard.jsx'
 import VisitasSection      from './admin/Visitas.jsx'
 import PorCotizarSection   from './admin/PorCotizar.jsx'
@@ -107,6 +107,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
 export default function AdminApp() {
   const [authed, setAuthed]                       = useState(() => Boolean(leerSesion()))
   const [section, setSection]                     = useState('inicio')
+  const [menuMas, setMenuMas]                     = useState(false)
   const [statuses, setStatuses]                   = useState({})
   const [visitaParaCotizar, setVisitaParaCotizar] = useState(null)
   const [allVisits, setAllVisits]                 = useState([])
@@ -191,10 +192,11 @@ export default function AdminApp() {
         <SectionContent {...contentProps} />
       </main>
       <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sidebar, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {SECTIONS.filter(s => !s.soloEscritorio).map(s => {
-          const active = section === s.id
+        {[...BARRA_MOVIL, { id: 'mas', label: 'Más', icon: 'list' }].map(s => {
+          const enMas = !BARRA_MOVIL.some(b => b.id === section)
+          const active = s.id === 'mas' ? (menuMas || enMas) : section === s.id && !menuMas
           return (
-            <button key={s.id} onClick={() => navigateTo(s.id)} style={{
+            <button key={s.id} onClick={() => (s.id === 'mas' ? setMenuMas(v => !v) : (setMenuMas(false), navigateTo(s.id)))} aria-expanded={s.id === 'mas' ? menuMas : undefined} style={{
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: 3, padding: '8px 2px', border: 'none', cursor: 'pointer',
               background: 'transparent', color: active ? C.orange : '#6B7280', transition: 'color .15s',
@@ -207,6 +209,21 @@ export default function AdminApp() {
           )
         })}
       </nav>
+      {/* "Más": las secciones que no van en la barra, en una hoja sobre la barra. */}
+      {menuMas && (
+        <div onClick={() => setMenuMas(false)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'rgba(0,0,0,.35)' }}>
+          <nav aria-label="Más secciones" onClick={e => e.stopPropagation()} style={{ position: 'absolute', left: 0, right: 0, bottom: 'calc(58px + env(safe-area-inset-bottom))', background: C.sidebar, borderRadius: '16px 16px 0 0', padding: '10px 10px 6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+            {SECTIONS.filter(s => !s.barraMovil).map(s => {
+              const active = section === s.id
+              return (
+                <button key={s.id} onClick={() => { setMenuMas(false); navigateTo(s.id) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: 'none', borderRadius: 10, cursor: 'pointer', textAlign: 'left', background: active ? 'rgba(219,153,43,.18)' : 'rgba(255,255,255,.04)', color: active ? C.orange : '#D1D5DB', fontSize: 14, fontWeight: active ? 700 : 500 }}>
+                  <Icon name={s.icon} size={17} color={active ? C.orange : '#9CA3AF'} />{s.label}
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+      )}
     </div>
   )
 
@@ -220,21 +237,25 @@ export default function AdminApp() {
             onError={e => { e.target.style.display = 'none' }} />
         </div>
         <nav style={{ flex: 1, padding: '10px' }}>
-          {SECTIONS.map(s => {
+          {SECTIONS.map((s, i) => {
             const active = section === s.id
+            const primeraDeMas = s.mas && !SECTIONS[i - 1]?.mas
             return (
-              <button key={s.id} onClick={() => navigateTo(s.id)} style={{
+              <React.Fragment key={s.id}>
+              {primeraDeMas && <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', color: '#4B5563', padding: '14px 14px 6px', borderTop: '1px solid rgba(255,255,255,.06)', marginTop: 8 }}>Más</div>}
+              <button onClick={() => navigateTo(s.id)} style={{
                 display: 'flex', alignItems: 'center', gap: 11, width: '100%',
-                padding: '10px 14px', marginBottom: 2,
+                padding: s.mas ? '7px 14px' : '10px 14px', marginBottom: 2,
                 border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: 10, transition: 'all .15s',
                 background: active ? 'rgba(219,153,43,.18)' : 'transparent',
                 color: active ? C.orange : '#9CA3AF',
-                fontSize: 14, fontWeight: active ? 700 : 400,
+                fontSize: s.mas ? 13 : 14, fontWeight: active ? 700 : 400,
               }}>
-                <Icon name={s.icon} size={16} color={active ? C.orange : '#6B7280'} />
+                <Icon name={s.icon} size={s.mas ? 14 : 16} color={active ? C.orange : '#6B7280'} />
                 {s.label}
                 {active && <div style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: C.orange }}/>}
               </button>
+              </React.Fragment>
             )
           })}
         </nav>

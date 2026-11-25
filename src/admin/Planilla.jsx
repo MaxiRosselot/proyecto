@@ -291,7 +291,10 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion, on
           </div>
           <button onClick={onCerrar} aria-label="Cerrar" style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: C.textMuted }}>✕</button>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+        {/* Lo que mas se usa (registro de uso): la ficha del maestro y el cobro, arriba. */}
+        <div data-testid="acciones-venta" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+          {inst.fecha && inst.origen !== 'excel' && <FichaMaestro q={q} />}
+          {pago.saldo > 0 && <CopiarMensaje texto={textoCobro(q)} etiqueta="📋 Copiar mensaje de cobro" />}
           <button type="button" onClick={onReagendar} style={boton}>📅 {inst.fecha ? 'Reagendar' : 'Agendar'}</button>
           {inst.instalada && <button type="button" onClick={onReagendar} style={{ ...boton, color: C.red }}>↩️ No se realizó · reagendar</button>}
         </div>
@@ -317,12 +320,10 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion, on
         <div style={titulo}>Pagos</div>
         <PagosCotizacion quote={q} onCambio={onCambioLocal} />
 
-        <div style={titulo}>Acciones</div>
+        <div style={titulo}>Otras acciones</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {pago.saldo > 0 && <CopiarMensaje texto={textoCobro(q)} etiqueta="📋 Copiar mensaje de cobro" />}
           {inst.fecha && <CopiarMensaje texto={mensajeInstalacion(q, inst, pago)} etiqueta="📋 Copiar mensaje de agendamiento" />}
           {inst.fecha && inst.inicio && <CopiarMensaje texto={mensajeConfirmarInstalacion(q, inst)} etiqueta="📋 Copiar mensaje de confirmación" />}
-          {inst.fecha && inst.origen !== 'excel' && <FichaMaestro q={q} />}
           {inst.link && <a href={inst.link} target="_blank" rel="noreferrer" style={boton}>Ver en Calendar</a>}
           {q.pdfUrl && <a href={q.pdfUrl} target="_blank" rel="noreferrer" style={boton}>Ver PDF</a>}
           {onVerCotizacion && inst.origen !== 'excel' && <button onClick={() => onVerCotizacion(q.cotNum)} style={boton}>Ver cotización</button>}
@@ -663,10 +664,14 @@ export default function PlanillaSection({ onVerCotizacion }) {
             <div key={f.q.cotNum} data-testid="fila-planilla" onClick={() => setDetalle(f.q.cotNum)}
               style={{ ...styles.card, padding: 12, cursor: 'pointer', borderLeft: '4px solid ' + (f.instalada ? C.green : f.atrasada ? C.yellow : C.border), background: f.instalada ? '#F6F7F9' : 'white' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14 }}>
-                  <input type="checkbox" checked={f.instalada} aria-label={`Instalada: ${f.q.nombre}`} onChange={e => actualizar(f.q.cotNum, { instalada: e.target.checked })} style={{ width: 18, height: 18, margin: 0, flex: 'none' }} />
+                {/* Solo la casilla marca "instalada"; el nombre abre el detalle, como el resto de la tarjeta
+                    (antes el nombre era parte de la etiqueta y tocarlo la marcaba sin querer). */}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14, minWidth: 0 }}>
+                  <label onClick={e => e.stopPropagation()} style={{ display: 'grid', placeItems: 'center', padding: 6, margin: -6, flex: 'none' }}>
+                    <input type="checkbox" checked={f.instalada} aria-label={`Instalada: ${f.q.nombre}`} onChange={e => actualizar(f.q.cotNum, { instalada: e.target.checked })} style={{ width: 18, height: 18, margin: 0 }} />
+                  </label>
                   {f.q.nombre}
-                </label>
+                </span>
                 <strong style={{ fontSize: 14 }}>{fmt(f.montos.bruto)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, color: C.textSub, marginTop: 4 }}>
