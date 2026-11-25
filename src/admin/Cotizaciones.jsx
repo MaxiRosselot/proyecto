@@ -177,6 +177,7 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
   const [elegidas, setElegidas]         = useState([])
   const alternarElegida = n => setElegidas(l => (l.includes(n) ? l.filter(x => x !== n) : [...l, n]))
   const moverElegida = (n, d) => setElegidas(l => { const i = l.indexOf(n), j = i + d; if (i < 0 || j < 0 || j >= l.length) return l; const c = [...l]; [c[i], c[j]] = [c[j], c[i]]; return c })
+  const [irANueva, setIrANueva]         = useState(null)
   const actualizarLocal = (cotNum, cambios) => setQuotes(prev => prev.map(x => x.cotNum === cotNum ? { ...x, ...cambios } : x))
 
   const load = useCallback(async () => {
@@ -374,6 +375,14 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
     await rehacerPdf(quote)
   }
 
+  // Despues de juntar en una venta: abrir la nueva cuando termine de recargar.
+  useEffect(() => {
+    if (!irANueva || loading) return
+    const q = quotes.find(x => String(x.cotNum) === String(irANueva))
+    setIrANueva(null)
+    if (q) irA(q)
+  }, [irANueva, loading]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Ir a otra cotizacion del mismo cliente (puede estar en otra pestaña).
   function irA(q) {
     setBuscar(''); setTab(porVerificar(q) ? 'verificar' : q.status); setExpanded(q.cotNum)
@@ -450,7 +459,8 @@ export default function CotizacionesSection({ onAbrirEnCotizador, enfocar }) {
         </div>
       </div>
 
-      {juntando && <PanelJuntar elegidas={elegidas} quotes={quotes} onQuitar={alternarElegida} onMover={moverElegida} onCancelar={() => { setJuntando(false); setElegidas([]) }} />}
+      {juntando && <PanelJuntar elegidas={elegidas} quotes={quotes} onQuitar={alternarElegida} onMover={moverElegida} onCancelar={() => { setJuntando(false); setElegidas([]) }}
+        onJuntada={n => { setJuntando(false); setElegidas([]); setIrANueva(n); load() }} />}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>

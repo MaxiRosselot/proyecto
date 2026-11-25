@@ -5,6 +5,43 @@
 import React, { useEffect, useState } from 'react'
 import { C, adminFetch, apiFetch, fmt, styles } from './utils.js'
 import { vistasDelProyecto } from './regenerarPdf.js'
+import { juntarEnUnaVenta } from '../../netlify/functions/lib/juntar-venta.mjs'
+
+const aBase64 = buffer => { const b = new Uint8Array(buffer); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s) }
+
+// "Juntar en una venta": crea una cotizacion nueva con todo (ver lib/juntar-venta.mjs), le deja el
+// presupuesto conjunto como PDF y pasa las originales a rechazadas ("Juntada en la N° X"), para
+// que no se agenden ni se cuenten dos veces. La nueva queda por confirmar: se agenda como cualquiera.
+export async function juntarEnVenta(cotNums, cliente, { pdf, alAvanzar = () => {} } = {}) {
+  alAvanzar('Leyendo las cotizaciones')
+  const completas = []
+  for (const cotNum of cotNums) {
+    const { ok, quote, error } = await apiFetch('/.netlify/functions/get-quotes?cotNum=' + encodeURIComponent(cotNum))
+    if (!ok || !quote) throw new Error(error || `No se encontró la cotización N${cotNum}`)
+    completas.push(quote)
+  }
+  const { venta, motivo } = juntarEnUnaVenta(completas, cliente)
+  alAvanzar('Creando la venta')
+  const creada = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ crear: true, ...venta }) })
+  if (!creada.ok) throw new Error(creada.error || 'No se pudo crear la venta')
+  const nuevo = creada.cotNum
+  let aviso = ''
+  try {
+    alAvanzar('Subiendo el presupuesto')
+    const archivo = pdf || await armarPresupuesto(cotNums, cliente)
+    const bytes = await (await fetch(archivo.blobUrl)).arrayBuffer()
+    const subida = await apiFetch('/.netlify/functions/upload-pdf', { method: 'POST', body: JSON.stringify({ pdfBase64: aBase64(bytes), fileName: archivo.nombreArchivo, cotNum: nuevo }) })
+    if (!subida.ok || !subida.viewUrl) throw new Error(subida.error || 'Drive no respondió')
+    const conPdf = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ cotNum: nuevo, pdfUrl: subida.viewUrl }) })
+    if (!conPdf.ok) throw new Error(conPdf.error || 'No se guardó el link del PDF')
+  } catch (e) { aviso = `La venta quedó creada, pero el PDF no se pudo subir (${e.message}).` }
+  alAvanzar('Marcando las originales como juntadas')
+  for (const cotNum of cotNums) {
+    const r = await apiFetch('/.netlify/functions/save-quote', { method: 'POST', body: JSON.stringify({ cotNum, status: 'rechazada', motivoRechazo: motivo(nuevo) }) })
+    if (!r.ok) aviso += ` No se pudo marcar la N° ${cotNum} como juntada: hazlo a mano.`
+  }
+  return { cotNum: nuevo, aviso: aviso.trim() }
+}
 
 export const MAX_JUNTAR = 6
 
@@ -31,7 +68,7 @@ export async function armarPresupuesto(cotNums, cliente, { titulos = {}, alAvanz
 }
 
 // La barra de arriba mientras se eligen: las elegidas (en orden), los datos del cliente y el boton.
-export default function PanelJuntar({ elegidas, quotes, onQuitar, onMover, onCancelar }) {
+export default function PanelJuntar({ elegidas, quotes, onQuitar, onMover, onCancelar, onJuntada }) {
   const lista = elegidas.map(n => quotes.find(q => String(q.cotNum) === String(n))).filter(Boolean)
   const primera = lista[0]
   const [cliente, setCliente] = useState({ nombre: '', telefono: '', direccion: '', email: '' })
@@ -47,6 +84,20 @@ export default function PanelJuntar({ elegidas, quotes, onQuitar, onMover, onCan
   }, [elegidas.join(','), quotes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalSuma = lista.reduce((s, q) => s + (Number(q.total) || 0), 0)
+  // Vista previa de la venta junta (o por que no se puede): con lo que ya esta en la lista.
+  let previa = null, impedimento = ''
+  try { if (lista.length >= 2) previa = juntarEnUnaVenta(lista, cliente) } catch (e) { impedimento = e.message }
+  const juntar = async () => {
+    if (!previa) return
+    const ok = window.confirm(`Se crea una venta nueva con las ${lista.length} cotizaciones por ${fmt(previa.venta.total)} (con IVA), lista para agendar el trabajo completo.\n\nLas originales (${lista.map(q => 'N° ' + q.cotNum).join(', ')}) quedan en Rechazadas como "Juntada en la N° …", para no agendarlas ni contarlas dos veces.\n\n¿Seguir?`)
+    if (!ok) return
+    setError('')
+    try {
+      const r = await juntarEnVenta(lista.map(q => q.cotNum), cliente, { pdf: listo, alAvanzar: setEtapa })
+      if (r.aviso) window.alert(r.aviso)
+      onJuntada?.(r.cotNum)
+    } catch (e) { setError(e.message) } finally { setEtapa('') }
+  }
   const armar = async () => {
     setError(''); setListo(null)
     try { setListo(await armarPresupuesto(lista.map(q => q.cotNum), cliente, { alAvanzar: setEtapa })) }
@@ -93,7 +144,16 @@ export default function PanelJuntar({ elegidas, quotes, onQuitar, onMover, onCan
           <a href={listo.blobUrl} target="_blank" rel="noreferrer" style={{ ...styles.btnSecondary, textDecoration: 'none' }}>Abrir PDF</a>
           <a href={listo.blobUrl} download={listo.nombreArchivo} data-testid="descargar-presupuesto" style={{ ...styles.btnSecondary, textDecoration: 'none' }}>Descargar</a>
         </>}
+        {lista.length >= 2 && (
+          <button onClick={juntar} disabled={!previa || !!etapa || !cliente.nombre.trim() || lista.length > MAX_JUNTAR}
+            title={impedimento || 'Crea una sola venta con todo, para agendar el trabajo completo de una vez'}
+            style={{ ...styles.btnSecondary, color: C.green, borderColor: C.green, opacity: previa ? 1 : .5 }}>
+            📅 Juntar en una venta para agendar{previa ? ` · ${fmt(previa.venta.total)}` : ''}
+          </button>
+        )}
       </div>
+      {impedimento && lista.length >= 2 && <div style={{ fontSize: 12.5, color: C.red }}>Para juntarlas en una venta: {impedimento}</div>}
+      {previa && previa.venta.total !== totalSuma && <div style={{ fontSize: 12.5, color: C.textSub }}>La venta junta suma {fmt(previa.venta.total)} y no {fmt(totalSuma)} porque el recargo de sábado no se copia: se vuelve a poner solo si el trabajo completo se agenda un sábado.</div>}
       {error && <div style={styles.errorBox}>{error}</div>}
     </div>
   )

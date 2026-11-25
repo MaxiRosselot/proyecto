@@ -58,6 +58,26 @@ try {
   if (paginas !== 1 + 2 + 3) throw new Error('Paginas: ' + paginas)
   expect(descarga.suggestedFilename()).toMatch(/Presupuesto Cliente Varias Bodegas - 2 bodegas/)
   await page.screenshot({ path: path.join(evidence, '02-listo.png') })
+
+  // Juntar en una venta para agendar el trabajo completo.
+  page.once('dialog', d => d.accept())
+  await panel.getByRole('button', { name: /Juntar en una venta para agendar · \$249\.900/ }).click()
+  await expect(panel).toHaveCount(0, { timeout: 120000 })
+  const { quotes } = await api('get-quotes')
+  const nueva = quotes.find(q => q.nombre === 'Cliente Varias Bodegas' && q.status === 'por confirmar')
+  if (!nueva) throw new Error('No se creó la venta junta')
+  expect(Number(nueva.total)).toBe(249900)
+  expect(nueva.repisas.map(r => r.label)).toEqual(['Bodega 1 · Repisa', 'Bodega 2 · Repisa'])
+  expect(nueva.pdfUrl).toBeTruthy()
+  for (const n of [a.cotNum, b.cotNum]) {
+    const o = quotes.find(q => String(q.cotNum) === String(n))
+    expect(o.status).toBe('rechazada')
+    expect(o.motivoRechazo).toBe(`Juntada en la N° ${nueva.cotNum} (N° ${a.cotNum} + N° ${b.cotNum})`)
+  }
+  // Queda abierta y se agenda como cualquier cotizacion.
+  const tarjeta = page.locator('#cot-' + nueva.cotNum)
+  await expect(tarjeta.getByTestId('siguiente-paso').getByRole('button', { name: 'Agendar instalación' })).toBeVisible()
+  await page.screenshot({ path: path.join(evidence, '03-venta-junta.png') })
   if (errors.length) throw new Error(errors.join('\n'))
-  console.log('verify-juntar: ok', { a: a.cotNum, b: b.cotNum, paginas })
+  console.log('verify-juntar: ok', { a: a.cotNum, b: b.cotNum, paginas, nueva: nueva.cotNum })
 } finally { await browser.close() }
