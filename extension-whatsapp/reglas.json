@@ -1,0 +1,49 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        {
+          "header": "x-frame-options",
+          "operation": "remove"
+        },
+        {
+          "header": "content-security-policy",
+          "operation": "remove"
+        },
+        {
+          "header": "content-security-policy-report-only",
+          "operation": "remove"
+        }
+      ],
+      "requestHeaders": [
+        {
+          "header": "sec-fetch-dest",
+          "operation": "set",
+          "value": "document"
+        },
+        {
+          "header": "sec-fetch-site",
+          "operation": "set",
+          "value": "none"
+        }
+      ]
+    },
+    "condition": {
+      "requestDomains": [
+        "web.whatsapp.com"
+      ],
+      "initiatorDomains": [
+        "repisasdonmaxi.cl",
+        "localhost",
+        "127.0.0.1",
+        "web.whatsapp.com"
+      ],
+      "resourceTypes": [
+        "sub_frame"
+      ]
+    }
+  }
+]

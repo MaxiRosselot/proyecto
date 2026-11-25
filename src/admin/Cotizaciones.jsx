@@ -14,7 +14,7 @@ import PanelJuntar from './JuntarCotizaciones.jsx'
 import { resumenPagos } from '../../netlify/functions/lib/pagos-resumen.mjs'
 import { porcentajeDescuento, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
 import { estadoSeguimiento, mensajePregunta, quitarPregunta, quitarRespuesta, registrarPregunta, registrarRespuesta } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
-import { linkWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
+import { abrirWhatsapp } from './whatsappPanel.js'
 
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
 const AMBAR = '#D97706'
@@ -61,7 +61,7 @@ function SeguimientoWhatsapp({ q, onGuardar }) {
       <span style={{ ...styles.badge(color), cursor: e.veces || e.respondio ? 'pointer' : 'default' }} title={e.veces ? 'Ver o corregir las fechas' : undefined}
         onClick={parar(() => (e.veces || q.seguimiento?.respondio) && setVerFechas(v => !v))}>{texto}{e.tocaPreguntar ? ' · toca preguntar' : ''}</span>
       {q.telefono && <button type="button" disabled={guardando} style={{ ...boton, color: '#15803d', borderColor: '#86efac' }} title="Abre WhatsApp con el mensaje listo y lo anota"
-        onClick={parar(() => { window.open(linkWhatsapp(q.telefono, mensajePregunta(q)), '_blank'); guardar(registrarPregunta(q.seguimiento, hoy)) })}>Preguntar</button>}
+        onClick={parar(() => { abrirWhatsapp(q.telefono, mensajePregunta(q), q.nombre); guardar(registrarPregunta(q.seguimiento, hoy)) })}>Preguntar</button>}
       {!anotando && <button type="button" disabled={guardando} style={boton} onClick={parar(() => abrir('pregunta'))}>✓ Ya le pregunté</button>}
       {!anotando && e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} onClick={parar(() => abrir('respuesta'))}>Respondió</button>}
       {anotando && (

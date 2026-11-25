@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Don Maxi: WhatsApp en el panel",
+  "version": "1.0.0",
+  "description": "Deja abrir WhatsApp Web dentro del panel de Repisas Don Maxi (repisasdonmaxi.cl/admin). No lee ni envía mensajes.",
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": ["https://web.whatsapp.com/*"],
+  "declarative_net_request": {
+    "rule_resources": [{ "id": "whatsapp_en_panel", "enabled": true, "path": "reglas.json" }]
+  },
+  "content_scripts": [{
+    "matches": ["https://repisasdonmaxi.cl/*", "https://www.repisasdonmaxi.cl/*", "http://localhost/*", "http://127.0.0.1/*"],
+    "js": ["aviso.js"],
+    "run_at": "document_start"
+  }],
+  "icons": { "128": "icono.png" }
+}

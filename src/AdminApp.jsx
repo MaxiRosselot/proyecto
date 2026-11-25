@@ -13,6 +13,8 @@ import FotosWebSection from './admin/FotosWeb.jsx'
 import UsoPanel from './admin/UsoPanel.jsx'
 import PendientesSection from './admin/Pendientes.jsx'
 import { fijarSeccionUso } from './admin/registroUso.js'
+import VentanaWhatsapp from './admin/VentanaWhatsapp.jsx'
+import { EVENTO_PARA_ENVIAR, leerAbierto, leerAncho, guardarAbierto, leerLinkWhatsapp, marcarVentanaAbierta } from './admin/whatsappPanel.js'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -114,6 +116,29 @@ export default function AdminApp() {
   const [cotizacionParaAbrir, setCotizacionParaAbrir] = useState(null)
   const [cotizacionEnfocada, setCotizacionEnfocada]   = useState(null)
   const isMobile = useIsMobile()
+  // WhatsApp a la derecha (solo PC). Se monta la primera vez que se abre y despues solo se oculta,
+  // para no perder el chat al cambiar de seccion o cerrarla un rato.
+  const [whatsapp, setWhatsapp]                   = useState(leerAbierto)
+  const [whatsappMontado, setWhatsappMontado]     = useState(leerAbierto)
+  const [anchoWhatsapp, setAnchoWhatsapp]         = useState(leerAncho)
+  const whatsappVisible = whatsapp && !isMobile
+  function alternarWhatsapp(v) { setWhatsapp(v); guardarAbierto(v); if (v) setWhatsappMontado(true) }
+  useEffect(() => { marcarVentanaAbierta(whatsappVisible) }, [whatsappVisible])
+
+  // Con WhatsApp abierto, los links de WhatsApp del panel (wa.me) no abren otra pestaña:
+  // dejan el mensaje listo en la ventana.
+  useEffect(() => {
+    if (!whatsappVisible) return
+    const alClic = ev => {
+      const a = ev.target.closest?.('a[href]')
+      const link = a && leerLinkWhatsapp(a.href)
+      if (!link) return
+      ev.preventDefault()
+      window.dispatchEvent(new CustomEvent(EVENTO_PARA_ENVIAR, { detail: link }))
+    }
+    document.addEventListener('click', alClic, true)
+    return () => document.removeEventListener('click', alClic, true)
+  }, [whatsappVisible])
 
   // Registro de uso del panel (Inicio → Uso del panel): que secciones y botones se ocupan.
   useEffect(() => { if (authed) fijarSeccionUso(section) }, [authed, section])
@@ -267,19 +292,28 @@ export default function AdminApp() {
           </button>
         </div>
       </aside>
-      <div style={{ marginLeft: 220, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ marginLeft: 220, marginRight: whatsappVisible ? anchoWhatsapp : 0, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <header style={{ background: C.surface, borderBottom: '1px solid ' + C.border, padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 30 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Icon name={currentSection?.icon} size={17} color={C.orange} />
             <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{currentSection?.label}</span>
           </div>
-          <div style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '4px 12px', borderRadius: 6, fontWeight: 500 }}>Repisas Don Maxi</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '4px 12px', borderRadius: 6, fontWeight: 500 }}>Repisas Don Maxi</div>
+            {!whatsappVisible && (
+              <button type="button" onClick={() => alternarWhatsapp(true)} title="Abre WhatsApp Web aquí, a la derecha"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #86efac', background: '#F0FDF4', color: '#15803d', borderRadius: 8, padding: '5px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#25D366' }} />WhatsApp
+              </button>
+            )}
+          </div>
         </header>
         {/* La planilla de instalaciones usa todo el ancho, como el Excel; el resto, una columna legible. */}
         <main style={{ flex: 1, padding: '28px 32px', maxWidth: ['instalaciones', 'pendientes'].includes(section) ? 'none' : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <SectionContent {...contentProps} />
         </main>
       </div>
+      {whatsappMontado && <VentanaWhatsapp visible={whatsappVisible} ancho={anchoWhatsapp} onAncho={setAnchoWhatsapp} onCerrar={() => alternarWhatsapp(false)} />}
     </div>
   )
 }
