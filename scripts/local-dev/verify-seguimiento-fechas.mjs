@@ -16,7 +16,7 @@ try {
   const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
   const api = async (ruta, data) => (await page.request.fetch(base + '/.netlify/functions/' + ruta, { method: data ? 'POST' : 'GET', data, headers: { Authorization: 'Bearer ' + token } })).json()
   const nombre = 'Prueba Seguimiento ' + Date.now().toString(36)
-  const q = await api('save-quote', { crear: true, nombre, telefono: '9 1111 2222', subtotal: 100000, iva: 19000, total: 119000, repisas: [{ largo: 1.2, prof: .45, alto: 2, niveles: 5, unidades: 1, valor: 100000 }], adicionales: {} })
+  const q = await api('save-quote', { crear: true, nombre, telefono: '9 ' + String(Date.now()).slice(-8), subtotal: 100000, iva: 19000, total: 119000, repisas: [{ largo: 1.2, prof: .45, alto: 2, niveles: 5, unidades: 1, valor: 100000 }], adicionales: {} })
   const hace5 = sumarDias(ahoraEnZona().fecha, -5)
 
   await page.getByRole('navigation').getByRole('button', { name: 'Cotizaciones', exact: true }).click()
