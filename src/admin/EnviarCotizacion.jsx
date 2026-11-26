@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { styles } from './utils.js'
 import { linkWhatsapp, mensajeCotizacion, mensajeEnvioCotizacion, mensajeHorarios } from '../../netlify/functions/lib/mensajes.mjs'
-import { disponibilidadAgenda, duracionInstalacionMin, duracionTexto } from '../../netlify/functions/lib/agenda-horas.mjs'
+import { BLOQUE_MIN, DURACION_CLIENTE, disponibilidadAgenda } from '../../netlify/functions/lib/agenda-horas.mjs'
 import { RECARGO_SABADO_PCT } from '../../netlify/functions/lib/totales.mjs'
 import { ahoraEnZona, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 
@@ -32,7 +32,7 @@ export function CopiarMensajeAgenda({ link, tamano = 12 }) {
 }
 
 // Copia los horarios libres de los proximos 10 dias para esta instalacion, para agendar a mano a
-// quien no entra a su link. Son los mismos que ve el cliente en /agendar (misma duracion y agenda).
+// quien no entra a su link. Son los mismos que ve el cliente en /agendar (mismos bloques y agenda).
 export const DIAS_HORARIOS = 10
 export function CopiarHorarios({ link, nombre, tamano = 12 }) {
   const [estado, setEstado] = useState('')
@@ -44,10 +44,9 @@ export function CopiarHorarios({ link, nombre, tamano = 12 }) {
       const r = await fetch(`/.netlify/functions/agendar?c=${encodeURIComponent(url.searchParams.get('c'))}&t=${encodeURIComponent(url.searchParams.get('t'))}`).then(x => x.json())
       if (!r.ok) throw new Error(r.error || 'No se pudo leer la agenda')
       if (!r.horario) throw new Error(r.estado === 'instalada' ? 'Esta instalación ya se hizo' : 'No se pudo leer su agenda')
-      const duracion = duracionInstalacionMin(r.cotizacion, r.cotizacion.adicionales)
       const hasta = sumarDias(ahoraEnZona().fecha, DIAS_HORARIOS)
-      const dias = disponibilidadAgenda(r.ocupados || {}, duracion, new Date(), r.horario).filter(d => d.fecha <= hasta)
-      const texto = mensajeHorarios({ nombre, duracion: duracionTexto(duracion), dias, recargoSabadoPct: RECARGO_SABADO_PCT })
+      const dias = disponibilidadAgenda(r.ocupados || {}, BLOQUE_MIN, new Date(), r.horario).filter(d => d.fecha <= hasta)
+      const texto = mensajeHorarios({ nombre, duracion: DURACION_CLIENTE, dias, recargoSabadoPct: RECARGO_SABADO_PCT })
       try { await navigator.clipboard.writeText(texto) } catch { window.prompt('Copia los horarios:', texto) }
       setEstado('✓ Horarios copiados'); setTimeout(() => setEstado(''), 2500)
     } catch (e) { setEstado(''); alert('No se pudieron copiar los horarios: ' + e.message) }

@@ -37,13 +37,13 @@ test('el link firmado abre la cotizacion; uno alterado no', async () => {
   assert.equal((await leer(await atenderAgendaGet({ c: '1500', t: 'x' }, deps))).status, 404)
 })
 
-test('agenda con un servicio: duracion, calendario, total y correos al cliente y a Don Maxi', async () => {
-  // El miercoles 21 hay otra instalacion de 10:00 a 13:00.
+test('agenda con un servicio: bloque de 2 h, calendario, total y correos al cliente y a Don Maxi', async () => {
+  // El miercoles 21 hay otra instalacion que Maxi alargo de 10:00 a 13:00.
   const { almacen, deps, correos, insertados } = await preparar([{ tipo: 'instalacion', id: 'otra', cotNum: '9', fecha: '2026-10-21', minutoInicio: 600, minutoFin: 780, todoElDia: false }])
-  // $200.000 en repisas + retiro y orden = 2 h 30: de 13:00 a 15:30.
+  // Se ofrece desde las 13:00 y el evento queda de 2 h (Maxi lo alarga si hace falta).
   const r = await leer(await atenderAgendaPost({ c: '1500', t: T, fecha: '2026-10-21', inicio: '13:00', servicios: { retiro_orden: 1 } }, deps))
   assert.equal(r.ok, true, r.error)
-  assert.deepEqual(r.cotizacion.instalacion, { fecha: '2026-10-21', inicio: '13:00', fin: '15:30' })
+  assert.deepEqual(r.cotizacion.instalacion, { fecha: '2026-10-21', inicio: '13:00', fin: '15:00' })
   const q = await obtenerCotizacion(almacen, 1500)
   assert.equal(q.adicionales.qty_retiro_orden, 1)
   assert.equal(Number(q.total), (200000 + 40000) * 1.19)
@@ -51,12 +51,12 @@ test('agenda con un servicio: duracion, calendario, total y correos al cliente y
   assert.equal(insertados.length, 1)
   assert.equal(correos.length, 2)
   assert.match(correos[0].asunto, /quedó agendada/)
-  assert.match(correos[0].texto, /De 13:00 a 15:30 hrs[\s\S]*Retiro y orden de artículos[\s\S]*pago es una vez terminada/)
+  assert.match(correos[0].texto, /Llegamos a las 13:00 hrs \(el trabajo dura entre 2 y 3 horas\)[\s\S]*Retiro y orden de artículos[\s\S]*pago es una vez terminada/)
   assert.match(correos[0].texto, /agendar\?c=1500/)
   assert.equal(correos[1].para, 'admin@example.cl')
   assert.match(correos[1].asunto, /Agendó: Marta Díaz · Miércoles/)
   // Trae el mensaje para confirmarle por WhatsApp, listo para copiar y con el link al chat.
-  assert.match(correos[1].texto, /Falta confirmarle por WhatsApp[\s\S]*confirmar su instalación de mañana miércoles 21 de octubre, de 13:00 a 15:30[\s\S]*wa\.me\/56977778888/)
+  assert.match(correos[1].texto, /Falta confirmarle por WhatsApp[\s\S]*confirmar su instalación de mañana miércoles 21 de octubre, de 13:00 a 15:00[\s\S]*wa\.me\/56977778888/)
   // Al volver a entrar ve su hora.
   const g = await leer(await atenderAgendaGet({ c: '1500', t: T }, deps))
   assert.equal(g.estado, 'agendada')

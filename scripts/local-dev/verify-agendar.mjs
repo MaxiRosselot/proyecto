@@ -66,29 +66,28 @@ try {
   const enlace = new URL(guardada.linkAgenda); enlace.host = new URL(base).host; enlace.protocol = new URL(base).protocol
   await cel.goto(enlace.toString())
   await expect(cel.getByRole('heading', { name: /agenda tu instalación/ })).toBeVisible()
-  await expect(cel.getByTestId('agenda-duracion')).toContainText('aprox. 2 h.')
+  await expect(cel.getByTestId('agenda-duracion')).toContainText('entre 2 y 3 horas')
   await expect(cel.getByTestId('agenda-total')).toContainText('$238.000')
-  // Suma retiro y orden: +$40.000 neto y la instalacion pasa a 2 h 30.
+  // Suma retiro y orden: +$40.000 neto (las horas no cambian: bloques de 2 h).
   await cel.getByRole('checkbox', { name: 'Retiro y orden de artículos' }).check()
   await expect(cel.getByTestId('agenda-total')).toContainText('$285.600')
-  await expect(cel.getByTestId('agenda-duracion')).toContainText('2 h 30 min')
-  // El dia cerrado no aparece; el de solo tarde (13 a 16): al inicio o al final.
-  await expect(cel.getByRole('button', { name: new RegExp(`^${fechaLarga(cerrado)} de`) })).toHaveCount(0)
+  // El dia cerrado no aparece; el de solo tarde (13 a 16): al inicio o en el bloque de las 14.
+  await expect(cel.getByRole('button', { name: new RegExp(`^${fechaLarga(cerrado)} a las`) })).toHaveCount(0)
   const primerDia = cel.getByTestId('dia-agenda').first()
-  await expect(primerDia.getByRole('button')).toHaveText(['13:00a 15:30', '13:30a 16:00'])
+  await expect(primerDia.getByRole('button')).toHaveText(['13:00hrs', '14:00hrs'])
   await cel.screenshot({ path: path.join(evidence, '01-elegir.png'), fullPage: true })
   await primerDia.getByRole('button').first().click()
   const antes = asuntos().length
   await cel.getByRole('button', { name: 'Agendar instalación' }).click()
   const listo = cel.getByTestId('agenda-lista')
-  await expect(listo).toContainText('De 13:00 a 15:30 hrs')
+  await expect(listo).toContainText('A las 13:00 hrs')
   await expect(listo).toContainText('Te enviamos un correo')
   await expect(listo).toContainText('Te escribiremos por WhatsApp para confirmar')
   await expect(listo).toContainText('El pago es una vez terminada la instalación')
   await cel.screenshot({ path: path.join(evidence, '02-listo.png'), fullPage: true })
 
   const q = (await api('get-quotes?cotNum=' + guardada.cotNum)).quote
-  expect([q.status, q.adicionales.qty_retiro_orden, Number(q.total), q.instalacion.fecha, q.instalacion.inicio, q.instalacion.fin, q.instalacion.agendadaPorCliente]).toEqual(['confirmada', 1, 285600, soloTarde, '13:00', '15:30', true])
+  expect([q.status, q.adicionales.qty_retiro_orden, Number(q.total), q.instalacion.fecha, q.instalacion.inicio, q.instalacion.fin, q.instalacion.agendadaPorCliente]).toEqual(['confirmada', 1, 285600, soloTarde, '13:00', '15:00', true])
   const nuevos = asuntos().slice(antes).join('\n')
   expect(nuevos).toMatch(/Tu instalación quedó agendada/)
   expect(nuevos).toMatch(/📅 Agendó: Paula Agenda/)
@@ -96,7 +95,7 @@ try {
   // Al volver a entrar ve su hora, y puede cambiarla cuando quiera.
   await cel.goto(enlace.toString())
   const actual = cel.getByTestId('agenda-actual')
-  await expect(actual).toContainText('De 13:00 a 15:30 hrs')
+  await expect(actual).toContainText('A las 13:00 hrs')
   await actual.getByRole('button', { name: 'Cambiar día u hora' }).click()
   await expect(cel.getByRole('heading', { name: 'Cambia tu día u hora' })).toBeVisible()
   await cel.getByRole('button', { name: 'Mantener mi hora actual' }).click()

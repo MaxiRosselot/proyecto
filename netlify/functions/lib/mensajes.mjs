@@ -251,7 +251,7 @@ export function correoAgendaCliente({ nombre, email, cotNum, direccion, adiciona
       `${reagendada ? 'Reagendamos' : 'Agendamos'} la instalación de tu cotización N° ${cotNum} ✅`,
       '',
       `📅 ${fechaLarga(instalacion.fecha)}`,
-      `🕙 De ${instalacion.inicio} a ${instalacion.fin} hrs (duración aprox. ${duracion(instalacion.inicio, instalacion.fin)})`,
+      `🕙 Llegamos a las ${instalacion.inicio} hrs (el trabajo dura entre 2 y 3 horas)`,
       ...(direccion ? [`📍 ${direccion}`] : []),
       ...(servicios.length ? ['', 'Servicios adicionales:', ...servicios] : []),
       '',
@@ -327,7 +327,7 @@ export function mensajeHorarios({ nombre = '', duracion = '', dias = [], recargo
   const primerNombre = String(nombre).trim().split(/\s+/)[0]
   if (!dias.length) return `Hola${primerNombre ? ' ' + primerNombre : ''} 👋 Por ahora no me quedan horarios libres en los próximos días. Cuéntame qué días te acomodan y lo buscamos 🙌`
   return [
-    `Hola${primerNombre ? ' ' + primerNombre : ''} 👋 Estos son los horarios disponibles para tu instalación${duracion ? ` (dura aprox. ${duracion})` : ''}:`,
+    `Hola${primerNombre ? ' ' + primerNombre : ''} 👋 Estos son los horarios disponibles para tu instalación${duracion ? ` (dura ${duracion})` : ''}:`,
     '',
     ...lineas,
     '',

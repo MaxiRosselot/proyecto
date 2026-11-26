@@ -1,10 +1,12 @@
 // netlify/functions/calendario.mjs — admin
 //   GET ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD → eventos del calendario del negocio en ese rango
-//   (visitas, instalaciones con su cotizacion y pagos, y el resto de los eventos).
+//   (visitas, instalaciones con su cotizacion y pagos, y el resto de los eventos). Las instalaciones
+//   movidas o alargadas en Google pasan de paso a su venta (lib/sincronizar-calendario.mjs).
 import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { almacenSheets, listarCotizaciones } from './lib/cotizaciones.mjs'
 import { MAX_DIAS, eventosEntre } from './lib/calendario.mjs'
+import { sincronizarDesdeCalendario } from './lib/sincronizar-calendario.mjs'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,10 +28,10 @@ export async function handler(event) {
   try {
     const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
     auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
-    const cotizaciones = process.env.GOOGLE_SHEET_ID
-      ? (await listarCotizaciones(almacenSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID))).quotes
-      : []
+    const almacen = process.env.GOOGLE_SHEET_ID ? almacenSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID) : null
+    const cotizaciones = almacen ? (await listarCotizaciones(almacen)).quotes : []
     const eventos = await eventosEntre(google.calendar({ version: 'v3', auth }), process.env.CALENDAR_ID, desde, hasta, cotizaciones)
+    if (almacen) await sincronizarDesdeCalendario(almacen, eventos, cotizaciones).catch(e => console.warn('calendario→venta:', e.message))
     return responder(200, { ok: true, eventos })
   } catch (err) {
     console.error('calendario error:', err)

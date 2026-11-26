@@ -12,10 +12,13 @@
 //     mas cercana, entre 1 h y la jornada (6 h).
 //   · jornada segun Admin → Horarios → Instalaciones (por defecto lunes a viernes de 10:00 a 16:00);
 //     un dia puede tener varios rangos (p. ej. solo la tarde) o estar cerrado. Una instalacion a la vez.
-//   · todo espacio libre donde quepa el trabajo se ofrece: siempre pegado a su inicio y a su fin
-//     (junto a la otra instalacion o al borde de la jornada). Ademas, las horas que dejan libre 0 o
-//     al menos 2 h antes y despues (para no cortar el dia). En un dia vacio: 3 h → 10 o 13;
-//     2 h → 10, 12 o 14. (2026-11-16: antes solo esas, y se perdian dias con espacio.)
+//   · horas (2026-11-26, pedido del usuario: "hay que hacerlo mas simple"): tres bloques de 2 h,
+//     10-12, 12-14 y 14-16. Al cliente se le dice que su trabajo dura entre 2 y 3 horas; el evento
+//     se crea de 2 h y Maxi lo alarga en el calendario (Google o panel) si el trabajo dura mas. Lo
+//     que el alarga o mueve se respeta: se ofrece cada bloque que queda libre entero y, ademas, el
+//     inicio de cada espacio libre de al menos 2 h (si 10-13 esta tomado, se ofrecen 13:00 y 14:00).
+//     Sin tope de trabajos por dia: caben los que caben. La duracion estimada (abajo) queda solo
+//     como referencia, ya no decide las horas.
 //   · se puede agendar el mismo dia hasta las 8:00; hasta las semanas que diga el horario (4).
 //   · reagendar: cuando quiera, incluso si la hora ya paso (solo no, si ya esta instalada).
 import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, rangosDelDia, sumarDias } from './horarios.mjs'
@@ -25,11 +28,14 @@ export const MISMO_DIA_HASTA_MIN = 8 * 60
 // La jornada mas larga: un trabajo mas largo se agenda como jornada completa.
 export const MAX_DURACION_MIN = 6 * 60
 export const MIN_DURACION_MIN = 60
+// Los bloques que se ofrecen y lo que dura cada uno (el evento que se crea).
+export const BLOQUE_MIN = 120
+export const BLOQUES = ['10:00', '12:00', '14:00']
+// Lo que se le dice al cliente de cuanto dura su trabajo.
+export const DURACION_CLIENTE = 'entre 2 y 3 horas'
 // Los servicios que el cliente puede agregar desde su link (clave y si va por cantidad).
 export const SERVICIOS_CLIENTE = [['retiro_orden', false], ['retiro_basura', false], ['cajas', true], ['bici', true]]
 
-// Lo minimo libre que tiene que quedar al lado de una instalacion (o nada).
-export const HUECO_MINIMO_MIN = 120
 const MODULO_MAX_CM = 243
 
 // La bodega segun el modelo 3D: m² (largo × ancho), en cuantos muros van las repisas, cuantos
@@ -83,8 +89,9 @@ export const duracionTexto = min => [Math.floor(min / 60) ? `${Math.floor(min / 
 const JORNADA_POR_DEFECTO = [{ desde: '10:00', hasta: '16:00' }]
 
 // Horas de inicio posibles en un dia, dados los tramos ocupados [{ desde, hasta }] en minutos y
-// los rangos de trabajo de ese dia ([{ desde: 'HH:MM', hasta: 'HH:MM' }]).
-export function horasDelDia(ocupados, duracionMin, rangos = JORNADA_POR_DEFECTO) {
+// los rangos de trabajo de ese dia ([{ desde: 'HH:MM', hasta: 'HH:MM' }]): cada bloque libre entero
+// y el inicio de cada espacio libre donde cabe un bloque.
+export function horasDelDia(ocupados, duracionMin = BLOQUE_MIN, rangos = JORNADA_POR_DEFECTO) {
   const huecos = []
   for (const rango of rangos) {
     const ini = aMinutos(rango.desde), fin = aMinutos(rango.hasta)
@@ -99,24 +106,18 @@ export function horasDelDia(ocupados, duracionMin, rangos = JORNADA_POR_DEFECTO)
     }
     if (cursor < fin) huecos.push([cursor, fin])
   }
-  // En cada hueco donde cabe: pegado a su inicio y a su fin, y cada media hora que deja libre
-  // 0 o al menos 2 h antes y despues.
-  const sirve = libre => libre === 0 || libre >= HUECO_MINIMO_MIN
   const horas = new Set()
   for (const [a, b] of huecos) {
     if (b - a < duracionMin) continue
     horas.add(a)
-    horas.add(b - duracionMin)
-    for (let inicio = a; inicio + duracionMin <= b; inicio += 30) {
-      if (sirve(inicio - a) && sirve(b - inicio - duracionMin)) horas.add(inicio)
-    }
+    for (const bloque of BLOQUES.map(aMinutos)) if (bloque >= a && bloque + duracionMin <= b) horas.add(bloque)
   }
   return [...horas].sort((x, y) => x - y).map(m => ({ inicio: aHHMM(m), fin: aHHMM(m + duracionMin) }))
 }
 
 // Dias y horas libres. ocupadosPorFecha: { 'AAAA-MM-DD': [{ desde, hasta }] }; horario: el de
 // Admin → Horarios → Instalaciones (semanal, fechas especiales y semanas).
-export function disponibilidadAgenda(ocupadosPorFecha, duracionMin, ahora = new Date(), horario = HORARIO_INSTALACIONES) {
+export function disponibilidadAgenda(ocupadosPorFecha, duracionMin = BLOQUE_MIN, ahora = new Date(), horario = HORARIO_INSTALACIONES) {
   const { fecha: hoy, minutos } = ahoraEnZona(ahora)
   const { hasta } = rangoAgendaCliente(ahora, horario)
   const dias = []

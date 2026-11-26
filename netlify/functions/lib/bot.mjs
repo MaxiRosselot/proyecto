@@ -14,7 +14,7 @@ import { MAESTRO, MARCA } from './marca.mjs'
 import { linkWhatsapp } from './mensajes.mjs'
 import { MEDIOS_PAGO, resumenPagos } from './pagos-resumen.mjs'
 import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, rangosDelDia, sumarDias } from './horarios.mjs'
-import { disponibilidadAgenda, duracionInstalacionMin, duracionTexto, horasDelDia, ocupadosAgenda } from './agenda-horas.mjs'
+import { BLOQUE_MIN, disponibilidadAgenda, duracionTexto, horasDelDia, ocupadosAgenda } from './agenda-horas.mjs'
 import { avisoSinRespuesta, confirmacionCortaInstalacion, fichaCotizacion, lineasRepisas, serviciosDe } from './telegram.mjs'
 import { diasDesde } from './seguimiento.mjs'
 import { marcarYaCompro, sinWhatsapp } from './seguimiento-whatsapp.mjs'
@@ -271,7 +271,7 @@ export function fichasDelDia(quotes, fecha, hoy) {
 function duracionDe(q) {
   const i = q.instalacion || {}
   if (i.inicio && i.fin && aMinutos(i.fin) > aMinutos(i.inicio)) return aMinutos(i.fin) - aMinutos(i.inicio)
-  return duracionInstalacionMin(q, q.adicionales || {})
+  return BLOQUE_MIN
 }
 
 // ---------- El webhook ----------

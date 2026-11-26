@@ -8,7 +8,7 @@
 import { avisoInstalacionAgendada } from './telegram.mjs'
 import { ErrorCotizacion, actualizarCotizacion, listarCotizaciones, obtenerCotizacion } from './cotizaciones.mjs'
 import {
-  SERVICIOS_CLIENTE, disponibilidadAgenda, duracionInstalacionMin, ocupadosAgenda, puedeReagendar, rangoAgendaCliente
+  BLOQUE_MIN, SERVICIOS_CLIENTE, disponibilidadAgenda, ocupadosAgenda, puedeReagendar, rangoAgendaCliente
 } from './agenda-horas.mjs'
 import { HORARIO_INSTALACIONES } from './horarios.mjs'
 import { agendarInstalacion } from './instalaciones.mjs'
@@ -125,9 +125,8 @@ async function agendarPost(body, deps) {
     falla('Esta instalación no tiene hora para cambiar: escríbenos por WhatsApp.', 409)
 
   const adicionales = conServiciosElegidos(cotizacion.adicionales || {}, body.servicios || {})
-  const duracion = duracionInstalacionMin(cotizacion, adicionales)
   const horario = await horarioDe(deps)
-  const dias = disponibilidadAgenda(await ocupadosPara(cotizacion, deps, horario), duracion, ahora, horario)
+  const dias = disponibilidadAgenda(await ocupadosPara(cotizacion, deps, horario), BLOQUE_MIN, ahora, horario)
   const hora = dias.find(d => d.fecha === body.fecha)?.horas.find(h => h.inicio === body.inicio)
   if (!hora) falla('Ese horario ya no está disponible. Elige otro, por favor.', 409)
 

@@ -10,7 +10,9 @@ import { google } from 'googleapis'
 import { AUTH_HEADERS, requireAdmin } from './lib/admin-auth.mjs'
 import { almacenSheets, listarCotizaciones } from './lib/cotizaciones.mjs'
 import { enviarCorreoGmail } from './lib/correo.mjs'
-import { ahoraEnZona } from './lib/horarios.mjs'
+import { eventosEntre } from './lib/calendario.mjs'
+import { ahoraEnZona, sumarDias } from './lib/horarios.mjs'
+import { sincronizarDesdeCalendario } from './lib/sincronizar-calendario.mjs'
 import { linkAgenda } from './lib/mercadopago.mjs'
 import { ejecutarSeguimiento } from './lib/seguimiento.mjs'
 import { alertarError, enviarTelegram } from './lib/telegram.mjs'
@@ -28,9 +30,17 @@ export async function correrSeguimiento() {
   const auth = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
   auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
   const gmail = google.gmail({ version: 'v1', auth })
-  const { quotes } = await listarCotizaciones(almacenSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID))
+  const almacen = almacenSheets(google.sheets({ version: 'v4', auth }), process.env.GOOGLE_SHEET_ID)
+  const hoy = ahoraEnZona().fecha
+  let { quotes } = await listarCotizaciones(almacen)
+  // Antes de avisar las de mañana: lo movido o alargado en Google pasa a la venta
+  // (lib/sincronizar-calendario.mjs). Si falla, se sigue con lo que hay.
+  try {
+    const eventos = await eventosEntre(google.calendar({ version: 'v3', auth }), process.env.CALENDAR_ID, sumarDias(hoy, -7), sumarDias(hoy, 54), quotes)
+    quotes = (await sincronizarDesdeCalendario(almacen, eventos, quotes)).cotizaciones
+  } catch (e) { console.warn('seguimiento: calendario→venta:', e.message) }
   return ejecutarSeguimiento({
-    cotizaciones: quotes, hoy: ahoraEnZona().fecha, linkAgenda: cotNum => linkAgenda(cotNum),
+    cotizaciones: quotes, hoy, linkAgenda: cotNum => linkAgenda(cotNum),
     enviarCorreo: correo => enviarCorreoGmail(gmail, correo), avisoA: process.env.NOTIFY_EMAIL || 'repisas@donmaxi.cl',
     telegram: (texto, opciones) => enviarTelegram(texto, opciones),
   })

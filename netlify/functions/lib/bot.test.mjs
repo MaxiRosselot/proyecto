@@ -104,12 +104,12 @@ test('admin: cambiar dia y hora (dia → hora → confirmar) mueve la instalacio
   const dias = botones(enviados(llamadas).at(-1)).map(x => x.callback_data)
   assert.equal(dias[0], 'rd|1450|20261027')   // mañana martes (hoy lunes ya paso de las 8:00)
   await atenderUpdate(boton(1, 'rd|1450|20261029'), deps)
-  // El jueves ya hay una de 10 a 11: para 3 h, 11:00 o 13:00 (dejan 0 o ≥ 2 h libres).
-  assert.deepEqual(botones(enviados(llamadas).at(-1)).map(x => x.text), ['11:00–14:00', '13:00–16:00', '⬅️ Otro día'])
-  await atenderUpdate(boton(1, 'rh|1450|20261029|1300'), deps)
-  assert.match(enviados(llamadas).at(-1).text, /Antes: Miércoles 28 de octubre, 10:00–13:00\nAhora: Jueves 29 de octubre, 13:00–16:00/)
-  await atenderUpdate(boton(1, 'rc|1450|20261029|1300'), deps)
-  assert.deepEqual(cambios, [{ cotNum: '1450', fecha: '2026-10-29', inicio: '13:00', fin: '16:00' }])
+  // El jueves ya hay una de 10 a 11: para sus 3 h, al terminar esa (11:00) o en el bloque de las 12.
+  assert.deepEqual(botones(enviados(llamadas).at(-1)).map(x => x.text), ['11:00–14:00', '12:00–15:00', '⬅️ Otro día'])
+  await atenderUpdate(boton(1, 'rh|1450|20261029|1200'), deps)
+  assert.match(enviados(llamadas).at(-1).text, /Antes: Miércoles 28 de octubre, 10:00–13:00\nAhora: Jueves 29 de octubre, 12:00–15:00/)
+  await atenderUpdate(boton(1, 'rc|1450|20261029|1200'), deps)
+  assert.deepEqual(cambios, [{ cotNum: '1450', fecha: '2026-10-29', inicio: '12:00', fin: '15:00' }])
   assert.ok(llamadas.some(l => l.chat_id === '2' && /Cambio de agenda: Juan Pérez/.test(l.text)), 'el maestro se entera')
   assert.ok(botones(enviados(llamadas).at(-1)).some(x => /wa\.me/.test(x.url || '')))
 })

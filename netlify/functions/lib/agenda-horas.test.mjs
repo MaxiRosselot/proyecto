@@ -24,25 +24,20 @@ test('duracion segun el monto de las repisas (ajustada con las instalaciones del
   assert.deepEqual(perfilBodega(null, [{ unidades: 4, alto: 2.5 }]), { m2: null, muros: 1, modulos: 4, altoCm: 250 })
 })
 
-test('horas pegadas a cada espacio libre, y las que no cortan el dia', () => {
-  const inicios = (d, ocupados = []) => horasDelDia(ocupados, d).map(h => h.inicio)
-  assert.deepEqual(inicios(180), ['10:00', '13:00'])
-  assert.deepEqual(inicios(120), ['10:00', '12:00', '14:00'])
-  assert.deepEqual(inicios(150), ['10:00', '13:30'])
-  assert.deepEqual(inicios(240), ['10:00', '12:00'])
-  assert.deepEqual(inicios(360), ['10:00'])
-  assert.deepEqual(inicios(60), ['10:00', '12:00', '12:30', '13:00', '15:00'])
-  // Con 10-12 ocupado, una de 3 h se ofrece igual pegada a la otra o al cierre (aunque deje 1 h).
-  assert.deepEqual(inicios(180, [{ desde: 600, hasta: 720 }]), ['12:00', '13:00'])
-  assert.deepEqual(horasDelDia([{ desde: 600, hasta: 720 }], 120).map(h => `${h.inicio}-${h.fin}`), ['12:00-14:00', '14:00-16:00'])
-  // Hueco justo.
-  assert.deepEqual(inicios(120, [{ desde: 600, hasta: 720 }, { desde: 840, hasta: 960 }]), ['12:00'])
-  // No cabe.
-  assert.deepEqual(inicios(120, [{ desde: 600, hasta: 780 }, { desde: 840, hasta: 960 }]), [])
-  // La semana del 16 de noviembre (2 h 30): antes no se ofrecia nada en estos dias.
-  assert.deepEqual(inicios(150, [{ desde: 810, hasta: 960 }]), ['10:00', '11:00']) // martes 17: 13:30-16 ocupado
-  assert.deepEqual(inicios(150, [{ desde: 600, hasta: 750 }]), ['12:30', '13:30']) // miercoles 18: 10-12:30 ocupado
-  assert.deepEqual(inicios(150, [{ desde: 840, hasta: 960 }]), ['10:00', '11:30']) // viernes 20: 14-16 ocupado
+test('tres bloques de 2 h, y el inicio de cada espacio que libero Maxi en el calendario', () => {
+  const inicios = (ocupados = []) => horasDelDia(ocupados).map(h => h.inicio)
+  assert.deepEqual(horasDelDia([]).map(h => `${h.inicio}-${h.fin}`), ['10:00-12:00', '12:00-14:00', '14:00-16:00'])
+  // Uno a las 10: quedan 12 y 14 (sin tope por dia).
+  assert.deepEqual(inicios([{ desde: 600, hasta: 720 }]), ['12:00', '14:00'])
+  assert.deepEqual(inicios([{ desde: 600, hasta: 720 }, { desde: 720, hasta: 840 }]), ['14:00'])
+  // El de las 10 se alargo a 13:00: se libera de 13 a 16 (13:00 y el bloque de 14).
+  assert.deepEqual(inicios([{ desde: 600, hasta: 780 }]), ['13:00', '14:00'])
+  // El de las 12 se alargo hasta las 15: queda solo 10-12.
+  assert.deepEqual(inicios([{ desde: 720, hasta: 900 }]), ['10:00'])
+  // Espacio de menos de 2 h: no se ofrece.
+  assert.deepEqual(inicios([{ desde: 600, hasta: 780 }, { desde: 840, hasta: 960 }]), [])
+  // Un trabajo puesto a mano a las 11: 10-11 no alcanza; de 13 a 16 si.
+  assert.deepEqual(inicios([{ desde: 660, hasta: 780 }]), ['13:00', '14:00'])
 })
 
 test('lunes a viernes por defecto, el mismo dia solo hasta las 8:00, y con el horario editable', () => {
