@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { BARRA_MOVIL, SECTIONS, SESSION_EXPIRED_EVENT, C, styles, leerSesion, guardarSesion, cerrarSesion } from './admin/utils.js'
+import { BARRA_MOVIL, SECTIONS, SESSION_EXPIRED_EVENT, C, styles, apiFetch, leerSesion, guardarSesion, cerrarSesion } from './admin/utils.js'
 import DashboardSection    from './admin/Dashboard.jsx'
 import VisitasSection      from './admin/Visitas.jsx'
 import PorCotizarSection   from './admin/PorCotizar.jsx'
@@ -181,6 +181,15 @@ export default function AdminApp() {
       return next
     })
   }
+
+  // El cotizador necesita las visitas realizadas aunque no se haya pasado antes por Visitas:
+  // se cargan al entrar al panel y se refrescan cada vez que se abre el cotizador.
+  useEffect(() => {
+    if (!authed || (section !== 'cotizador' && allVisits.length)) return
+    apiFetch('/.netlify/functions/get-visits')
+      .then(r => { if (r?.ok) handleVisitsLoaded(r.visits) })
+      .catch(() => {})
+  }, [authed, section])
 
   function navigateTo(sec, visitData) {
     setSection(sec)
