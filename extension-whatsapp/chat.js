@@ -68,15 +68,26 @@ if (window.top !== window) {
   })
 }
 
-// Atajos del panel desde dentro de WhatsApp: Alt+↓/↑ (cliente siguiente/anterior) y Alt+1…9 (escribir ese
+// Atajos del panel desde dentro de WhatsApp: ↓/↑ y Alt+↓/↑ (cliente siguiente/anterior) y Alt+1…9 (escribir ese
 // mensaje en su chat). Solo se le pasa al panel que tecla fue; WhatsApp no ve esas teclas.
 if (window.top !== window) {
   const PANEL = /^(https:\/\/(www\.)?repisasdonmaxi\.cl|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/
   const origen = (location.ancestorOrigins && location.ancestorOrigins[0]) || ''
   if (PANEL.test(origen)) {
+    // ↑/↓ solas tambien van al panel cuando no estas escribiendo: la caja del chat vacia (en WhatsApp ↑
+    // ahi es "editar el ultimo mensaje") o nada para escribir enfocado. En el buscador de WhatsApp, en
+    // un texto a medias o moviendote por la lista de chats, las flechas siguen siendo de WhatsApp.
+    const sinEscribir = () => {
+      const el = document.activeElement
+      if (!el || el === document.body || el === document.documentElement) return true
+      if (el.matches('#main footer [contenteditable="true"]')) return !(el.textContent || '').trim()
+      return false
+    }
     window.addEventListener('keydown', e => {
-      if (!e.altKey || e.ctrlKey || e.metaKey) return
-      if (!(e.key === 'ArrowDown' || e.key === 'ArrowUp' || /^(Digit|Numpad)[1-9]$/.test(e.code))) return
+      if (e.ctrlKey || e.metaKey || (e.shiftKey && !e.altKey)) return // Ctrl+Alt = AltGr (@, #...): de WhatsApp
+      const flecha = e.key === 'ArrowDown' || e.key === 'ArrowUp'
+      if (!e.altKey && !(flecha && sinEscribir())) return
+      if (!(flecha || /^(Digit|Numpad)[1-9]$/.test(e.code))) return
       e.preventDefault(); e.stopImmediatePropagation()
       window.parent.postMessage({ dm: 'tecla', key: e.key, code: e.code, altKey: true, shiftKey: e.shiftKey }, origen)
     }, true)

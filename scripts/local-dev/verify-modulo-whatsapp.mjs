@@ -112,6 +112,13 @@ try {
   await marco.locator('body').click({ position: { x: 5, y: 5 } })
   await page.keyboard.press('Alt+Digit2')
   await expect.poll(() => page.getByTestId('marco-whatsapp').getAttribute('src')).toContain('sigue+disponible')
+  // ↓ sola dentro de WhatsApp (sin estar escribiendo) tambien va al panel, y el teclado vuelve al panel.
+  await expect(async () => {
+    await marco.locator('body').click({ position: { x: 5, y: 5 } })
+    if (await page.evaluate(() => document.activeElement?.tagName) !== 'IFRAME') throw new Error('sin foco en WhatsApp')
+  }).toPass({ timeout: 20000 })
+  await page.keyboard.press('ArrowDown')
+  await expect.poll(() => page.evaluate(() => document.activeElement?.tagName), { timeout: 5000 }).not.toBe('IFRAME')
 
   // Si WhatsApp se queda con el teclado al abrir un chat, vuelve al panel (para seguir con las flechas).
   await modulo.getByLabel('Buscar cliente').fill(nombre)

@@ -17,7 +17,8 @@ export const ATAJOS = [
   ['?', 'Mostrar u ocultar los atajos'],
 ]
 export const ATAJOS_EN_WHATSAPP = [
-  ['Alt + ↓ / ↑', 'Siguiente / anterior cliente'],
+  ['↓ / ↑', 'Siguiente / anterior cliente, si no estás escribiendo (caja del chat vacía)'],
+  ['Alt + ↓ / ↑', 'Siguiente / anterior cliente, aunque estés escribiendo'],
   ['Alt + 1 … 9', 'Escribe ese mensaje en su chat'],
 ]
 
