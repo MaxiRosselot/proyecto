@@ -85,15 +85,18 @@ export const registrarMarco = el => { marco = el }
 // pide a la extension (1.2+) que lo abra sin recargar; si no puede (cargando, sin sesion, version
 // vieja) o no contesta, recarga WhatsApp con el chat, que tarda unos segundos mas.
 let pedidos = 0
+let ultimoPedido = 0
 export async function abrirChatEnMarco(telefono, texto = '') {
   if (!marco) return
+  const turno = ++ultimoPedido // si mientras tanto se pidio otro chat, ese manda
   const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
-  if (!ok && marco) marco.src = linkWhatsappWeb(telefono, texto)
+  if (!ok && marco && turno === ultimoPedido) marco.src = linkWhatsappWeb(telefono, texto)
 }
 // Deja el PDF adjunto en su chat con el texto como comentario, sin enviar (extension 1.5+). Devuelve
 // { ok, motivo }. Si no se puede (version vieja, sin sesion), el panel lo descarga para arrastrarlo.
 export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
   if (!marco) return { ok: false, motivo: 'sin-marco' }
+  ++ultimoPedido
   return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 12000, 'adjunto')
 }
 function pedirAlMarco(mensaje, espera = 1500, respuesta = 'chat') {

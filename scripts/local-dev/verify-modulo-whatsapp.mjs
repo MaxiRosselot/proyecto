@@ -53,8 +53,7 @@ try {
   // "En su chat" con el mensaje de seguimiento: lo deja escrito en su chat y anota la pregunta.
   await page.getByTestId('mensaje-sin-respuesta').getByRole('button', { name: 'En su chat' }).click()
   await expect(page.getByTestId('ficha-seguimiento').getByText(/Preguntado 1 vez/)).toBeVisible()
-  const src = await page.getByTestId('marco-whatsapp').getAttribute('src')
-  if (!src.includes('web.whatsapp.com/send?phone=5695555' + cola + '&text=Hola+Modulo')) throw new Error('No abrió su chat con el mensaje: ' + src)
+  await expect.poll(() => page.getByTestId('marco-whatsapp').getAttribute('src'), { timeout: 8000 }).toContain('web.whatsapp.com/send?phone=5695555' + cola + '&text=Hola+Modulo')
 
   // Pospuso: esperar 2 semanas. Sale del "toca preguntar" y aparece en Esperando.
   await page.getByTestId('ficha-seguimiento').getByRole('button', { name: '2 semanas' }).click()
@@ -160,6 +159,7 @@ try {
         e.preventDefault()
         document.querySelector('#main')?.remove()
         const main = Object.assign(document.createElement('div'), { id: 'main' })
+        main.style.cssText = 'position:fixed;top:0;left:0;width:300px;height:300px;z-index:99999;background:white'
         main.innerHTML = '<footer><div contenteditable="true"></div></footer>'
         main.addEventListener('drop', ev => {
           const archivo = ev.dataTransfer.files[0]

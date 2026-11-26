@@ -4,9 +4,24 @@
 // Solo dentro del panel (en su propia pestaña no hace nada) y solo atiende al panel.
 // Numero sin WhatsApp: WhatsApp muestra un aviso ("Phone number shared via url is invalid" / "no es
 // válido") que bloquea abrir otros chats. Se cierra y se le avisa al panel, que lo deja aparte.
-const INVALIDO = /invalid|inv[aá]lido|no es v[aá]lido|not on whatsapp|no est[aá] en whatsapp/i
+// (en ingles hoy dice: "The number +56 9 ... isn't on WhatsApp.")
+const INVALIDO = /isn.t on whatsapp|not on whatsapp|no est[aá] en whatsapp|no tiene whatsapp|invalid|inv[aá]lido|no es v[aá]lido/i
 function avisoInvalido() {
-  return [...document.querySelectorAll('[role="dialog"], [data-animate-modal-popup="true"]')].find(d => INVALIDO.test(d.textContent || ''))
+  const marcado = [...document.querySelectorAll('[role="dialog"], [data-animate-modal-popup="true"]')].find(d => INVALIDO.test(d.textContent || ''))
+  if (marcado) return marcado
+  // Si WhatsApp cambia como marca sus avisos: el texto, y subir hasta lo que tenga el boton OK.
+  const recorrer = document.createTreeWalker(document.querySelector('#app') || document.body, NodeFilter.SHOW_TEXT)
+  for (let n = recorrer.nextNode(); n; n = recorrer.nextNode()) {
+    if (!INVALIDO.test(n.nodeValue || '')) continue
+    // Solo un aviso chico (poco texto, uno o dos botones): nunca un mensaje de un chat que diga "invalid".
+    if (n.parentElement?.closest('#main, #side')) continue
+    for (let el = n.parentElement, i = 0; el && i < 8; el = el.parentElement, i++) {
+      const botones = el.querySelectorAll('button, [role="button"]').length
+      if ((el.textContent || '').length > 300) break
+      if (botones >= 1 && botones <= 2) return el
+    }
+  }
+  return null
 }
 function cerrarAvisoInvalido() {
   const d = avisoInvalido()
@@ -68,18 +83,49 @@ if (window.top !== window) {
   }
 }
 
-// Dejar un PDF adjunto en el chat de un numero, con su texto, SIN ENVIAR: se abre su chat y se suelta
-// el archivo sobre la conversacion como cuando lo arrastras; WhatsApp muestra la vista previa y tu das
-// Enter. Responde { dm: 'adjunto', id, ok } (ok false: no habia sesion o no aparecio el chat).
+// Dejar un PDF adjunto en el chat de un numero, con su texto, SIN ENVIAR: se abre su chat y se le
+// entrega el archivo a WhatsApp como si lo pegaras, lo soltaras o lo eligieras en "Documento"; WhatsApp
+// muestra la vista previa y tu das Enter. Solo se responde ok si la vista previa aparecio de verdad.
+// Responde { dm: 'adjunto', id, ok, motivo, como }.
 const esperar = ms => new Promise(r => setTimeout(r, ms))
 async function hasta(fn, ms) { const fin = Date.now() + ms; for (;;) { const v = fn(); if (v || Date.now() > fin) return v; await esperar(150) } }
+const editables = () => new Set(document.querySelectorAll('[contenteditable="true"]'))
+// La vista previa trae su propio campo para el comentario: aparece un editable que antes no estaba.
+const nuevoEditable = antes => [...document.querySelectorAll('[contenteditable="true"]')].find(el => !antes.has(el) && el.offsetParent)
+function conArchivo(archivo) { const dt = new DataTransfer(); dt.items.add(archivo); return dt }
+
+const MANERAS = {
+  pegar: async (main, archivo) => {
+    const composer = main.querySelector('footer [contenteditable="true"]')
+    if (!composer) return
+    composer.focus()
+    composer.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: conArchivo(archivo) }))
+  },
+  soltar: async (main, archivo) => {
+    const r = main.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2
+    const ev = (tipo, el) => el && el.dispatchEvent(new DragEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: conArchivo(archivo) }))
+    const debajo = document.elementFromPoint(x, y) || main
+    ev('dragenter', debajo); ev('dragover', debajo)
+    await esperar(400) // WhatsApp pone su zona para soltar encima
+    const zona = document.elementFromPoint(x, y) || debajo
+    ev('dragover', zona); ev('drop', zona)
+  },
+  documento: async (main, archivo) => {
+    const boton = main.querySelector('footer [data-icon="plus-rounded"], footer [data-icon="plus"], footer [data-icon="clip"], footer [aria-label="Attach"], footer [aria-label="Adjuntar"], footer [title="Attach"], footer [title="Adjuntar"]')
+    ;(boton?.closest('button, [role="button"]') || boton)?.click()
+    const input = await hasta(() => [...document.querySelectorAll('input[type="file"]')].find(i => !/image|video/.test(i.accept || '') || i.accept === '*'), 1500)
+    if (!input) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return }
+    input.files = conArchivo(archivo).files
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  },
+}
+
 async function adjuntar(d, origen) {
-  const responder = (ok, motivo = '') => window.parent.postMessage({ dm: 'adjunto', id: d.id, ok, motivo }, origen)
+  const responder = (ok, motivo = '', como = '') => window.parent.postMessage({ dm: 'adjunto', id: d.id, ok, motivo, como }, origen)
   const tel = String(d.telefono || '').replace(/\D/g, '')
   const raiz = document.querySelector('#app')
   if (!raiz || !tel || !document.querySelector('#side') || !d.archivo) return responder(false, 'sin-sesion')
   cerrarAvisoInvalido()
-  const antes = document.querySelector('#main')
   const a = document.createElement('a')
   a.href = `https://wa.me/${tel}`
   a.style.display = 'none'
@@ -88,19 +134,18 @@ async function adjuntar(d, origen) {
   window.addEventListener('click', despues)
   raiz.appendChild(a); a.click(); a.remove()
   if (!tomado) return responder(false, 'sin-chat') // WhatsApp no tomo el link: que no navegue
-  await esperar(500)
-  if (await hasta(() => avisoInvalido(), 1500)) { cerrarAvisoInvalido(); window.parent.postMessage({ dm: 'sin-whatsapp', telefono: tel }, origen); return responder(false, 'sin-whatsapp') }
-  const main = await hasta(() => { const m = document.querySelector('#main'); return m && (m !== antes || !antes) && m.querySelector('footer') ? m : null }, 6000) || document.querySelector('#main')
-  if (!main) return responder(false, 'sin-chat')
+  await esperar(900)
+  if (avisoInvalido()) { cerrarAvisoInvalido(); window.parent.postMessage({ dm: 'sin-whatsapp', telefono: tel }, origen); return responder(false, 'sin-whatsapp') }
+  const main = await hasta(() => { const m = document.querySelector('#main'); return m && m.querySelector('footer [contenteditable="true"]') ? m : null }, 5000)
+  if (!main) return responder(false, avisoInvalido() ? 'sin-whatsapp' : 'sin-chat')
   const archivo = new File([d.archivo], d.nombre || 'Cotizacion.pdf', { type: 'application/pdf' })
-  const dt = new DataTransfer()
-  dt.items.add(archivo)
-  for (const tipo of ['dragenter', 'dragover', 'drop']) main.dispatchEvent(new DragEvent(tipo, { bubbles: true, cancelable: true, dataTransfer: dt }))
-  // El texto va como comentario del archivo, en la vista previa (si aparece el campo para escribir).
-  if (d.texto) {
-    const composer = main.querySelector('footer [contenteditable="true"]')
-    const campo = await hasta(() => { const el = document.activeElement; return el && el.isContentEditable && el !== composer ? el : null }, 3000)
-    if (campo) document.execCommand('insertText', false, d.texto)
+  for (const [como, hacer] of Object.entries(MANERAS)) {
+    const antes = editables()
+    try { await hacer(main, archivo) } catch { continue }
+    const campo = await hasta(() => nuevoEditable(antes), 2500)
+    if (!campo) continue
+    if (d.texto) { campo.focus(); document.execCommand('insertText', false, d.texto) }
+    return responder(true, '', como)
   }
-  responder(true)
+  responder(false, 'no-adjunto')
 }
