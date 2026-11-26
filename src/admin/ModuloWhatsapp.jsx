@@ -8,9 +8,9 @@ import { mensajeEnvioCotizacion, mensajeRecordatorio, telefonoWhatsapp } from '.
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
-import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
+import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
-import { FILTROS, clasificar, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
+import { FILTROS, clasificar, cotizacionesDelNumero, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
 // Seccion WhatsApp (solo PC): a la izquierda los clientes por filtro, al centro WhatsApp Web (lo usas
 // tu, a mano) y a la derecha la ficha del cliente elegido: en que va, seguimiento, bitacora y los
@@ -269,7 +269,7 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
   )
 }
 
-function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, onVerCotizacion, onEnWhatsapp }) {
+function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, onVerCotizacion, onEnWhatsapp, otras = [], onElegirOtra }) {
   const estado = QUOTE_STATUS_LABELS[q.status] || QUOTE_STATUS_LABELS['por confirmar']
   const mensajes = mensajesPara(q, hoy, { eventoManana })
   const grupos = [...new Set(mensajes.map(m => m.grupo))]
@@ -290,6 +290,15 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
           {q.telefono && <Copiar texto={telefonoLegible(q.telefono)}>Copiar</Copiar>}
           {q.telefono && <button type="button" style={botonVerde} onClick={() => abrirChatEnMarco(q.telefono)}>Abrir su chat</button>}
         </div>
+        {otras.length > 0 && (
+          <div data-testid="otras-cotizaciones" style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11.5, color: C.textMuted }}>Otras de este número:</span>
+            {otras.map(o => (
+              <button key={o.cotNum} type="button" onClick={() => onElegirOtra(o.cotNum)} title={o.nombre}
+                style={{ ...boton, padding: '2px 8px', fontSize: 11.5 }}>N° {o.cotNum} · {(QUOTE_STATUS_LABELS[o.status] || QUOTE_STATUS_LABELS['por confirmar']).label}{o.total ? ' · ' + fmt(o.total) : ''}</button>
+            ))}
+          </div>
+        )}
         <PdfEnSuChat q={q} onEnWhatsapp={onEnWhatsapp} />
         {q.telefono && (sinWhatsapp(q)
           ? <div data-testid="ficha-sin-whatsapp" style={{ marginTop: 8, padding: '7px 9px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 12, color: C.red, display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -323,6 +332,26 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
       <Bitacora q={q} hoy={hoy} onGuardar={onGuardar} guardando={guardando} />
       <MisMensajes cliente={q} telefono={q.telefono} desde={mensajes.length} />
     </>
+  )
+}
+
+// El chat abierto en WhatsApp no tiene cotizacion en el panel (o no se ve su numero).
+function ChatSinCotizacion({ chat, onBuscar }) {
+  const esNumero = !chat.titulo || /^\+?[\d\s()-]+$/.test(chat.titulo)
+  return (
+    <div data-testid="chat-sin-cotizacion" style={{ ...bloque, background: '#F8FAFC' }}>
+      <div style={{ ...titulo, marginBottom: 6 }}>Chat abierto en WhatsApp</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{chat.telefono ? telefonoLegible(chat.telefono) : chat.titulo}</div>
+      {!esNumero && chat.telefono && <div style={{ fontSize: 12, color: C.textSub }}>{chat.titulo}</div>}
+      <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 6, lineHeight: 1.5 }}>
+        {chat.telefono ? 'Este número no tiene cotizaciones en el panel.' : 'No se ve su número (grupo o contacto guardado).'}
+        {!esNumero && ' Si cotizó con otro número, búscalo por nombre:'}
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+        {!esNumero && <button type="button" style={boton} onClick={() => onBuscar(chat.titulo)}>Buscar “{chat.titulo}”</button>}
+        {chat.telefono && <Copiar texto={telefonoLegible(chat.telefono)}>Copiar número</Copiar>}
+      </div>
+    </div>
   )
 }
 
@@ -362,6 +391,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
   const [guardando, setGuardando] = useState(false)
   const [hayExtension, setHayExtension] = useState(extensionInstalada)
   const [ayuda, setAyuda] = useState(false)
+  const [chatAbierto, setChatAbierto] = useState(null) // { telefono, titulo } del chat que se ve en WhatsApp
   const campoBuscar = React.useRef(null)
 
   const cargar = useCallback(async () => {
@@ -399,6 +429,19 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
     window.addEventListener(EVENTO_PARA_ENVIAR, recibir)
     return () => window.removeEventListener(EVENTO_PARA_ENVIAR, recibir)
   }, [quotes])
+
+  // Al entrar a la seccion (o al cargar los clientes), la ficha toma el chat que ya esta abierto.
+  useEffect(() => {
+    const chat = chatAbiertoAhora()
+    if (quotes.length && chat && !sel && !envio) chatAbiertoRef.current?.(chat)
+  }, [quotes]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Si el mensaje llego antes de que cargaran los clientes, se elige al cliente apenas cargan.
+  useEffect(() => {
+    if (!envio?.telefono || sel) return
+    const c = quotes.find(x => mismoTelefono(x.telefono, envio.telefono))
+    if (c) setSel({ cotNum: c.cotNum })
+  }, [quotes, envio]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tocar un cliente abre su ficha y, al tiro, su chat (si tiene celular y WhatsApp esta listo).
   // WhatsApp se queda con el teclado al abrir un chat: se le devuelve al panel para seguir con las
@@ -460,6 +503,18 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
   sinWhatsappRef.current = tel => {
     for (const c of quotes) if (mismoTelefono(c.telefono, tel) && !sinWhatsapp(c)) guardarCambios(c.cotNum, { seguimiento: marcarSinWhatsapp(c.seguimiento, c.telefono, hoy) })
   }
+  // La ficha sigue al chat que abras en WhatsApp: si ese numero tiene cotizaciones, se elige la que
+  // conviene; si no, la ficha avisa que no tiene (para no mostrar a otro cliente al lado de su chat).
+  const chatAbiertoRef = React.useRef(null)
+  chatAbiertoRef.current = chat => {
+    setChatAbierto(chat.telefono || chat.titulo ? chat : null)
+    if (!chat.telefono) return
+    const telActual = q?.telefono || sel?.evento?.telefono
+    if (telActual && mismoTelefono(telActual, chat.telefono)) return
+    const delNumero = cotizacionesDelNumero(quotes, chat.telefono)
+    const evento = eventos.find(e => e.telefono && mismoTelefono(e.telefono, chat.telefono))
+    setSel(delNumero.length ? { cotNum: delNumero[0].cotNum } : evento ? { evento } : null)
+  }
   const hacerRef = React.useRef(hacer)
   hacerRef.current = hacer
   useEffect(() => {
@@ -478,7 +533,8 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
     window.addEventListener('keydown', tecla)
     const dejar = oirTeclasDelMarco(d => { const a = accionDeTecla(d, 'otro'); if (a) hacerRef.current(a) })
     const dejar2 = oirSinWhatsapp(tel => sinWhatsappRef.current(tel))
-    return () => { window.removeEventListener('keydown', tecla); dejar(); dejar2() }
+    const dejar3 = oirChatAbierto(chat => chatAbiertoRef.current(chat))
+    return () => { window.removeEventListener('keydown', tecla); dejar(); dejar2(); dejar3() }
   }, [])
 
   // Se ve al instante y se guarda en la planilla por detras (tarda 1–2 s); si falla, se deshace.
@@ -556,17 +612,20 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
       {/* Ficha */}
       <section style={{ ...columna, overflowY: 'auto' }} aria-label="Ficha del cliente">
         {ayuda && <AyudaAtajos onCerrar={() => setAyuda(false)} />}
+        {chatAbierto && !q && !sel?.evento && <ChatSinCotizacion chat={chatAbierto} onBuscar={t => { setBuscar(t); campoBuscar.current?.focus() }} />}
         {envio && <div style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ParaEnviar envio={envio} onAbrirChat={abrirChatEnMarco} onCerrar={() => setEnvio(null)} /></div>}
         {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion}
               onEnWhatsapp={() => { irAWhatsapp.current = Date.now(); enfocarMarco() }}
+              otras={cotizacionesDelNumero(quotes, q.telefono).filter(x => x.cotNum !== q.cotNum)}
+              onElegirOtra={cotNum => setSel({ cotNum })}
               onGuardar={seguimiento => guardarCambios(q.cotNum, { seguimiento })}
               onEstado={(status, motivo = '') => guardarCambios(q.cotNum, { status, motivoRechazo: motivo })} />
           : sel?.evento ? <FichaEvento e={sel.evento} />
           : <>
-              <div style={{ ...bloque, fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>
-                Elige un cliente a la izquierda para ver en qué va, anotar el seguimiento y tener sus mensajes listos.
-              </div>
-              <MisMensajes cliente={null} telefono="" />
+              {!chatAbierto && <div style={{ ...bloque, fontSize: 13, color: C.textSub, lineHeight: 1.5 }}>
+                Elige un cliente a la izquierda (o abre su chat en WhatsApp) para ver en qué va, anotar el seguimiento y tener sus mensajes listos.
+              </div>}
+              <MisMensajes cliente={chatAbierto && !/^\+?[\d\s()-]*$/.test(chatAbierto.titulo) ? { nombre: chatAbierto.titulo } : null} telefono={chatAbierto?.telefono || ''} />
             </>}
       </section>
     </div>

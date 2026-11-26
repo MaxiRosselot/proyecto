@@ -1,7 +1,7 @@
 // Logica de la seccion WhatsApp: que clientes van en cada filtro, que mensajes sirven para cada uno
 // segun en que va, y los mensajes rapidos propios (con {nombre}, {cotizacion}...).
 import { estadoSeguimiento, mensajesSeguimiento, sinWhatsapp } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
-import { mensajeConfirmarInstalacion, mensajeCotizacion, mensajeEnvioCotizacion, mensajeInstalacionManana, mensajeRecordatorio } from '../../netlify/functions/lib/mensajes.mjs'
+import { telefonoWhatsapp, mensajeConfirmarInstalacion, mensajeCotizacion, mensajeEnvioCotizacion, mensajeInstalacionManana, mensajeRecordatorio } from '../../netlify/functions/lib/mensajes.mjs'
 import { mensajeInstalacionDe } from './whatsappInstalacion.js'
 
 export const FILTROS = [
@@ -14,6 +14,16 @@ export const FILTROS = [
   { id: 'sinwsp', nombre: 'Sin WhatsApp', ayuda: 'Números que WhatsApp dice que no existen: para revisarlos por fuera' },
   { id: 'todos', nombre: 'Todos', ayuda: 'Todas las cotizaciones' },
 ]
+
+// Las cotizaciones de un numero de WhatsApp, la que conviene mostrar primero: la mas nueva que no
+// este rechazada (si todas lo estan, la mas nueva).
+export function cotizacionesDelNumero(quotes, telefono) {
+  const t = telefonoWhatsapp(telefono)
+  if (t.length < 8) return []
+  const lista = quotes.filter(q => q.instalacion?.origen !== 'excel' && telefonoWhatsapp(q.telefono) === t).sort(porNumeroDesc)
+  const i = lista.findIndex(q => q.status !== 'rechazada')
+  return i > 0 ? [lista[i], ...lista.filter((_, j) => j !== i)] : lista
+}
 
 const porNumeroDesc = (a, b) => (b.creadoMs ?? 0) - (a.creadoMs ?? 0) || Number(b.cotNum) - Number(a.cotNum)
 

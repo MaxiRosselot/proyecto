@@ -94,6 +94,35 @@ if (window.top !== window) {
   }
 }
 
+// Que chat esta abierto: se le avisa al panel su numero (cuando cambia) para que la ficha lo siga.
+// El numero sale de los mensajes (data-id "..._56912345678@c.us_...") y, en un chat nuevo sin
+// mensajes, del titulo si es un numero. Grupos o contactos sin numero visible: telefono vacio.
+if (window.top !== window) {
+  const PANEL = /^(https:\/\/(www\.)?repisasdonmaxi\.cl|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/
+  const origen = (location.ancestorOrigins && location.ancestorOrigins[0]) || ''
+  if (PANEL.test(origen)) {
+    const tituloDelChat = main => (main.querySelector('header span[dir="auto"]')?.textContent || '').trim()
+    const telDelChat = main => {
+      for (const el of main.querySelectorAll('[data-id]')) {
+        const m = /(?:^|_)(\d{8,15})@c\.us/.exec(el.getAttribute('data-id') || '')
+        if (m) return m[1]
+      }
+      const t = tituloDelChat(main)
+      return /^\+?[\d\s()-]{8,20}$/.test(t) ? t.replace(/\D/g, '') : ''
+    }
+    let ultimo = null
+    setInterval(() => {
+      const main = document.querySelector('#main')
+      const titulo = main ? tituloDelChat(main) : ''
+      const telefono = main ? telDelChat(main) : ''
+      const clave = main ? telefono + '|' + titulo : ''
+      if (clave === ultimo) return
+      ultimo = clave
+      window.parent.postMessage({ dm: 'chat-abierto', telefono, titulo }, origen)
+    }, 700)
+  }
+}
+
 // Dejar un PDF adjunto en el chat de un numero, con su texto, SIN ENVIAR: se abre su chat y se le
 // entrega el archivo a WhatsApp como si lo pegaras, lo soltaras o lo eligieras en "Documento"; WhatsApp
 // muestra la vista previa y tu das Enter. Solo se responde ok si la vista previa aparecio de verdad.

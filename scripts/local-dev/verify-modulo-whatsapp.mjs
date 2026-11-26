@@ -17,7 +17,7 @@ const ctx = await chromium.launchPersistentContext(perfil, {
   channel: 'msedge', headless: false, viewport: { width: 1600, height: 950 },
   args: ['--headless=new', `--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
 })
-let api, cotNum
+let api, cotNum, otraCot
 try {
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base })
   const page = await ctx.newPage()
@@ -186,9 +186,28 @@ try {
   const soltado = await f.evaluate(() => ({ ...window.__soltado, comentario: document.querySelector('#comentario')?.textContent }))
   if (soltado.veces !== 1 || soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || !soltado.comentario.includes('Te adjunto la cotización'))
     throw new Error('No quedó bien el PDF en el chat: ' + JSON.stringify(soltado))
+
+  // La ficha sigue al chat que se abre en WhatsApp (la extension lee el numero de sus mensajes o del titulo).
+  const otra = (await api('save-quote', { crear: true, nombre: nombre + ' B', telefono: '9 5555 ' + cola, subtotal: 50000, iva: 9500, total: 59500, repisas: [{ largo: 1, prof: .4, alto: 2, niveles: 4, unidades: 1, valor: 50000 }], adicionales: {} })).cotNum
+  otraCot = otra
+  await modulo.getByRole('button', { name: '↻ Actualizar' }).click()
+  const abrirEnWhatsapp = async (html) => {
+    const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
+    await f.evaluate(h => { document.querySelector('#main')?.remove(); const m = Object.assign(document.createElement('div'), { id: 'main', innerHTML: h }); document.body.append(m) }, html)
+  }
+  await abrirEnWhatsapp('<header><span dir="auto">+56 9 4000 ' + cola + '</span></header>') // numero que no tiene nadie
+  await expect(page.getByTestId('chat-sin-cotizacion')).toContainText('+56 9 4000 ' + cola + '')
+  await expect(page.getByTestId('ficha-cliente')).toHaveCount(0)
+  await abrirEnWhatsapp(`<header><span dir="auto">Cliente guardado</span></header><div data-id="false_5695555${cola}@c.us_3EB0ABC"></div>`)
+  await expect(page.getByTestId('ficha-cliente')).toBeVisible()
+  await expect(page.getByTestId('chat-sin-cotizacion')).toHaveCount(0)
+  await expect(page.getByTestId('otras-cotizaciones')).toContainText('N° ')
+  await page.getByTestId('otras-cotizaciones').getByRole('button').first().click()
+  await expect(page.getByTestId('ficha-cliente').getByText('N° ' + (await page.getByTestId('ficha-cliente').getByText(/^N° \d+/).first().textContent()).match(/\d+/)[0])).toBeVisible()
   if (errors.length) throw new Error(errors.join('\n'))
 } finally {
   if (api && cotNum) await api('delete-quote', { cotNum }).catch(() => {})
+  if (api && otraCot) await api('delete-quote', { cotNum: otraCot }).catch(() => {})
   await ctx.close(); rmSync(perfil, { recursive: true, force: true })
 }
 console.log('OK seccion WhatsApp')

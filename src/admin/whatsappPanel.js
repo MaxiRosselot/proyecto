@@ -116,6 +116,14 @@ export function enfocarMarco() { try { marco?.focus(); marco?.contentWindow?.foc
 export const esMarco = el => Boolean(el) && el === marco
 export function oirTeclasDelMarco(fn) { return oirDelMarco('tecla', fn) }
 // WhatsApp dijo que ese numero no existe (extension 1.4+).
+// El chat que esta abierto en WhatsApp (extension 1.6+): { telefono, titulo } cada vez que cambia.
+// Se guarda el ultimo aunque la seccion no este abierta, para que al volver la ficha lo tome.
+let ultimoChat = null
+if (typeof window !== 'undefined') window.addEventListener('message', ev => {
+  if (marco && ev.source === marco.contentWindow && ev.data?.dm === 'chat-abierto') ultimoChat = { telefono: String(ev.data.telefono || ''), titulo: String(ev.data.titulo || '') }
+})
+export const chatAbiertoAhora = () => ultimoChat
+export function oirChatAbierto(fn) { return oirDelMarco('chat-abierto', d => fn({ telefono: String(d.telefono || ''), titulo: String(d.titulo || '') })) }
 export function oirSinWhatsapp(fn) { return oirDelMarco('sin-whatsapp', d => fn(String(d.telefono || ''))) }
 function oirDelMarco(tipo, fn) {
   const oir = ev => { if (marco && ev.source === marco.contentWindow && ev.data?.dm === tipo) fn(ev.data) }
