@@ -86,8 +86,29 @@ export const registrarMarco = el => { marco = el }
 // vieja) o no contesta, recarga WhatsApp con el chat, que tarda unos segundos mas.
 let pedidos = 0
 let ultimoPedido = 0
+// Los chats que el panel pidio abrir hace poco: el chat que WhatsApp avisa en esos segundos es el pedido
+// (o uno anterior que llego tarde), no uno que abriste tu a mano.
+const pedidosChat = []
+function anotarPedido(telefono) {
+  const ahora = Date.now()
+  pedidosChat.push({ telefono: telefonoWhatsapp(telefono), en: ahora })
+  while (pedidosChat.length && ahora - pedidosChat[0].en > 10000) pedidosChat.shift()
+}
+export const pedidosRecientes = (ms = 3000) => pedidosChat.filter(p => Date.now() - p.en < ms)
+// Contactos guardados: WhatsApp no muestra su numero, pero si el panel abrio su chat se sabe cual es.
+// Se recuerda nombre del contacto → numero en este PC, para reconocerlo cuando lo abras a mano.
+const CLAVE_CONTACTOS = 'dm_whatsapp_contactos'
+const normal = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+const leerContactos = () => { try { return JSON.parse(localStorage.getItem(CLAVE_CONTACTOS)) || {} } catch { return {} } }
+export const telefonoDeContacto = titulo => leerContactos()[normal(titulo)] || ''
+export function recordarContacto(titulo, telefono) {
+  const t = normal(titulo), tel = telefonoWhatsapp(telefono)
+  if (!t || tel.length < 8 || /^\+?[\d\s()-]+$/.test(t)) return
+  try { localStorage.setItem(CLAVE_CONTACTOS, JSON.stringify({ ...leerContactos(), [t]: tel })) } catch { /* sin espacio */ }
+}
 export async function abrirChatEnMarco(telefono, texto = '') {
   if (!marco) return
+  anotarPedido(telefono)
   const turno = ++ultimoPedido // si mientras tanto se pidio otro chat, ese manda
   const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
   if (!ok && marco && turno === ultimoPedido) marco.src = linkWhatsappWeb(telefono, texto)
@@ -97,6 +118,7 @@ export async function abrirChatEnMarco(telefono, texto = '') {
 export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
   if (!marco) return { ok: false, motivo: 'sin-marco' }
   ++ultimoPedido
+  anotarPedido(telefono)
   return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 90000, 'adjunto')
 }
 function pedirAlMarco(mensaje, espera = 1500, respuesta = 'chat') {

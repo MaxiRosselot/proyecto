@@ -9,7 +9,7 @@ import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
 import { hayBorradorSinGuardar } from './PorCotizar.jsx'
-import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
+import { EVENTO_PARA_ENVIAR, pedidosRecientes, recordarContacto, telefonoDeContacto, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, cotizacionesDelNumero, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
@@ -534,7 +534,17 @@ export default function ModuloWhatsapp({ onVerCotizacion, onAbrirEnCotizador }) 
   // La ficha sigue al chat que abras en WhatsApp: si ese numero tiene cotizaciones, se elige la que
   // conviene; si no, la ficha avisa que no tiene (para no mostrar a otro cliente al lado de su chat).
   const chatAbiertoRef = React.useRef(null)
-  chatAbiertoRef.current = chat => {
+  chatAbiertoRef.current = avisado => {
+    const chat = { ...avisado }
+    const recientes = pedidosRecientes()
+    if (chat.telefono && recientes.length && !recientes.some(p => mismoTelefono(p.telefono, chat.telefono))) return // de un pedido anterior: ya llega el que pediste
+    if (!chat.telefono && chat.titulo) {
+      // Sin numero a la vista (contacto guardado): si es el chat que pidio el panel, la ficha se queda y
+      // se aprende su numero; si lo abriste tu, se busca el numero aprendido.
+      if (recientes.length === 1) recordarContacto(chat.titulo, recientes[0].telefono)
+      if (recientes.length) { setChatAbierto(chat); return }
+      chat.telefono = telefonoDeContacto(chat.titulo)
+    }
     setChatAbierto(chat.telefono || chat.titulo ? chat : null)
     if (!chat.telefono) {
       // Contacto guardado o grupo: no se ve el numero. Si la ficha es de otra persona, se limpia (y se

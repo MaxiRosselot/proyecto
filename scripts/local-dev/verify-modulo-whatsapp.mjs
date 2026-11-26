@@ -203,6 +203,12 @@ try {
   await page.keyboard.press('Shift+Digit1')
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('N° ' + cotNum)
   if (await fr.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent)) throw new Error('el 1 se escribió en WhatsApp')
+  // Las letras no pasan al panel desde WhatsApp: escribir "Claro..." no confirma la cotizacion.
+  await page.keyboard.press('c')
+  await expect.poll(() => fr.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent)).toBe('c')
+  await page.waitForTimeout(500)
+  await expect(page.getByTestId('ficha-cliente')).not.toContainText(/Confirmada/)
+  await fr.evaluate(() => { document.querySelector('#main footer [contenteditable="true"]').textContent = '' })
   await marco.locator('#main footer [contenteditable="true"]').click()
   await page.keyboard.press('Digit1')
   await expect.poll(() => fr.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent)).toBe('1')
@@ -215,6 +221,7 @@ try {
     const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
     await f.evaluate(h => { document.querySelector('#main')?.remove(); const m = Object.assign(document.createElement('div'), { id: 'main', innerHTML: h }); document.body.append(m) }, html)
   }
+  await page.waitForTimeout(3100) // lo que avisa WhatsApp justo despues de que el panel abre un chat es de ese chat
   await abrirEnWhatsapp('<header><span dir="auto">+56 9 4000 ' + cola + '</span></header>') // numero que no tiene nadie
   await expect(page.getByTestId('chat-sin-cotizacion')).toContainText('+56 9 4000 ' + cola + '')
   await expect(page.getByTestId('ficha-cliente')).toHaveCount(0)
@@ -230,6 +237,17 @@ try {
   await expect(page.getByTestId('chat-sin-cotizacion')).toBeVisible()
   await expect(page.getByTestId('ficha-cliente')).toHaveCount(0)
   await page.getByTestId('cotizaciones-parecidas').getByRole('button', { name: new RegExp('N° ' + otra) }).click()
+  await expect(page.getByTestId('ficha-cliente').getByText(nombre + ' B', { exact: true })).toBeVisible()
+  // Cliente guardado como contacto: si el panel abre su chat, la ficha se queda y aprende su numero, y
+  // despues se reconoce aunque lo abras a mano.
+  await page.getByTestId('ficha-cliente').getByRole('button', { name: 'Abrir su chat' }).click()
+  await abrirEnWhatsapp(`<header><span dir="auto">Contacto ${cola}</span></header>`)
+  await page.waitForTimeout(1500)
+  await expect(page.getByTestId('ficha-cliente').getByText(nombre + ' B', { exact: true })).toBeVisible()
+  await page.waitForTimeout(2000)
+  await abrirEnWhatsapp('<header><span dir="auto">+56 9 4000 ' + cola + '</span></header>')
+  await expect(page.getByTestId('chat-sin-cotizacion')).toBeVisible()
+  await abrirEnWhatsapp(`<header><span dir="auto">Contacto ${cola}</span></header>`)
   await expect(page.getByTestId('ficha-cliente').getByText(nombre + ' B', { exact: true })).toBeVisible()
   // E (o el boton) lleva la cotizacion al cotizador para editarla.
   await page.evaluate(() => document.activeElement?.blur())

@@ -88,10 +88,11 @@ if (window.top !== window) {
     }
     // Clic tuyo dentro de WhatsApp: desde ahi las teclas son de WhatsApp (salvo las de arriba).
     window.addEventListener('pointerdown', e => { if (e.isTrusted) window.__dmMandaPanel = false }, true)
-    // Atajos del panel que valen sin Alt mientras el panel manda y la caja del chat esta vacia.
-    // Por la tecla y no solo por su codigo: hay teclados (y teclados en pantalla) que no traen el codigo.
-    const codigo = e => e.code || (/^[1-9]$/.test(e.key) ? 'Digit' + e.key : /^[a-z]$/i.test(e.key) ? 'Key' + e.key.toUpperCase() : '')
-    const DEL_PANEL = /^(Digit|Numpad)[1-9]$|^Key[DAEPRC]$/
+    // Atajos del panel que valen sin Alt mientras el panel manda y la caja del chat esta vacia: solo los
+    // numeros (y ?). Las letras no: si empiezas a escribir "Claro..." sin hacer clic, la C confirmaria la
+    // cotizacion. Por la tecla y no solo por su codigo: hay teclados que no traen el codigo.
+    const codigo = e => e.code || (/^[1-9]$/.test(e.key) ? 'Digit' + e.key : '')
+    const DEL_PANEL = /^(Digit|Numpad)[1-9]$/
     window.addEventListener('keydown', e => {
       if (e.ctrlKey || e.metaKey) return
       if (window.__dmMandaPanel && !e.altKey && sinEscribir() && (DEL_PANEL.test(codigo(e)) || e.key === '?')) {
