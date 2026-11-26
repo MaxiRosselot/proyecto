@@ -16,7 +16,7 @@ import { fijarSeccionUso } from './admin/registroUso.js'
 import VentanaWhatsapp from './admin/VentanaWhatsapp.jsx'
 import MarcoWhatsapp from './admin/MarcoWhatsapp.jsx'
 import ModuloWhatsapp from './admin/ModuloWhatsapp.jsx'
-import { EVENTO_PARA_ENVIAR, extensionInstalada, leerAbierto, leerAncho, guardarAbierto, leerLinkWhatsapp, marcarVentanaAbierta } from './admin/whatsappPanel.js'
+import { EVENTO_ABRIR_VENTANA, EVENTO_PARA_ENVIAR, extensionInstalada, leerAbierto, leerAncho, guardarAbierto, leerLinkWhatsapp, marcarVentanaAbierta } from './admin/whatsappPanel.js'
 
 function Icon({ name, size = 16, color = 'currentColor' }) {
   const icons = {
@@ -132,6 +132,11 @@ export default function AdminApp() {
   function alternarWhatsapp(v) { setWhatsapp(v); guardarAbierto(v); if (v) setWhatsappMontado(true) }
   useEffect(() => { if (enModulo) setWhatsappMontado(true) }, [enModulo])
   useEffect(() => { marcarVentanaAbierta(hayWhatsapp) }, [hayWhatsapp])
+  useEffect(() => {
+    const abrir = () => alternarWhatsapp(true)
+    window.addEventListener(EVENTO_ABRIR_VENTANA, abrir)
+    return () => window.removeEventListener(EVENTO_ABRIR_VENTANA, abrir)
+  }, [])
 
   // Con WhatsApp abierto, los links de WhatsApp del panel (wa.me) no abren otra pestaña:
   // dejan el mensaje listo en la ventana.

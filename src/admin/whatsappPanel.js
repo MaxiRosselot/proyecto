@@ -81,6 +81,9 @@ export function lugarVisible() {
 }
 let marco = null
 export const registrarMarco = el => { marco = el }
+export const hayMarco = () => Boolean(marco)
+// Pide abrir la ventana de WhatsApp de la derecha (la escucha AdminApp).
+export const EVENTO_ABRIR_VENTANA = 'dm:abrir-ventana-whatsapp'
 // Abre el chat de ese numero en el WhatsApp del panel, con el texto escrito (sin enviar). Primero le
 // pide a la extension (1.2+) que lo abra sin recargar; si no puede (cargando, sin sesion, version
 // vieja) o no contesta, recarga WhatsApp con el chat, que tarda unos segundos mas.
@@ -131,12 +134,13 @@ export async function abrirChatEnMarco(telefono, texto = '', reintento = false) 
 }
 // Deja el PDF adjunto en su chat con el texto como comentario, sin enviar (extension 1.5+). Devuelve
 // { ok, motivo }. Si no se puede (version vieja, sin sesion), el panel lo descarga para arrastrarlo.
-export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
+// despues (extension 1.8+): un mensaje que queda escrito en la caja del chat cuando envias el PDF.
+export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '', despues = '' }) {
   if (!marco) return { ok: false, motivo: 'sin-marco' }
   clearTimeout(relojChat)
   ++ultimoPedido
   anotarPedido(telefono)
-  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 90000, 'adjunto')
+  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto, despues }, 90000, 'adjunto')
 }
 function pedirAlMarco(mensaje, espera = 1500, respuesta = 'chat') {
   return new Promise(resolver => {

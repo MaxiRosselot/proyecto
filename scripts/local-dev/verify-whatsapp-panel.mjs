@@ -61,6 +61,49 @@ try {
   if (await page.evaluate(() => navigator.clipboard.readText()) !== '+56 9 3333 4444') throw new Error('No copió el número')
   await page.screenshot({ path: process.env.SHOT || 'whatsapp-panel.png' })
 
+  // Cotizador: recien generada, "PDF + mensaje a su WhatsApp" deja el PDF en su chat (WhatsApp con sesion
+  // simulada dentro del marco) y, al enviarlo, el mensaje para agendar queda escrito. Nada se envia.
+  const cola = String(Date.now() % 10000).padStart(4, '0')
+  await page.getByRole('navigation').getByRole('button', { name: 'Cotizar', exact: true }).click()
+  await page.getByRole('button', { name: 'Reiniciar' }).click()
+  await page.getByRole('button', { name: 'Ingreso manual' }).click()
+  await page.getByPlaceholder('Nombre completo').fill('Cotizador Chat ' + cola)
+  await page.getByPlaceholder('+56 9 XXXX XXXX').fill('9 6666 ' + cola)
+  await page.getByRole('button', { name: /Generar Cotizacion PDF/ }).click()
+  await expect(page.getByText(/Cotización N° \d+ guardada/)).toBeVisible({ timeout: 120000 })
+  const fr = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
+  await fr.evaluate(() => {
+    document.querySelector('#side') || document.body.append(Object.assign(document.createElement('div'), { id: 'side' }))
+    window.__pegado = null
+    document.addEventListener('click', e => {
+      const a = e.target.closest?.('a[href^="https://wa.me/"]')
+      if (!a) return
+      e.preventDefault()
+      document.querySelector('#main')?.remove()
+      const main = Object.assign(document.createElement('div'), { id: 'main' })
+      main.style.cssText = 'position:fixed;top:0;left:0;width:300px;height:300px;z-index:99999;background:white'
+      main.innerHTML = '<footer><div contenteditable="true"></div></footer>'
+      main.addEventListener('paste', ev => {
+        window.__pegado = { nombre: ev.clipboardData.files[0].name, chat: a.href }
+        main.querySelector('footer').style.display = 'none'
+        const vista = Object.assign(document.createElement('div'), { contentEditable: 'true', id: 'vista' })
+        document.body.append(vista)
+      })
+      document.body.append(main)
+    }, true)
+  })
+  await page.getByTestId('pdf-al-chat').click()
+  await expect(page.getByTestId('estado-pdf-al-chat')).toContainText('PDF en su chat', { timeout: 30000 })
+  const pegado = await fr.evaluate(() => window.__pegado)
+  if (!pegado?.chat.endsWith('/5696666' + cola) || !pegado.nombre.startsWith('Cotizacion Cotizador Chat')) throw new Error('PDF mal dejado: ' + JSON.stringify(pegado))
+  if (!(await page.evaluate(() => navigator.clipboard.readText())).includes('Te adjunto la cotización')) throw new Error('El mensaje no quedó copiado')
+  await page.waitForTimeout(800)
+  if (await fr.evaluate(() => document.querySelector('#main footer [contenteditable]').textContent)) throw new Error('El mensaje se escribió antes de enviar el PDF')
+  await fr.evaluate(() => { document.querySelector('#vista').remove(); document.querySelector('#main footer').style.display = '' })
+  await expect.poll(() => fr.evaluate(() => document.querySelector('#main footer [contenteditable]').textContent), { timeout: 5000 }).toContain('Te adjunto la cotización')
+  const cotChat = Number((await page.getByText(/Cotización N° \d+ guardada/).textContent()).match(/N° (\d+)/)[1])
+  await api('delete-quote', { cotNum: cotChat })
+
   // Cerrar: el panel vuelve a todo el ancho y queda el boton para abrirla otra vez.
   await ventana.getByRole('button', { name: 'Cerrar WhatsApp' }).click()
   await expect(ventana).toBeHidden()

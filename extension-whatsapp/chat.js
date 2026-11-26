@@ -219,7 +219,24 @@ async function adjuntar(d, origen) {
       if (campo) { campo.focus(); document.execCommand('insertText', false, d.texto) }
       return responder(true, campo ? '' : 'sin-comentario', como)
     }
+    if (d.despues) escribirDespues(main, antes, d.despues) // sin esperar: tu decides cuando dar Enter
     return responder(true, '', como)
   }
   responder(false, 'no-adjunto')
+}
+
+// El mensaje que va despues del PDF (extension 1.8): cuando envias el PDF (o lo descartas) y se cierra
+// la vista previa, queda ESCRITO en la caja del mismo chat, sin enviar. Si cambiaste de chat o ya
+// estabas escribiendo algo, no se toca nada (el panel igual lo dejo copiado).
+async function escribirDespues(main, antes, texto) {
+  const titulo = () => (document.querySelector('#main header span[dir="auto"]')?.textContent || '').trim()
+  const delChat = titulo()
+  const vista = await hasta(() => nuevoEditable(antes), 15000)
+  if (!vista) return
+  if (!await hasta(() => !vista.isConnected || !vista.offsetParent, 15 * 60000)) return
+  await esperar(500)
+  const caja = document.querySelector('#main footer [contenteditable="true"]')
+  if (!caja || titulo() !== delChat || (caja.textContent || '').trim()) return
+  caja.focus()
+  document.execCommand('insertText', false, texto)
 }
