@@ -161,8 +161,9 @@ try {
         const main = Object.assign(document.createElement('div'), { id: 'main' })
         main.style.cssText = 'position:fixed;top:0;left:0;width:300px;height:300px;z-index:99999;background:white'
         main.innerHTML = '<footer><div contenteditable="true"></div></footer>'
-        main.addEventListener('drop', ev => {
-          const archivo = ev.dataTransfer.files[0]
+        // Como el WhatsApp real: toma el archivo pegado en la caja del chat.
+        main.addEventListener('paste', ev => {
+          const archivo = ev.clipboardData.files[0]
           window.__soltado = { nombre: archivo.name, tipo: archivo.type, tam: archivo.size, chat: a.href, veces: (window.__soltado?.veces || 0) + 1 }
           main.querySelector('footer').style.display = 'none' // la vista previa tapa la caja del chat
           const comentario = Object.assign(document.createElement('div'), { contentEditable: 'true', id: 'comentario' })

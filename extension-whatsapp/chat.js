@@ -94,7 +94,14 @@ const editables = () => new Set(document.querySelectorAll('[contenteditable="tru
 const nuevoEditable = antes => [...document.querySelectorAll('[contenteditable="true"]')].find(el => !antes.has(el) && el.offsetParent)
 function conArchivo(archivo) { const dt = new DataTransfer(); dt.items.add(archivo); return dt }
 
+// En el WhatsApp real (2026-11-26) funciona pegar; soltar no lo toma. Las otras quedan de respaldo.
 const MANERAS = {
+  pegar: async (main, archivo) => {
+    const composer = main.querySelector('footer [contenteditable="true"]')
+    if (!composer) return
+    composer.focus()
+    composer.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: conArchivo(archivo) }))
+  },
   soltar: async (main, archivo) => {
     const r = main.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2
     const ev = (tipo, el) => el && el.dispatchEvent(new DragEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: conArchivo(archivo) }))
@@ -103,12 +110,6 @@ const MANERAS = {
     await esperar(400) // WhatsApp pone su zona para soltar encima
     const zona = document.elementFromPoint(x, y) || debajo
     ev('dragover', zona); ev('drop', zona)
-  },
-  pegar: async (main, archivo) => {
-    const composer = main.querySelector('footer [contenteditable="true"]')
-    if (!composer) return
-    composer.focus()
-    composer.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: conArchivo(archivo) }))
   },
   documento: async (main, archivo) => {
     const boton = main.querySelector('footer [data-icon="plus-rounded"], footer [data-icon="plus"], footer [data-icon="clip"], footer [aria-label="Attach"], footer [aria-label="Adjuntar"], footer [title="Attach"], footer [title="Adjuntar"]')
@@ -140,7 +141,7 @@ async function adjuntar(d, origen) {
   if (!main) return responder(false, avisoInvalido() ? 'sin-whatsapp' : 'sin-chat')
   const archivo = new File([d.archivo], d.nombre || 'Cotizacion.pdf', { type: 'application/pdf' })
   // Funciono cuando la vista previa muestra el nombre del archivo (en el WhatsApp real tarda hasta
-  // ~12 s con un PDF de 700 kB). Se prueba UNA manera a la vez y se espera de verdad antes de la
+  // ~25 s con un PDF de 700 kB, comentario incluido). Se prueba UNA manera a la vez y se espera de verdad antes de la
   // siguiente: si no, quedan copias del PDF.
   const conNombre = () => { let n = 0; const w = document.createTreeWalker(document.querySelector('#app') || document.body, NodeFilter.SHOW_TEXT); for (let t = w.nextNode(); t; t = w.nextNode()) if ((t.nodeValue || '').includes(archivo.name)) n++; return n }
   for (const [como, hacer] of Object.entries(MANERAS)) {
