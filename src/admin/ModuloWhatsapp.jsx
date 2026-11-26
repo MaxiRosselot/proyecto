@@ -243,13 +243,16 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
       if (!r.ok) throw new Error((await r.text()).slice(0, 120) || 'error ' + r.status)
       const archivo = await r.blob()
       const nombre = nombrePdf(q.nombre), texto = mensajeEnvioCotizacion(q.linkAgenda)
-      setEstado({ texto: 'Dejándolo en su chat…', tono: '' })
+      setEstado({ texto: 'Dejándolo en su chat… (un PDF grande tarda unos segundos)', tono: '' })
       const res = await adjuntarEnChat(q.telefono, { archivo, nombre, texto })
-      if (res.ok) { setEstado({ texto: '✓ Quedó en su chat: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
+      if (res.ok && res.motivo === 'sin-comentario') {
+        navigator.clipboard?.writeText(texto).catch(() => {})
+        setEstado({ texto: '✓ El PDF quedó en su chat. El mensaje no entró solo: lo copié, pégalo en el comentario (Ctrl+V) y da Enter.', tono: 'verde' }); onEnWhatsapp?.()
+      } else if (res.ok) { setEstado({ texto: '✓ Quedó en su chat con su mensaje: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
       else if (res.motivo === 'sin-whatsapp') setEstado({ texto: 'WhatsApp dice que este número no existe', tono: 'rojo' })
       else {
         descargar(archivo, nombre)
-        try { await navigator.clipboard.writeText(texto) } catch { /* sin permiso */ }
+        navigator.clipboard?.writeText(texto).catch(() => {}) // sin esperar: con WhatsApp enfocado puede no contestar
         setEstado({ texto: 'No pude dejarlo en el chat (¿extensión al día y WhatsApp abierto?). Lo descargué y copié el mensaje: arrástralo al chat.', tono: 'ambar' })
       }
     } catch (e) { setEstado({ texto: 'No se pudo traer el PDF: ' + e.message, tono: 'rojo' }) }

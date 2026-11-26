@@ -139,12 +139,20 @@ async function adjuntar(d, origen) {
   const main = await hasta(() => { const m = document.querySelector('#main'); return m && m.querySelector('footer [contenteditable="true"]') ? m : null }, 5000)
   if (!main) return responder(false, avisoInvalido() ? 'sin-whatsapp' : 'sin-chat')
   const archivo = new File([d.archivo], d.nombre || 'Cotizacion.pdf', { type: 'application/pdf' })
+  // Apenas WhatsApp toma el archivo, la caja para escribir del chat desaparece (la tapa la vista previa,
+  // aunque todavia este cargando): eso dice que funciono, y no se prueba otra manera (si no, quedan copias).
+  const composer = main.querySelector('footer [contenteditable="true"]')
+  const tapado = () => !composer.isConnected || !composer.offsetParent
   for (const [como, hacer] of Object.entries(MANERAS)) {
     const antes = editables()
     try { await hacer(main, archivo) } catch { continue }
-    const campo = await hasta(() => nuevoEditable(antes), 2500)
-    if (!campo) continue
-    if (d.texto) { campo.focus(); document.execCommand('insertText', false, d.texto) }
+    if (!await hasta(tapado, 3000)) continue
+    // El comentario: el campo de la vista previa, cuando termina de cargar (un PDF grande tarda).
+    if (d.texto) {
+      const campo = await hasta(() => nuevoEditable(antes), 20000)
+      if (campo) { campo.focus(); document.execCommand('insertText', false, d.texto) }
+      return responder(true, campo ? '' : 'sin-comentario', como)
+    }
     return responder(true, '', como)
   }
   responder(false, 'no-adjunto')

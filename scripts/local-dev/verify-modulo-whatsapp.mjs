@@ -163,7 +163,8 @@ try {
         main.innerHTML = '<footer><div contenteditable="true"></div></footer>'
         main.addEventListener('drop', ev => {
           const archivo = ev.dataTransfer.files[0]
-          window.__soltado = { nombre: archivo.name, tipo: archivo.type, tam: archivo.size, chat: a.href }
+          window.__soltado = { nombre: archivo.name, tipo: archivo.type, tam: archivo.size, chat: a.href, veces: (window.__soltado?.veces || 0) + 1 }
+          main.querySelector('footer').style.display = 'none' // la vista previa tapa la caja del chat
           const comentario = Object.assign(document.createElement('div'), { contentEditable: 'true', id: 'comentario' })
           document.body.append(comentario); comentario.focus()
         })
@@ -175,7 +176,7 @@ try {
   await expect(page.getByTestId('estado-pdf')).toContainText('Quedó en su chat')
   const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
   const soltado = await f.evaluate(() => ({ ...window.__soltado, comentario: document.querySelector('#comentario')?.textContent }))
-  if (soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || !soltado.comentario.includes('Te adjunto la cotización'))
+  if (soltado.veces !== 1 || soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || !soltado.comentario.includes('Te adjunto la cotización'))
     throw new Error('No quedó bien el PDF en el chat: ' + JSON.stringify(soltado))
   if (errors.length) throw new Error(errors.join('\n'))
 } finally {
