@@ -153,7 +153,7 @@ try {
   if (!descarga.suggestedFilename().startsWith('Cotizacion Modulo')) throw new Error('Descargó ' + descarga.suggestedFilename())
   await expect(page.getByTestId('estado-pdf')).toContainText('Lo descargué')
 
-  // Con sesion (simulada dentro del marco: un chat que recibe lo que se suelta): queda el PDF con su mensaje.
+  // Con sesion (simulada dentro del marco: un chat que recibe lo que se suelta): queda el PDF solo, sin comentario.
   await expect(async () => {
     const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
     await f.evaluate(() => {
@@ -181,11 +181,16 @@ try {
     })
   }).toPass({ timeout: 20000 })
   await page.keyboard.press('d')
-  await expect(page.getByTestId('estado-pdf')).toContainText('Quedó en su chat')
+  await expect(page.getByTestId('estado-pdf')).toContainText('El PDF quedó en su chat')
   const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
   const soltado = await f.evaluate(() => ({ ...window.__soltado, comentario: document.querySelector('#comentario')?.textContent }))
-  if (soltado.veces !== 1 || soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || !soltado.comentario.includes('Te adjunto la cotización'))
+  if (soltado.veces !== 1 || soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || soltado.comentario)
     throw new Error('No quedó bien el PDF en el chat: ' + JSON.stringify(soltado))
+  // El mensaje de agendamiento va aparte: boton al lado del PDF (tecla A) que lo copia.
+  await page.evaluate(() => { document.activeElement?.blur(); return navigator.clipboard.writeText('') })
+  await page.keyboard.press('a')
+  await expect(page.locator('[data-atajo="copiar-agenda"]')).toHaveText('✓ Copiado')
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('Te adjunto la cotización')
 
   // La ficha sigue al chat que se abre en WhatsApp (la extension lee el numero de sus mensajes o del titulo).
   const otra = (await api('save-quote', { crear: true, nombre: nombre + ' B', telefono: '9 5555 ' + cola, subtotal: 50000, iva: 9500, total: 59500, repisas: [{ largo: 1, prof: .4, alto: 2, niveles: 4, unidades: 1, valor: 50000 }], adicionales: {} })).cotNum

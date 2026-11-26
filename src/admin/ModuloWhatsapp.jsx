@@ -228,9 +228,9 @@ function descargar(blob, nombre) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000)
 }
 
-// Deja el PDF de la cotizacion en su chat, con el mensaje de envio como comentario. No lo envia:
-// WhatsApp muestra la vista previa y tu das Enter. Si la extension no puede, lo descarga y copia el
-// mensaje para arrastrarlo a mano.
+// Deja el PDF de la cotizacion en su chat, solo (sin comentario: con el mensaje encima se ve mal). No lo
+// envia: WhatsApp muestra la vista previa y tu das Enter. Al lado, un boton copia el mensaje de agendamiento
+// para mandarlo aparte. Si la extension no puede, lo descarga para arrastrarlo a mano.
 function PdfEnSuChat({ q, onEnWhatsapp }) {
   const [estado, setEstado] = useState({ texto: '', tono: '' })
   const [ocupado, setOcupado] = useState(false)
@@ -242,19 +242,15 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
       const r = await adminFetch('/.netlify/functions/pdf-cotizacion?id=' + encodeURIComponent(id))
       if (!r.ok) throw new Error((await r.text()).slice(0, 120) || 'error ' + r.status)
       const archivo = await r.blob()
-      const nombre = nombrePdf(q.nombre), texto = mensajeEnvioCotizacion(q.linkAgenda)
+      const nombre = nombrePdf(q.nombre)
       setEstado({ texto: 'Dejándolo en su chat… (un PDF grande tarda unos segundos)', tono: '' })
-      const res = await adjuntarEnChat(q.telefono, { archivo, nombre, texto })
+      const res = await adjuntarEnChat(q.telefono, { archivo, nombre })
       console.info('PDF en su chat:', res) // como lo tomo WhatsApp (soltar / pegar / documento)
-      if (res.ok && res.motivo === 'sin-comentario') {
-        navigator.clipboard?.writeText(texto).catch(() => {})
-        setEstado({ texto: '✓ El PDF quedó en su chat. El mensaje no entró solo: lo copié, pégalo en el comentario (Ctrl+V) y da Enter.', tono: 'verde' }); onEnWhatsapp?.()
-      } else if (res.ok) { setEstado({ texto: '✓ Quedó en su chat con su mensaje: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
+      if (res.ok) { setEstado({ texto: '✓ El PDF quedó en su chat: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
       else if (res.motivo === 'sin-whatsapp') setEstado({ texto: 'WhatsApp dice que este número no existe', tono: 'rojo' })
       else {
         descargar(archivo, nombre)
-        navigator.clipboard?.writeText(texto).catch(() => {}) // sin esperar: con WhatsApp enfocado puede no contestar
-        setEstado({ texto: 'No pude dejarlo en el chat (¿extensión al día y WhatsApp abierto?). Lo descargué y copié el mensaje: arrástralo al chat.', tono: 'ambar' })
+        setEstado({ texto: 'No pude dejarlo en el chat (¿extensión al día y WhatsApp abierto?). Lo descargué: arrástralo al chat.', tono: 'ambar' })
       }
     } catch (e) { setEstado({ texto: 'No se pudo traer el PDF: ' + e.message, tono: 'rojo' }) }
     finally { setOcupado(false) }
@@ -262,8 +258,11 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
   if (!q.telefono) return null
   return (
     <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
       <button type="button" data-atajo="pdf" disabled={!id || ocupado} onClick={dejar} title={id ? 'Tecla D' : 'Esta cotización no tiene PDF guardado'}
         style={{ ...botonVerde, opacity: id ? 1 : .5 }}>📄 {ocupado ? 'Preparando…' : id ? 'PDF en su chat' : 'Sin PDF guardado'}</button>
+      {q.linkAgenda && <Copiar texto={mensajeEnvioCotizacion(q.linkAgenda)} data-atajo="copiar-agenda" titulo="Tecla A">Copiar mensaje de agendamiento</Copiar>}
+      </div>
       {estado.texto && <div data-testid="estado-pdf" style={{ fontSize: 11.5, marginTop: 4, color: TONOS[estado.tono] || C.textSub }}>{estado.texto}</div>}
     </div>
   )
