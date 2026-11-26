@@ -112,6 +112,27 @@ try {
   await marco.locator('body').click({ position: { x: 5, y: 5 } })
   await page.keyboard.press('Alt+Digit2')
   await expect.poll(() => page.getByTestId('marco-whatsapp').getAttribute('src')).toContain('sigue+disponible')
+
+  // Si WhatsApp se queda con el teclado al abrir un chat, vuelve al panel (para seguir con las flechas).
+  await modulo.getByLabel('Buscar cliente').fill(nombre)
+  await page.evaluate(() => document.activeElement?.blur())
+  await page.keyboard.press('ArrowDown')
+  await page.evaluate(() => document.querySelector('[data-testid=marco-whatsapp]').focus())
+  await expect.poll(() => page.evaluate(() => document.activeElement?.tagName), { timeout: 4000 }).not.toBe('IFRAME')
+
+  // WhatsApp dice que el numero no existe (la extension avisa): queda en "Sin WhatsApp".
+  await expect(page.getByTestId('ficha-cliente').getByText(nombre)).toBeVisible()
+  await expect(async () => {
+    const frame = page.frames().find(f => f.parentFrame() === page.mainFrame() && f.url().includes('web.whatsapp.com'))
+    await frame.evaluate(() => window.parent.postMessage({ dm: 'sin-whatsapp', telefono: '56955556666' }, '*'))
+    await expect(page.getByTestId('ficha-sin-whatsapp')).toBeVisible({ timeout: 1000 })
+  }).toPass({ timeout: 20000 })
+  await expect(page.getByTestId('ficha-sin-whatsapp')).toBeVisible()
+  await modulo.getByLabel('Buscar cliente').fill('')
+  await expect(modulo.getByRole('button', { name: /^Sin WhatsApp · 1$/ })).toBeVisible()
+  await expect.poll(async () => (await api('get-quotes')).quotes.find(x => x.cotNum === cotNum).seguimiento.sinWhatsapp?.tel).toBe('55556666')
+  await page.getByTestId('ficha-sin-whatsapp').getByRole('button', { name: 'Sí tiene' }).click()
+  await expect(page.getByTestId('ficha-sin-whatsapp')).toBeHidden()
   if (errors.length) throw new Error(errors.join('\n'))
 } finally {
   if (api && cotNum) await api('delete-quote', { cotNum }).catch(() => {})

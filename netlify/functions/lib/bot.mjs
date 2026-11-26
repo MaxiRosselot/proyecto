@@ -17,7 +17,7 @@ import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, rangosDelDia, suma
 import { disponibilidadAgenda, duracionInstalacionMin, duracionTexto, horasDelDia, ocupadosAgenda } from './agenda-horas.mjs'
 import { avisoSinRespuesta, confirmacionCortaInstalacion, fichaCotizacion, lineasRepisas, serviciosDe } from './telegram.mjs'
 import { diasDesde } from './seguimiento.mjs'
-import { marcarYaCompro } from './seguimiento-whatsapp.mjs'
+import { marcarYaCompro, sinWhatsapp } from './seguimiento-whatsapp.mjs'
 import { comunaDe } from './zonas.mjs'
 import { linksRuta, planificarRuta } from './ruta-visitas.mjs'
 import { textoMateriales, tituloDia, ventasPorInstalar } from '../../../src/admin/materiales.js'
@@ -186,7 +186,7 @@ export function vistaPorCobrar({ quotes, hoy }) {
 export function vistaSinRespuesta({ quotes, hoy }) {
   // Las que el cliente pospuso ("Esperar hasta" en el panel) no aparecen hasta esa fecha, ni las de
   // clientes que ya compraron con otra cotizacion.
-  const pendientes = marcarYaCompro(quotes).filter(q => q.status === 'por confirmar' && !q.yaCompro && !(q.seguimiento?.esperarHasta > hoy))
+  const pendientes = marcarYaCompro(quotes).filter(q => q.status === 'por confirmar' && !q.yaCompro && !sinWhatsapp(q) && !(q.seguimiento?.esperarHasta > hoy))
     .map(q => ({ cotNum: q.cotNum, nombre: q.nombre, telefono: q.telefono, total: q.total, dias: diasDesde(q.creadoMs, hoy) }))
     .filter(c => c.dias != null && c.dias >= 2 && c.dias <= 45).sort((a, b) => a.dias - b.dias).slice(0, 12)
   if (!pendientes.length) return { texto: '⏰ No hay cotizaciones esperando respuesta (de 2 a 45 días). 🙌', filas: [MENU] }

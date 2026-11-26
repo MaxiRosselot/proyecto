@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, QUOTE_STATUS_LABELS, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import {
-  anotarBitacora, esperarHasta, estadoSeguimiento, marcarYaCompro, quitarDeBitacora, registrarPregunta, registrarRespuesta,
+  anotarBitacora, esperarHasta, estadoSeguimiento, marcarSinWhatsapp, marcarYaCompro, quitarDeBitacora, quitarSinWhatsapp, registrarPregunta, registrarRespuesta, sinWhatsapp,
 } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import { mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
-import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, buscarClientes, enfocarMarco, extensionInstalada, inicioMarco, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
+import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
@@ -235,6 +235,12 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
           {q.telefono && <Copiar texto={telefonoLegible(q.telefono)}>Copiar</Copiar>}
           {q.telefono && <button type="button" style={botonVerde} onClick={() => abrirChatEnMarco(q.telefono)}>Abrir su chat</button>}
         </div>
+        {q.telefono && (sinWhatsapp(q)
+          ? <div data-testid="ficha-sin-whatsapp" style={{ marginTop: 8, padding: '7px 9px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 12, color: C.red, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ flex: 1 }}>WhatsApp dice que este número no existe ({fechaCorta(q.seguimiento.sinWhatsapp.fecha)}). Revísalo por fuera: si lo corriges en la cotización, sale solo de esta lista.</span>
+              <button type="button" style={boton} onClick={() => onGuardar(quitarSinWhatsapp(q.seguimiento))}>Sí tiene</button>
+            </div>
+          : <button type="button" onClick={() => onGuardar(marcarSinWhatsapp(q.seguimiento, q.telefono, hoy))} style={{ border: 'none', background: 'none', padding: 0, marginTop: 6, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, color: C.textMuted, textDecoration: 'underline' }}>No tiene WhatsApp</button>)}
         {q.direccion && <div style={{ fontSize: 12, color: C.textSub, marginTop: 6 }}>📍 {q.direccion}</div>}
         {q.instalacion?.fecha && <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginTop: 4 }}>🛠️ Instalación {fechaCorta(q.instalacion.fecha)}, {q.instalacion.inicio}–{q.instalacion.fin}</div>}
         <EstadoCotizacion q={q} onEstado={onEstado} guardando={guardando} />
@@ -339,9 +345,20 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
   }, [quotes])
 
   // Tocar un cliente abre su ficha y, al tiro, su chat (si tiene celular y WhatsApp esta listo).
+  // WhatsApp se queda con el teclado al abrir un chat: se le devuelve al panel para seguir con las
+  // flechas, salvo que hayas pedido ir a WhatsApp (1–9, Enter).
+  const raiz = React.useRef(null)
+  const irAWhatsapp = React.useRef(0)
+  function retenerTeclado() {
+    const desde = Date.now()
+    for (const t of [80, 300, 700, 1200, 2000]) setTimeout(() => {
+      if (irAWhatsapp.current > desde || !esMarco(document.activeElement)) return
+      raiz.current?.focus({ preventScroll: true })
+    }, t)
+  }
   function elegir(seleccion, telefono) {
     setSel(seleccion)
-    if (telefono && hayExtension) abrirChatEnMarco(telefono)
+    if (telefono && hayExtension) { abrirChatEnMarco(telefono); retenerTeclado() }
   }
 
   // Atajos de teclado (ver atajosWhatsapp.js). La lista que se ve, en orden, con como elegir a cada uno.
@@ -366,11 +383,11 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
       const b = modulo?.querySelector(`[data-atajo="${a.copiar ? 'copiar' : 'chat'}-${a.n}"]`)
       if (!b) return
       b.click()
-      if (!a.copiar) setTimeout(enfocarMarco, 400)
+      if (!a.copiar) { irAWhatsapp.current = Date.now(); setTimeout(enfocarMarco, 400) }
     } else if (a.tipo === 'clic') {
       modulo?.querySelector(`[data-atajo="${a.atajo}"]`)?.click()
     } else if (a.tipo === 'whatsapp') {
-      enfocarMarco()
+      irAWhatsapp.current = Date.now(); enfocarMarco()
     } else if (a.tipo === 'buscar') {
       campoBuscar.current?.focus(); campoBuscar.current?.select()
     } else if (a.tipo === 'ayuda') {
@@ -381,6 +398,11 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
       else if (el && el !== document.body) el.blur()
       else setAyuda(false)
     }
+  }
+  // WhatsApp dijo que el numero no existe: se marca en sus cotizaciones (quedan en "Sin WhatsApp").
+  const sinWhatsappRef = React.useRef(null)
+  sinWhatsappRef.current = tel => {
+    for (const c of quotes) if (mismoTelefono(c.telefono, tel) && !sinWhatsapp(c)) guardarCambios(c.cotNum, { seguimiento: marcarSinWhatsapp(c.seguimiento, c.telefono, hoy) })
   }
   const hacerRef = React.useRef(hacer)
   hacerRef.current = hacer
@@ -399,7 +421,8 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
     }
     window.addEventListener('keydown', tecla)
     const dejar = oirTeclasDelMarco(d => { const a = accionDeTecla(d, 'otro'); if (a) hacerRef.current(a) })
-    return () => { window.removeEventListener('keydown', tecla); dejar() }
+    const dejar2 = oirSinWhatsapp(tel => sinWhatsappRef.current(tel))
+    return () => { window.removeEventListener('keydown', tecla); dejar(); dejar2() }
   }, [])
 
   // Se ve al instante y se guarda en la planilla por detras (tarda 1–2 s); si falla, se deshace.
@@ -422,7 +445,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
   }
 
   return (
-    <div data-testid="modulo-whatsapp" style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr) 360px', height: '100%', minHeight: 0, background: C.border, gap: 1 }}>
+    <div data-testid="modulo-whatsapp" ref={raiz} tabIndex={-1} style={{ outline: 'none', display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr) 360px', height: '100%', minHeight: 0, background: C.border, gap: 1 }}>
       {/* Clientes */}
       <section style={columna} aria-label="Clientes">
         <div style={{ padding: '10px 12px', borderBottom: '1px solid ' + C.border, display: 'flex', flexDirection: 'column', gap: 8 }}>

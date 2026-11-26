@@ -1,6 +1,6 @@
 // Logica de la seccion WhatsApp: que clientes van en cada filtro, que mensajes sirven para cada uno
 // segun en que va, y los mensajes rapidos propios (con {nombre}, {cotizacion}...).
-import { estadoSeguimiento, mensajesSeguimiento } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
+import { estadoSeguimiento, mensajesSeguimiento, sinWhatsapp } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import { mensajeConfirmarInstalacion, mensajeCotizacion, mensajeEnvioCotizacion, mensajeInstalacionManana, mensajeRecordatorio } from '../../netlify/functions/lib/mensajes.mjs'
 import { mensajeInstalacionDe } from './whatsappInstalacion.js'
 
@@ -11,6 +11,7 @@ export const FILTROS = [
   { id: 'proximas', nombre: 'Próximas instalaciones', ayuda: 'Instalaciones de hoy en adelante' },
   { id: 'porconfirmar', nombre: 'Por confirmar', ayuda: 'Todas las cotizaciones esperando respuesta' },
   { id: 'esperando', nombre: 'Esperando', ayuda: 'Clientes que pospusieron hasta una fecha' },
+  { id: 'sinwsp', nombre: 'Sin WhatsApp', ayuda: 'Números que WhatsApp dice que no existen: para revisarlos por fuera' },
   { id: 'todos', nombre: 'Todos', ayuda: 'Todas las cotizaciones' },
 ]
 
@@ -28,6 +29,7 @@ export function clasificar(quotes, hoy) {
     agendar: qs.filter(q => q.status === 'confirmada' && !q.instalacion?.fecha).sort(porNumeroDesc),
     proximas: qs.filter(q => q.instalacion?.fecha && q.instalacion.fecha >= hoy && q.status !== 'rechazada')
       .sort((a, b) => (a.instalacion.fecha + a.instalacion.inicio).localeCompare(b.instalacion.fecha + b.instalacion.inicio)),
+    sinwsp: qs.filter(q => sinWhatsapp(q) && q.status !== 'rechazada').sort(porNumeroDesc),
     todos: [...qs].sort(porNumeroDesc),
   }
 }
@@ -45,6 +47,7 @@ export function enQueVa(q, hoy) {
   }
   if (q.status === 'confirmada') return { texto: 'Confirmada · falta agendar', tono: 'ambar' }
   if (q.yaCompro) return { texto: `Ya compró con la N° ${q.yaCompro.cotNum}`, tono: 'verde' }
+  if (sinWhatsapp(q)) return { texto: 'Número sin WhatsApp: revisar', tono: 'rojo' }
   const e = estadoSeguimiento(q, hoy)
   if (e.esperando) return { texto: `Esperando hasta ${fechaCorta(e.esperando)}`, tono: 'gris' }
   if (e.tocaPreguntar) return { texto: e.veces ? `Toca preguntar · preguntado ${e.veces}×` : 'Toca preguntar · sin preguntar', tono: 'ambar' }

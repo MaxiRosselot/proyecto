@@ -4,7 +4,7 @@
 // se espera hasta esa fecha. La bitacora guarda notas cortas de lo que se hablo.
 // Se guarda en la columna V de la cotizacion:
 //   { preguntas: ['AAAA-MM-DD', ...], respondio?: 'AAAA-MM-DD', esperarHasta?: 'AAAA-MM-DD',
-//     bitacora?: [{ fecha: 'AAAA-MM-DD', texto }] }
+//     bitacora?: [{ fecha: 'AAAA-MM-DD', texto }], sinWhatsapp?: { fecha, tel } }
 import { diasDesde } from './seguimiento.mjs'
 
 // Dias sin respuesta despues de preguntar para volver a preguntar, y dias desde que se envio la
@@ -52,7 +52,17 @@ export function quitarDeBitacora(seguimiento, indice) {
 }
 
 // Hay algo que guardar en la planilla.
-export const haySeguimiento = s => Boolean(s && (s.preguntas?.length || s.respondio || s.esperarHasta || s.bitacora?.length))
+export const haySeguimiento = s => Boolean(s && (s.preguntas?.length || s.respondio || s.esperarHasta || s.bitacora?.length || s.sinWhatsapp))
+
+// Numero sin WhatsApp (WhatsApp dijo que no existe): no se le pregunta y queda aparte para revisarlo.
+// Se guarda con los ultimos 8 digitos: si se corrige el numero, deja de valer solo.
+export function marcarSinWhatsapp(seguimiento, telefono, fecha) {
+  return limpio({ ...(seguimiento || {}), preguntas: seguimiento?.preguntas || [], sinWhatsapp: { fecha, tel: ultimos8(telefono) } })
+}
+export function quitarSinWhatsapp(seguimiento) {
+  return limpio({ ...(seguimiento || {}), preguntas: seguimiento?.preguntas || [], sinWhatsapp: null })
+}
+export const sinWhatsapp = q => Boolean(q.seguimiento?.sinWhatsapp?.tel && q.seguimiento.sinWhatsapp.tel === ultimos8(q.telefono))
 
 // Clientes que ya compraron con otra cotizacion: si el mismo cliente (mismo celular, o mismo nombre
 // y apellido aunque el celular sea otro) tiene otra cotizacion confirmada, agendada, con pagos o en la
@@ -87,7 +97,7 @@ export function estadoSeguimiento(q, hoy) {
   const hasta = q.seguimiento?.esperarHasta || null
   const esperando = hasta && hoy < hasta ? hasta : null
   const cumplioEspera = hasta && !esperando && (!ultima || ultima < hasta)
-  const tocaPreguntar = porConfirmar && !q.yaCompro && !esperando && (cumplioEspera || (!respondio && (ultima
+  const tocaPreguntar = porConfirmar && !q.yaCompro && !sinWhatsapp(q) && !esperando && (cumplioEspera || (!respondio && (ultima
     ? diasDesdeUltima >= DIAS_PARA_VOLVER_A_PREGUNTAR
     : (diasDesde(q.creadoMs, hoy) ?? 0) >= DIAS_PARA_PRIMERA_PREGUNTA)))
   return { veces: preguntas.length, ultima, diasDesdeUltima, respondio, tocaPreguntar, esperando, yaCompro: q.yaCompro || null }

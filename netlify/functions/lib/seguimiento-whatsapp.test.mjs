@@ -98,3 +98,15 @@ test('seguimiento whatsapp: no se pregunta por cotizaciones de clientes que ya c
   assert.equal(estadoSeguimiento(por('10'), '2026-11-22').tocaPreguntar, false)
   assert.equal(estadoSeguimiento(por('30'), '2026-11-22').tocaPreguntar, true)
 })
+
+test('seguimiento whatsapp: numero sin WhatsApp no sale en "toca preguntar" hasta que se corrija', async () => {
+  const { marcarSinWhatsapp, quitarSinWhatsapp, sinWhatsapp } = await import('./seguimiento-whatsapp.mjs')
+  const base = q({ cotNum: '70', telefono: '+56 9 6531 7634' })
+  const marcada = { ...base, seguimiento: marcarSinWhatsapp(base.seguimiento, base.telefono, '2026-11-26') }
+  assert.deepEqual(marcada.seguimiento.sinWhatsapp, { fecha: '2026-11-26', tel: '65317634' })
+  assert.equal(haySeguimiento(marcada.seguimiento), true)
+  assert.equal(sinWhatsapp(marcada), true)
+  assert.equal(estadoSeguimiento(marcada, '2026-11-26').tocaPreguntar, false)
+  assert.equal(sinWhatsapp({ ...marcada, telefono: '+56 9 6531 7635' }), false) // corrigio el numero
+  assert.equal(sinWhatsapp({ ...marcada, seguimiento: quitarSinWhatsapp(marcada.seguimiento) }), false)
+})

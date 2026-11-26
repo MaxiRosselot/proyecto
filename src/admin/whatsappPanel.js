@@ -88,7 +88,7 @@ let pedidos = 0
 export async function abrirChatEnMarco(telefono, texto = '') {
   if (!marco) return
   const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
-  if (!ok) marco.src = linkWhatsappWeb(telefono, texto)
+  if (!ok && marco) marco.src = linkWhatsappWeb(telefono, texto)
 }
 function pedirAlMarco(mensaje, espera = 1500) {
   return new Promise(resolver => {
@@ -104,8 +104,12 @@ export function inicioMarco() { if (marco) marco.src = URL_WHATSAPP_WEB }
 // Lleva el teclado a WhatsApp (queda donde estaba: normalmente escribiendo en el chat abierto).
 export function enfocarMarco() { try { marco?.focus(); marco?.contentWindow?.focus() } catch { /* sin marco */ } }
 // Las teclas con Alt apretadas dentro de WhatsApp (la extension 1.3+ las pasa al panel).
-export function oirTeclasDelMarco(fn) {
-  const oir = ev => { if (marco && ev.source === marco.contentWindow && ev.data?.dm === 'tecla') fn(ev.data) }
+export const esMarco = el => Boolean(el) && el === marco
+export function oirTeclasDelMarco(fn) { return oirDelMarco('tecla', fn) }
+// WhatsApp dijo que ese numero no existe (extension 1.4+).
+export function oirSinWhatsapp(fn) { return oirDelMarco('sin-whatsapp', d => fn(String(d.telefono || ''))) }
+function oirDelMarco(tipo, fn) {
+  const oir = ev => { if (marco && ev.source === marco.contentWindow && ev.data?.dm === tipo) fn(ev.data) }
   window.addEventListener('message', oir)
   return () => window.removeEventListener('message', oir)
 }
