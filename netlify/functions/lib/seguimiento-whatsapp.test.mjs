@@ -83,12 +83,18 @@ test('seguimiento whatsapp: no se pregunta por cotizaciones de clientes que ya c
     q({ cotNum: '30', nombre: 'Ana Soto', telefono: '933334444' }),
     { cotNum: '31', nombre: 'Ana Soto', telefono: '933334444', status: 'confirmada', creadoMs: creada('2025-03-01'), instalacion: { fecha: '2025-03-10' } },
     q({ cotNum: '40', nombre: 'Ana Soto', telefono: '955556666' }),
+    q({ cotNum: '50', nombre: 'Oscar Gutierrez', telefono: '977778888' }),
+    { cotNum: '51', nombre: 'Óscar Gutiérrez ', telefono: '966667777', status: 'confirmada', creadoMs: creada('2026-11-15') },
+    q({ cotNum: '60', nombre: 'Javier Pino', telefono: '922223333' }),
+    { cotNum: '61', nombre: 'Javier Pino', telefono: '922223333', status: 'rechazada', instalacion: { fecha: '2026-11-25' } },
   ])
   const por = n => qs.find(x => x.cotNum === n)
   assert.deepEqual(por('10').yaCompro, { cotNum: '11', fecha: '2026-11-12' })
   assert.equal(por('20').yaCompro.cotNum, '21') // sin celular: por nombre
   assert.equal(por('30').yaCompro, undefined) // compró antes de esta cotizacion: es un pedido nuevo
-  assert.equal(por('40').yaCompro, undefined) // mismo nombre, otro celular: otra persona
+  assert.equal(por('40').yaCompro, undefined) // mismo nombre, pero esa compra es anterior
+  assert.equal(por('50').yaCompro.cotNum, '51') // mismo nombre y apellido con otro celular
+  assert.equal(por('60').yaCompro, undefined) // rechazada aunque tenga fecha: no es compra
   assert.equal(estadoSeguimiento(por('10'), '2026-11-22').tocaPreguntar, false)
   assert.equal(estadoSeguimiento(por('30'), '2026-11-22').tocaPreguntar, true)
 })
