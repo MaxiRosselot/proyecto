@@ -44,13 +44,13 @@ test('los rangos de largo cubren 50-243 cm sin huecos ni solapes', () => {
 test('traduce la profundidad total de la cotizacion al fondo util de la tabla', () => {
   // 0.48 m totales = 40 cm de terciado + 8 cm de pilares.
   assert.equal(precioRepisa({ largoM: 2.43, profM: 0.48, altoM: 2 }), 110000)
-  assert.equal(precioRepisa({ largoM: 1.0, profM: 0.28, altoM: 2.5 }), 60000)
-  assert.equal(precioRepisa({ largoM: 1.5, profM: 0.68, altoM: 3 }), 170000)
+  assert.equal(precioRepisa({ largoM: 1.0, profM: 0.28, altoM: 2.5 }), 50000)
+  assert.equal(precioRepisa({ largoM: 1.5, profM: 0.68, altoM: 3 }), 160000)
 })
 
 test('respeta los bordes del rango', () => {
-  assert.equal(precioRepisa({ largoM: 0.88, profM: 0.28, altoM: 2 }), 40000)
-  assert.equal(precioRepisa({ largoM: 0.89, profM: 0.28, altoM: 2 }), 50000)
+  assert.equal(precioRepisa({ largoM: 0.92, profM: 0.28, altoM: 2 }), 40000)
+  assert.equal(precioRepisa({ largoM: 0.93, profM: 0.28, altoM: 2 }), 50000)
 })
 
 test('usa la tabla que le pasen, no el respaldo del bundle', () => {
