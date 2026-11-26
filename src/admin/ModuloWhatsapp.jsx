@@ -8,6 +8,7 @@ import { mensajeEnvioCotizacion, mensajeRecordatorio, telefonoWhatsapp } from '.
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
+import { hayBorradorSinGuardar } from './PorCotizar.jsx'
 import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, cotizacionesDelNumero, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
@@ -268,7 +269,25 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
   )
 }
 
-function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, onVerCotizacion, onEnWhatsapp, otras = [], onElegirOtra }) {
+// Lleva la cotizacion completa (con su modelo 3D) al cotizador para ajustarla y regenerar el PDF.
+// WhatsApp queda abierto al lado, en la ventana.
+function EditarCotizacion({ q, onAbrir }) {
+  const [abriendo, setAbriendo] = useState(false)
+  if (!onAbrir) return null
+  async function abrir() {
+    if (hayBorradorSinGuardar() && !window.confirm('Hay una cotización nueva sin guardar en el cotizador. ¿Reemplazarla por la N° ' + q.cotNum + '?')) return
+    setAbriendo(true)
+    try {
+      const res = await apiFetch('/.netlify/functions/get-quotes?cotNum=' + encodeURIComponent(q.cotNum))
+      if (!res.ok || !res.quote) throw new Error(res.error || 'No se encontró la cotización')
+      onAbrir(res.quote)
+    } catch (e) { alert('No se pudo abrir: ' + e.message); setAbriendo(false) }
+  }
+  return <button type="button" data-atajo="editar" onClick={abrir} disabled={abriendo} style={{ ...boton, padding: '2px 8px', fontSize: 11.5, marginLeft: 6 }}
+    title="Abre la cotización en el cotizador para ajustarla y regenerar el PDF (tecla E)">✏️ {abriendo ? 'Abriendo…' : 'Editar en cotizador'}</button>
+}
+
+function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, onVerCotizacion, onAbrirEnCotizador, onEnWhatsapp, otras = [], onElegirOtra }) {
   const estado = QUOTE_STATUS_LABELS[q.status] || QUOTE_STATUS_LABELS['por confirmar']
   const mensajes = mensajesPara(q, hoy, { eventoManana })
   const grupos = [...new Set(mensajes.map(m => m.grupo))]
@@ -283,6 +302,7 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
         <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 3 }}>
           N° {q.cotNum}{q.total ? ` · ${fmt(q.total)}` : ''}{' · '}
           <button type="button" onClick={() => onVerCotizacion(q.cotNum)} style={{ border: 'none', background: 'none', padding: 0, color: C.orangeDark, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 }}>Ver cotización</button>
+          <EditarCotizacion q={q} onAbrir={onAbrirEnCotizador} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
           <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{q.telefono ? telefonoLegible(q.telefono) : 'Sin teléfono'}</span>
@@ -386,7 +406,7 @@ function FichaEvento({ e }) {
   )
 }
 
-export default function ModuloWhatsapp({ onVerCotizacion }) {
+export default function ModuloWhatsapp({ onVerCotizacion, onAbrirEnCotizador }) {
   const hoy = ahoraEnZona().fecha
   const [quotes, setQuotes] = useState([])
   const [eventos, setEventos] = useState([])
@@ -630,7 +650,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
         {chatAbierto && !q && !sel?.evento && <ChatSinCotizacion chat={chatAbierto} onBuscar={t => { setBuscar(t); campoBuscar.current?.focus() }}
           parecidas={chatAbierto.telefono ? [] : buscarClientes(grupos.todos, chatAbierto.titulo, 4)} onElegir={cotNum => setSel({ cotNum })} />}
         {envio && <div style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ParaEnviar envio={envio} onAbrirChat={abrirChatEnMarco} onCerrar={() => setEnvio(null)} /></div>}
-        {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion}
+        {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion} onAbrirEnCotizador={onAbrirEnCotizador}
               onEnWhatsapp={() => { irAWhatsapp.current = Date.now(); enfocarMarco() }}
               otras={cotizacionesDelNumero(quotes, q.telefono).filter(x => x.cotNum !== q.cotNum)}
               onElegirOtra={cotNum => setSel({ cotNum })}

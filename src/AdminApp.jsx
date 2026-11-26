@@ -106,7 +106,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'web')          return <FotosWebSection />
   if (section === 'uso')          return <UsoPanel onVolver={() => navigateTo('inicio')} />
   if (section === 'pendientes')   return <PendientesSection />
-  if (section === 'whatsapp')     return <ModuloWhatsapp onVerCotizacion={verCotizacion} />
+  if (section === 'whatsapp')     return <ModuloWhatsapp onVerCotizacion={verCotizacion} onAbrirEnCotizador={abrirCotizacion} />
   return null
 }
 

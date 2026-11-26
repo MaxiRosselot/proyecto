@@ -14,6 +14,7 @@ test('atajos whatsapp: teclas sin escribir', () => {
   assert.deepEqual(accionDeTecla(t('P', 'KeyP')), { tipo: 'clic', atajo: 'pregunte' })
   assert.deepEqual(accionDeTecla(t('/')), { tipo: 'buscar' })
   assert.deepEqual(accionDeTecla(t('a', 'KeyA')), { tipo: 'clic', atajo: 'copiar-agenda' })
+  assert.deepEqual(accionDeTecla(t('e', 'KeyE')), { tipo: 'clic', atajo: 'editar' })
   assert.equal(accionDeTecla(t('0', 'Digit0')), null)
   assert.equal(accionDeTecla(t('c', 'KeyC', { ctrlKey: true })), null) // Ctrl+C es copiar
 })

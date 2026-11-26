@@ -10,6 +10,7 @@ export const ATAJOS = [
   ['Enter', 'Ir a WhatsApp, a escribir'],
   ['D', 'Deja el PDF de la cotización en su chat (sin enviar)'],
   ['A', 'Copia el mensaje de agendamiento (para mandarlo aparte del PDF)'],
+  ['E', 'Editar la cotización en el cotizador'],
   ['P', 'Le pregunté hoy'],
   ['R', 'Respondió hoy'],
   ['C', 'Confirmó'],
@@ -18,13 +19,13 @@ export const ATAJOS = [
   ['?', 'Mostrar u ocultar los atajos'],
 ]
 export const ATAJOS_EN_WHATSAPP = [
-  ['1 … 9, D, A, P, R, C', 'Siguen siendo del panel tras abrir un chat con ↓/↑ o desde la lista, hasta que hagas clic en WhatsApp'],
+  ['1 … 9, D, A, E, P, R, C', 'Siguen siendo del panel tras abrir un chat con ↓/↑ o desde la lista, hasta que hagas clic en WhatsApp'],
   ['↓ / ↑', 'Siguiente / anterior cliente, si no estás escribiendo (caja del chat vacía)'],
   ['Alt + ↓ / ↑', 'Siguiente / anterior cliente, aunque estés escribiendo'],
   ['Alt + 1 … 9', 'Escribe ese mensaje en su chat'],
 ]
 
-const LETRAS = { p: 'pregunte', r: 'respondio', c: 'confirmo', d: 'pdf', a: 'copiar-agenda' }
+const LETRAS = { p: 'pregunte', r: 'respondio', c: 'confirmo', d: 'pdf', a: 'copiar-agenda', e: 'editar' }
 
 // e: { key, code, altKey, shiftKey, ctrlKey, metaKey }. campo: '' si no se esta escribiendo,
 // 'buscar' en el buscador, 'otro' en cualquier otro campo. Devuelve la accion o null (la tecla sigue su curso).

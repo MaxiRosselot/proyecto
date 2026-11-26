@@ -231,6 +231,11 @@ try {
   await expect(page.getByTestId('ficha-cliente')).toHaveCount(0)
   await page.getByTestId('cotizaciones-parecidas').getByRole('button', { name: new RegExp('N° ' + otra) }).click()
   await expect(page.getByTestId('ficha-cliente').getByText(nombre + ' B', { exact: true })).toBeVisible()
+  // E (o el boton) lleva la cotizacion al cotizador para editarla.
+  await page.evaluate(() => document.activeElement?.blur())
+  await page.keyboard.press('e')
+  await expect(page.getByText('N° ' + otra, { exact: true }).first()).toBeVisible({ timeout: 20000 })
+  await expect(page.getByTestId('modulo-whatsapp')).toHaveCount(0)
   if (errors.length) throw new Error(errors.join('\n'))
 } finally {
   if (api && cotNum) await api('delete-quote', { cotNum }).catch(() => {})
