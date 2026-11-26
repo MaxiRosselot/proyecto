@@ -9,7 +9,7 @@ import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
 import { hayBorradorSinGuardar } from './PorCotizar.jsx'
-import { EVENTO_PARA_ENVIAR, pedidosRecientes, recordarContacto, telefonoDeContacto, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
+import { EVENTO_PARA_ENVIAR, abrirChatPronto, pedidosRecientes, recordarContacto, telefonoDeContacto, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, cotizacionesDelNumero, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
@@ -485,7 +485,7 @@ export default function ModuloWhatsapp({ onVerCotizacion, onAbrirEnCotizador }) 
   }
   function elegir(seleccion, telefono) {
     setSel(seleccion)
-    if (telefono && hayExtension) { abrirChatEnMarco(telefono); retenerTeclado() }
+    if (telefono && hayExtension) { abrirChatPronto(telefono); retenerTeclado() }
   }
 
   // Atajos de teclado (ver atajosWhatsapp.js). La lista que se ve, en orden, con como elegir a cada uno.
@@ -536,8 +536,8 @@ export default function ModuloWhatsapp({ onVerCotizacion, onAbrirEnCotizador }) 
   const chatAbiertoRef = React.useRef(null)
   chatAbiertoRef.current = avisado => {
     const chat = { ...avisado }
-    const recientes = pedidosRecientes()
-    if (chat.telefono && recientes.length && !recientes.some(p => mismoTelefono(p.telefono, chat.telefono))) return // de un pedido anterior: ya llega el que pediste
+    const recientes = pedidosRecientes(), ultimo = recientes.at(-1)
+    if (chat.telefono && ultimo && !mismoTelefono(ultimo.telefono, chat.telefono)) return // de un pedido anterior: ya llega el que pediste
     if (!chat.telefono && chat.titulo) {
       // Sin numero a la vista (contacto guardado): si es el chat que pidio el panel, la ficha se queda y
       // se aprende su numero; si lo abriste tu, se busca el numero aprendido.

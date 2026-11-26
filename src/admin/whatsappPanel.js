@@ -90,11 +90,20 @@ let ultimoPedido = 0
 // (o uno anterior que llego tarde), no uno que abriste tu a mano.
 const pedidosChat = []
 function anotarPedido(telefono) {
-  const ahora = Date.now()
-  pedidosChat.push({ telefono: telefonoWhatsapp(telefono), en: ahora })
+  const ahora = Date.now(), tel = telefonoWhatsapp(telefono)
+  if (pedidosChat.at(-1)?.telefono === tel) pedidosChat.at(-1).en = ahora
+  else pedidosChat.push({ telefono: tel, en: ahora })
   while (pedidosChat.length && ahora - pedidosChat[0].en > 10000) pedidosChat.shift()
 }
 export const pedidosRecientes = (ms = 3000) => pedidosChat.filter(p => Date.now() - p.en < ms)
+// Moviendose por la lista con ↓ seguido: el chat se abre cuando paras (WhatsApp ignora a veces un chat
+// pedido mientras carga el anterior). El pedido se anota al tiro, para no hacer caso a los anteriores.
+let relojChat = null
+export function abrirChatPronto(telefono, ms = 300) {
+  anotarPedido(telefono)
+  clearTimeout(relojChat)
+  relojChat = setTimeout(() => abrirChatEnMarco(telefono), ms)
+}
 // Contactos guardados: WhatsApp no muestra su numero, pero si el panel abrio su chat se sabe cual es.
 // Se recuerda nombre del contacto → numero en este PC, para reconocerlo cuando lo abras a mano.
 const CLAVE_CONTACTOS = 'dm_whatsapp_contactos'
@@ -106,12 +115,18 @@ export function recordarContacto(titulo, telefono) {
   if (!t || tel.length < 8 || /^\+?[\d\s()-]+$/.test(t)) return
   try { localStorage.setItem(CLAVE_CONTACTOS, JSON.stringify({ ...leerContactos(), [t]: tel })) } catch { /* sin espacio */ }
 }
-export async function abrirChatEnMarco(telefono, texto = '') {
+export async function abrirChatEnMarco(telefono, texto = '', reintento = false) {
   if (!marco) return
   anotarPedido(telefono)
   const turno = ++ultimoPedido // si mientras tanto se pidio otro chat, ese manda
   const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
   if (!ok && marco && turno === ultimoPedido) marco.src = linkWhatsappWeb(telefono, texto)
+  // Si WhatsApp dejo otro chat abierto (se salto el pedido), se pide de nuevo una vez. Solo se puede ver
+  // cuando el chat muestra su numero (extension 1.6+); con un contacto guardado no se sabe.
+  if (ok && !reintento) setTimeout(() => {
+    if (turno !== ultimoPedido || !ultimoChat?.telefono) return
+    if (telefonoWhatsapp(ultimoChat.telefono) !== telefonoWhatsapp(telefono)) abrirChatEnMarco(telefono, texto, true)
+  }, 2500)
 }
 // Deja el PDF adjunto en su chat con el texto como comentario, sin enviar (extension 1.5+). Devuelve
 // { ok, motivo }. Si no se puede (version vieja, sin sesion), el panel lo descarga para arrastrarlo.
