@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Don Maxi: WhatsApp en el panel",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "description": "Deja abrir WhatsApp Web dentro del panel de Repisas Don Maxi (repisasdonmaxi.cl/admin). Abre chats y deja mensajes o PDFs listos; nunca envía nada.",
   "permissions": [
     "declarativeNetRequest",
@@ -42,7 +42,8 @@
         "https://web.whatsapp.com/*"
       ],
       "js": [
-        "galletas.js"
+        "galletas.js",
+        "foco.js"
       ],
       "all_frames": true,
       "world": "MAIN",

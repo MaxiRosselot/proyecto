@@ -87,7 +87,16 @@ if (window.top !== window) {
       return false
     }
     // Clic tuyo dentro de WhatsApp: desde ahi las teclas son de WhatsApp (salvo las de arriba).
-    window.addEventListener('pointerdown', e => { if (e.isTrusted) window.__dmMandaPanel = false }, true)
+    let tocando = false
+    window.addEventListener('pointerdown', e => { if (e.isTrusted) { window.__dmMandaPanel = false; tocando = true; setTimeout(() => { tocando = false }, 0) } }, true)
+    // foco.js no deja que WhatsApp tome el teclado mientras estas en el panel, asi que la caja del chat
+    // puede no tenerlo cuando el panel te trae (Enter, PDF...): se le da, si no hay otro campo elegido.
+    window.addEventListener('focus', () => {
+      if (tocando) return
+      const el = document.activeElement
+      if (el && el !== document.body && el !== document.documentElement) return
+      document.querySelector('#main footer [contenteditable="true"]')?.focus()
+    })
     // Atajos del panel que valen sin Alt mientras el panel manda y la caja del chat esta vacia: solo los
     // numeros (y ?). Las letras no: si empiezas a escribir "Claro..." sin hacer clic, la C confirmaria la
     // cotizacion. Por la tecla y no solo por su codigo: hay teclados que no traen el codigo.

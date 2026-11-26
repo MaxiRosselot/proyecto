@@ -43,6 +43,20 @@ try {
   if (Math.abs(hueco.x - iframe.x) > 2 || Math.abs(hueco.width - iframe.width) > 2) throw new Error(`WhatsApp no quedó en su lugar: ${JSON.stringify({ hueco, iframe })}`)
   await page.evaluate(() => { window.__marco = document.querySelector('[data-testid=marco-whatsapp]') })
 
+  // WhatsApp no le quita el teclado al panel (extension 1.7.3): escribiendo en un campo del panel, un
+  // focus() de WhatsApp no hace nada. Al hacer clic dentro de WhatsApp, si puede.
+  const marcoWsp = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
+  await marcoWsp.evaluate(() => { const i = document.createElement('input'); i.id = 'dm-prueba-foco'; i.style.cssText = 'position:fixed;top:0;left:0;z-index:99999'; document.body.append(i) })
+  await modulo.getByLabel('Buscar cliente').click()
+  await marcoWsp.evaluate(() => document.getElementById('dm-prueba-foco').focus())
+  await page.keyboard.type('abc')
+  if (await modulo.getByLabel('Buscar cliente').inputValue() !== 'abc') throw new Error('WhatsApp se llevó el teclado del panel')
+  await marcoWsp.locator('#dm-prueba-foco').click()
+  await page.keyboard.type('xy')
+  if (await marcoWsp.locator('#dm-prueba-foco').inputValue() !== 'xy') throw new Error('Con clic en WhatsApp no se pudo escribir ahí')
+  await marcoWsp.evaluate(() => document.getElementById('dm-prueba-foco').remove())
+  await modulo.getByLabel('Buscar cliente').fill('')
+
   // Buscar al cliente y elegirlo: su ficha a la derecha.
   await modulo.getByLabel('Buscar cliente').fill(nombre)
   await page.getByTestId('cliente-' + cotNum).click()

@@ -117,6 +117,7 @@ export function recordarContacto(titulo, telefono) {
 }
 export async function abrirChatEnMarco(telefono, texto = '', reintento = false) {
   if (!marco) return
+  clearTimeout(relojChat) // un pedido con mensaje (o hecho a mano) gana al chat que se iba a abrir al soltar la flecha
   anotarPedido(telefono)
   const turno = ++ultimoPedido // si mientras tanto se pidio otro chat, ese manda
   const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
@@ -132,6 +133,7 @@ export async function abrirChatEnMarco(telefono, texto = '', reintento = false) 
 // { ok, motivo }. Si no se puede (version vieja, sin sesion), el panel lo descarga para arrastrarlo.
 export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
   if (!marco) return { ok: false, motivo: 'sin-marco' }
+  clearTimeout(relojChat)
   ++ultimoPedido
   anotarPedido(telefono)
   return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 90000, 'adjunto')
