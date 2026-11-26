@@ -7,6 +7,7 @@ import EnviarCotizacion, { CopiarMensajeAgenda } from './EnviarCotizacion.jsx'
 import PdfAlChat from './PdfAlChat.jsx'
 import { mensajeEnvioCotizacion } from '../../netlify/functions/lib/mensajes.mjs'
 import AlternativasPanel, { firmaProyecto } from './AlternativasPanel.jsx'
+import { mismoCliente } from './mismoCliente.js'
 import { VISTA_ALTERNATIVA, planificarYDibujar } from './regenerarPdf.js'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { DESCUENTO_MAX, nombreServicio, totalesCotizacion } from '../../netlify/functions/lib/totales.mjs'
@@ -271,12 +272,18 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setAdicionales(blanco ? ADICIONALES_INICIALES : { ...ADICIONALES_INICIALES, ...(q.adicionales || {}) })
     setProject3d(blanco ? null : q.proyecto3d || null)
     soportesPrevios.current = blanco ? 0 : q.proyecto3d?.soportes?.length ?? 0
-    setCotGuardada(q.comoNueva ? null : { cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '' })
+    setCotGuardada(q.comoNueva ? null : { cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '', nombre: q.nombre || '', telefono: q.telefono || '' })
     setNuevaDesde(q.comoNueva ? { cotNum: String(q.origenCotNum || q.cotNum), nombre: q.nombre || '' } : null)
     setTotalInfo(blanco ? { subtotal: 0, iva: 0, total: 0 } : { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
     setAlternativas(blanco ? [] : (q.alternativas || []).map(a => ({ ...a, base: firmaProyecto(q.proyecto3d || null) })))
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
   }, [cotizacionAbierta])
+
+  // Si en pantalla ya hay otro cliente, generar crea una cotizacion nueva y la abierta queda como
+  // estaba (antes se actualizaba la abierta con el cliente nuevo y la anterior se perdia).
+  const clienteEnPantalla = mode === 'visita' ? (selectedVisit || {}) : manualCliente
+  const otroCliente = Boolean(cotGuardada) && !mismoCliente(cotGuardada, { nombre: clienteEnPantalla.nombre, telefono: clienteEnPantalla.celular || clienteEnPantalla.telefono })
+  const editando = cotGuardada && !otroCliente ? cotGuardada : null
 
   async function pedirSiguienteNumero() {
     const res = await apiFetch('/.netlify/functions/get-quotes?siguiente=1')
@@ -288,9 +295,9 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   // Muestra el proximo numero libre mientras se arma una cotizacion nueva. Es referencial:
   // se confirma al guardar, y si otro lo tomo antes se usa el siguiente.
   useEffect(() => {
-    if (cotGuardada) return
+    if (editando) return
     pedirSiguienteNumero().catch(() => setSiguienteNum(null))
-  }, [cotGuardada])
+  }, [editando])
 
   // La planilla del cliente manda. Hasta que responda se usa el respaldo del bundle.
   useEffect(() => {
@@ -500,7 +507,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
         email:       cliente.email || '',
         telefono:    cliente.celular || cliente.telefono || '',
         direccion:   cliente.direccion || '',
-        fechaVisita: mode === 'visita' ? (selectedVisit?.start || '') : (cotGuardada?.fechaVisita || ''),
+        fechaVisita: mode === 'visita' ? (selectedVisit?.start || '') : (editando?.fechaVisita || ''),
         repisas:     repisas.map(productoCotizacion),
         adicionales,
         // El modelo 3D se guarda con la cotizacion para poder reabrirla tal como se envio.
@@ -512,23 +519,23 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       // Nueva: se pide el siguiente numero libre y se crea. Si alguien lo tomo entre medio, el
       // servidor responde con otro y se rehace el PDF, porque el numero va impreso.
       // Guardada: se actualiza la misma, sin tocar su estado ni su fecha de creacion.
-      let numero = cotGuardada ? cotGuardada.cotNum : await pedirSiguienteNumero()
+      let numero = editando ? editando.cotNum : await pedirSiguienteNumero()
       let pdf, link = ''
       for (let intento = 0; ; intento++) {
         pdf = await generarPdf(numero, grafica3d, alternativasPdf)
         const guardado = await apiFetch('/.netlify/functions/save-quote', {
           method: 'POST',
-          body: JSON.stringify(cotGuardada
+          body: JSON.stringify(editando
             ? { ...datos, ...pdf.totales, cotNum: numero }
             : { ...datos, ...pdf.totales, crear: true, cotNum: numero, status: 'por confirmar', notas: '' }),
         })
         if (guardado.ok) { link = guardado.linkPago || ''; setLinkAgendaCot(guardado.linkAgenda || ''); break }
-        if (!cotGuardada && guardado.siguiente && intento < 2) { numero = guardado.siguiente; continue }
+        if (!editando && guardado.siguiente && intento < 2) { numero = guardado.siguiente; continue }
         throw new Error(guardado.error || 'No se pudo guardar la cotización')
       }
 
       // Desde aqui la cotizacion existe: volver a generar la actualiza en vez de duplicarla.
-      setCotGuardada({ cotNum: String(numero), fechaVisita: datos.fechaVisita })
+      setCotGuardada({ cotNum: String(numero), fechaVisita: datos.fechaVisita, nombre: datos.nombre, telefono: datos.telefono })
       setTotalInfo(pdf.totales)
       setPdfBlob(pdf.blob); setPdfUrl(URL.createObjectURL(pdf.blob)); setLinkPago(link)
 
@@ -663,10 +670,14 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
       <div style={{ ...styles.card, marginBottom: 14 }}>
         <div style={styles.cardLabel}>Numero de Cotizacion</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span data-testid="numero-cotizacion" style={{ fontSize: 18, fontWeight: 800, color: cotGuardada ? C.text : C.textSub }}>
-            N° {cotGuardada ? cotGuardada.cotNum : (siguienteNum ?? '...')}
+          <span data-testid="numero-cotizacion" style={{ fontSize: 18, fontWeight: 800, color: editando ? C.text : C.textSub }}>
+            N° {editando ? editando.cotNum : (siguienteNum ?? '...')}
           </span>
-          {cotGuardada
+          {otroCliente
+            ? <span data-testid="otro-cliente" style={{ color: '#5B21B6', fontSize: 12.5, flex: 1, minWidth: 200 }}>
+                Cliente distinto al de la N° {cotGuardada.cotNum} ({cotGuardada.nombre}): al generar se crea una cotización nueva y la N° {cotGuardada.cotNum} queda tal como está.
+              </span>
+            : editando
             ? <>
                 <span style={styles.badge(C.green)}>Guardada</span>
                 <span style={{ color: C.textMuted, fontSize: 12, flex: 1, minWidth: 200 }}>Si generas de nuevo, se actualiza esta misma cotización (PDF, montos y modelo 3D).</span>
