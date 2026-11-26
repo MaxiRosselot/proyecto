@@ -12,7 +12,6 @@ export const ATAJOS = [
   ['A', 'Copia el mensaje de agendamiento (para mandarlo aparte del PDF)'],
   ['E', 'Editar la cotización en el cotizador'],
   ['P', 'Le pregunté hoy'],
-  ['R', 'Respondió hoy'],
   ['C', 'Confirmó'],
   ['/', 'Buscar cliente (↓ para elegir el primero)'],
   ['Esc', 'Salir del buscador / de lo que estés escribiendo'],
@@ -25,7 +24,7 @@ export const ATAJOS_EN_WHATSAPP = [
   ['Alt + 1 … 9', 'Escribe ese mensaje en su chat'],
 ]
 
-const LETRAS = { p: 'pregunte', r: 'respondio', c: 'confirmo', d: 'pdf', a: 'copiar-agenda', e: 'editar' }
+const LETRAS = { p: 'pregunte', c: 'confirmo', d: 'pdf', a: 'copiar-agenda', e: 'editar' }
 
 // e: { key, code, altKey, shiftKey, ctrlKey, metaKey }. campo: '' si no se esta escribiendo,
 // 'buscar' en el buscador, 'otro' en cualquier otro campo. Devuelve la accion o null (la tecla sigue su curso).

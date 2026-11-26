@@ -34,8 +34,8 @@ test('dice en que va cada cliente', () => {
 
 test('los mensajes dependen de en que va el cliente', () => {
   const ids = q => mensajesPara({ ...q, linkAgenda: 'https://x/agendar' }, hoy).map(m => m.id)
-  assert.deepEqual(ids(qs[0]), ['sin-respuesta', 'sigue-disponible', 'ajustes', 'pospuso', 'link-agendar', 'cotizacion'])
-  assert.deepEqual(ids(qs[3]), ['link-agendar', 'cotizacion'])
+  assert.deepEqual(ids(qs[0]), ['sin-respuesta', 'sigue-disponible', 'ajustes', 'pospuso', 'cotizacion'])
+  assert.deepEqual(ids(qs[3]), ['cotizacion'])
   assert.deepEqual(ids(qs[4]), ['agendada', 'confirmar', 'vispera'])
   const conManana = mensajesPara(qs[5], hoy, { eventoManana: { tipo: 'instalacion', cliente: 'Fede', fecha: '2026-11-26', inicio: '13:00', fin: '15:00' } })
   assert.equal(conManana[0].id, 'recordatorio')

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { C, QUOTE_STATUS_LABELS, adminFetch, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import {
-  anotarBitacora, esperarHasta, estadoSeguimiento, marcarSinWhatsapp, marcarYaCompro, quitarDeBitacora, quitarSinWhatsapp, registrarPregunta, registrarRespuesta, sinWhatsapp,
+  esperarHasta, estadoSeguimiento, marcarSinWhatsapp, marcarYaCompro, quitarSinWhatsapp, registrarPregunta, sinWhatsapp,
 } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
 import { mensajeEnvioCotizacion, mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
@@ -14,8 +14,9 @@ import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWh
 import { FILTROS, clasificar, cotizacionesDelNumero, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
 // Seccion WhatsApp (solo PC): a la izquierda los clientes por filtro, al centro WhatsApp Web (lo usas
-// tu, a mano) y a la derecha la ficha del cliente elegido: en que va, seguimiento, bitacora y los
-// mensajes que le sirven, listos para copiar o para dejar escritos en su chat (sin enviar).
+// tu, a mano) y a la derecha la ficha del cliente elegido: en que va, seguimiento y los mensajes que le
+// sirven, listos para copiar o para dejar escritos en su chat (sin enviar). Solo lo que se usa: en la
+// revision de nov-2026 se sacaron Respondio, las esperas de 1-2 semanas o fecha y la bitacora (sin uso).
 
 const TONOS = { ambar: '#D97706', verde: C.green, gris: C.textMuted, rojo: C.red }
 const MOTIVOS_RECHAZO = ['Precio alto', 'Sin respuesta', 'Eligio otro proveedor', 'Otro']
@@ -104,18 +105,22 @@ function Mensaje({ m, telefono, onUsado, numero }) {
 }
 
 // Mis mensajes: los propios, editables, con {nombre}, {cotizacion}, {total}, {agendar}, {pagar}.
-function MisMensajes({ cliente, telefono, desde = 0 }) {
+// plegado: cerrado hasta que lo abras (en la ficha de un cliente casi no se usan).
+function MisMensajes({ cliente, telefono, desde = 0, plegado = false }) {
   const [lista, setLista] = useState(leerRapidos)
   const [editando, setEditando] = useState(false)
+  const [abierto, setAbierto] = useState(!plegado)
   const cambiar = nueva => { setLista(nueva); guardarRapidos(nueva) }
   const campo = { ...styles.input, padding: '6px 8px', fontSize: 12.5 }
   return (
     <div style={bloque}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-        <span style={titulo}>Mis mensajes</span>
-        <button type="button" onClick={() => setEditando(v => !v)} style={{ ...boton, marginLeft: 'auto' }}>{editando ? 'Listo' : 'Editar'}</button>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: abierto ? 8 : 0 }}>
+        {plegado
+          ? <button type="button" onClick={() => setAbierto(v => !v)} aria-expanded={abierto} style={{ ...titulo, border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>{abierto ? '▾' : '▸'} Mis mensajes</button>
+          : <span style={titulo}>Mis mensajes</span>}
+        {abierto && <button type="button" onClick={() => setEditando(v => !v)} style={{ ...boton, marginLeft: 'auto' }}>{editando ? 'Listo' : 'Editar'}</button>}
       </div>
-      {editando ? (
+      {!abierto ? null : editando ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 11.5, color: C.textMuted }}>Puedes usar {'{nombre}'}, {'{cotizacion}'}, {'{total}'}, {'{agendar}'} y {'{pagar}'}: se cambian por los datos del cliente elegido.</div>
           {lista.map((m, i) => (
@@ -139,11 +144,11 @@ function MisMensajes({ cliente, telefono, desde = 0 }) {
   )
 }
 
-// Seguimiento de una cotizacion por confirmar: anotar pregunta/respuesta y esperar hasta una fecha.
+// Seguimiento de una cotizacion por confirmar: anotar que le preguntaste y, si pospuso, esperar un mes.
+// Si ya tenia "respondio" o notas se siguen viendo (se corrigen en Cotizaciones).
 function Seguimiento({ q, hoy, onGuardar, guardando }) {
   const e = estadoSeguimiento(q, hoy)
-  const [fecha, setFecha] = useState('')
-  const rapido = [['1 semana', 7], ['2 semanas', 14], ['1 mes', 30]]
+  const notas = q.seguimiento?.bitacora || []
   return (
     <div style={bloque} data-testid="ficha-seguimiento">
       <div style={{ ...titulo, marginBottom: 8 }}>Seguimiento</div>
@@ -156,39 +161,14 @@ function Seguimiento({ q, hoy, onGuardar, guardando }) {
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button type="button" disabled={guardando} style={boton} data-atajo="pregunte" title="Tecla P" onClick={() => onGuardar(registrarPregunta(q.seguimiento, hoy))}>✓ Le pregunté hoy</button>
-        {e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} data-atajo="respondio" title="Tecla R" onClick={() => onGuardar(registrarRespuesta(q.seguimiento, hoy))}>Respondió hoy</button>}
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, fontSize: 12, color: C.textSub }}>
-        <span>Pospuso, esperar:</span>
-        {rapido.map(([t, d]) => <button key={t} type="button" disabled={guardando} style={boton} onClick={() => onGuardar(esperarHasta(q.seguimiento, sumarDias(hoy, d)))}>{t}</button>)}
-        <input type="date" value={fecha} min={sumarDias(hoy, 1)} onChange={ev => setFecha(ev.target.value)} aria-label="Esperar hasta" style={{ fontSize: 12, padding: '3px 6px', border: '1px solid ' + C.border, borderRadius: 6, fontFamily: 'inherit' }} />
-        {fecha && <button type="button" disabled={guardando || fecha <= hoy} style={botonVerde} onClick={() => { onGuardar(esperarHasta(q.seguimiento, fecha)); setFecha('') }}>Esperar</button>}
-        {q.seguimiento?.esperarHasta && <button type="button" disabled={guardando} style={{ ...boton, color: C.red }} onClick={() => onGuardar(esperarHasta(q.seguimiento, ''))}>Quitar espera</button>}
-      </div>
-    </div>
-  )
-}
-
-function Bitacora({ q, hoy, onGuardar, guardando }) {
-  const [texto, setTexto] = useState('')
-  const notas = q.seguimiento?.bitacora || []
-  const anotar = async () => { if (!texto.trim()) return; await onGuardar(anotarBitacora(q.seguimiento, hoy, texto)); setTexto('') }
-  return (
-    <div style={bloque} data-testid="ficha-bitacora">
-      <div style={{ ...titulo, marginBottom: 8 }}>Bitácora</div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input value={texto} onChange={e => setTexto(e.target.value)} onKeyDown={e => e.key === 'Enter' && anotar()} placeholder="Qué hablaron: “pidió 5 niveles”, “lo ve en enero”…"
-          aria-label="Nota para la bitácora" style={{ ...styles.input, padding: '6px 9px', fontSize: 12.5 }} />
-        <button type="button" disabled={guardando || !texto.trim()} onClick={anotar} style={botonVerde}>Anotar</button>
+        {q.seguimiento?.esperarHasta
+          ? <button type="button" disabled={guardando} style={{ ...boton, color: C.red }} onClick={() => onGuardar(esperarHasta(q.seguimiento, ''))}>Quitar espera</button>
+          : <button type="button" disabled={guardando} style={boton} title="Sale de “Toca preguntar” por un mes" onClick={() => onGuardar(esperarHasta(q.seguimiento, sumarDias(hoy, 30)))}>Pospuso: esperar 1 mes</button>}
       </div>
       {notas.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-          {[...notas.entries()].reverse().map(([i, n]) => (
-            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12.5, color: C.text, alignItems: 'baseline' }}>
-              <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: 'nowrap' }}>{fechaCorta(n.fecha)}</span>
-              <span style={{ flex: 1 }}>{n.texto}</span>
-              <button type="button" disabled={guardando} aria-label="Borrar nota" onClick={() => onGuardar(quitarDeBitacora(q.seguimiento, i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.textMuted, padding: 0 }}>✕</button>
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8 }}>
+          {notas.slice(-3).reverse().map((n, i) => (
+            <div key={i} style={{ fontSize: 12, color: C.text }}><span style={{ fontSize: 11, color: C.textMuted, marginRight: 6 }}>{fechaCorta(n.fecha)}</span>{n.texto}</div>
           ))}
         </div>
       )}
@@ -256,13 +236,16 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
     } catch (e) { setEstado({ texto: 'No se pudo traer el PDF: ' + e.message, tono: 'rojo' }) }
     finally { setOcupado(false) }
   }
-  if (!q.telefono) return null
+  // Lo de agendar va todo aqui (un solo mensaje + los horarios libres), solo mientras falte agendar.
+  const porAgendar = q.linkAgenda && q.status !== 'rechazada' && !q.instalacion?.fecha
+  if (!q.telefono && !porAgendar) return null
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-      <button type="button" data-atajo="pdf" disabled={!id || ocupado} onClick={dejar} title={id ? 'Tecla D' : 'Esta cotización no tiene PDF guardado'}
-        style={{ ...botonVerde, opacity: id ? 1 : .5 }}>📄 {ocupado ? 'Preparando…' : id ? 'PDF en su chat' : 'Sin PDF guardado'}</button>
-      {q.linkAgenda && <Copiar texto={mensajeEnvioCotizacion(q.linkAgenda)} data-atajo="copiar-agenda" titulo="Tecla A">Copiar mensaje de agendamiento</Copiar>}
+      {q.telefono && <button type="button" data-atajo="pdf" disabled={!id || ocupado} onClick={dejar} title={id ? 'Tecla D' : 'Esta cotización no tiene PDF guardado'}
+        style={{ ...botonVerde, opacity: id ? 1 : .5 }}>📄 {ocupado ? 'Preparando…' : id ? 'PDF en su chat' : 'Sin PDF guardado'}</button>}
+      {porAgendar && <Copiar texto={mensajeEnvioCotizacion(q.linkAgenda)} data-atajo="copiar-agenda" titulo="Copia el mensaje con el link para agendar (tecla A)">Copiar mensaje de agendamiento</Copiar>}
+      {porAgendar && <CopiarHorarios link={q.linkAgenda} nombre={q.nombre} />}
       </div>
       {estado.texto && <div data-testid="estado-pdf" style={{ fontSize: 11.5, marginTop: 4, color: TONOS[estado.tono] || C.textSub }}>{estado.texto}</div>}
     </div>
@@ -339,17 +322,9 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
               {mensajes.map((m, i) => m.grupo === g && <Mensaje key={m.id} numero={i + 1} m={m} telefono={q.telefono} onUsado={usado} />)}
             </React.Fragment>
           ))}
-          {q.status !== 'rechazada' && !q.instalacion?.fecha && q.linkAgenda && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
-              <CopiarHorarios link={q.linkAgenda} nombre={q.nombre} />
-              {q.linkPago && <Copiar texto={q.linkPago}>Copiar link de pago</Copiar>}
-              <Copiar texto={q.linkAgenda}>Copiar link para agendar</Copiar>
-            </div>
-          )}
         </div>
       </div>
-      <Bitacora q={q} hoy={hoy} onGuardar={onGuardar} guardando={guardando} />
-      <MisMensajes cliente={q} telefono={q.telefono} desde={mensajes.length} />
+      <MisMensajes cliente={q} telefono={q.telefono} desde={mensajes.length} plegado />
     </>
   )
 }
@@ -401,7 +376,7 @@ function FichaEvento({ e }) {
         <div style={{ ...titulo, marginBottom: 8 }}>Mensajes</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{m.map((x, i) => <Mensaje key={x.id} numero={i + 1} m={x} telefono={e.telefono} />)}</div>
       </div>
-      <MisMensajes cliente={{ nombre: e.cliente }} telefono={e.telefono} desde={m.length} />
+      <MisMensajes cliente={{ nombre: e.cliente }} telefono={e.telefono} desde={m.length} plegado />
     </>
   )
 }

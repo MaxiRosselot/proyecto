@@ -55,20 +55,28 @@ try {
   await expect(page.getByTestId('ficha-seguimiento').getByText(/Preguntado 1 vez/)).toBeVisible()
   await expect.poll(() => page.getByTestId('marco-whatsapp').getAttribute('src'), { timeout: 8000 }).toContain('web.whatsapp.com/send?phone=5695555' + cola + '&text=Hola+Modulo')
 
-  // Pospuso: esperar 2 semanas. Sale del "toca preguntar" y aparece en Esperando.
-  await page.getByTestId('ficha-seguimiento').getByRole('button', { name: '2 semanas' }).click()
-  await expect(page.getByTestId('ficha-seguimiento').getByText(/Esperando hasta el/)).toBeVisible()
-  await page.getByTestId('ficha-bitacora').getByLabel('Nota para la bitácora').fill('Lo ve con su señora en diciembre')
-  await page.getByTestId('ficha-bitacora').getByRole('button', { name: 'Anotar' }).click()
-  await expect(page.getByTestId('ficha-bitacora').getByText('Lo ve con su señora en diciembre')).toBeVisible()
-  const guardada = (await api('get-quotes')).quotes.find(x => x.cotNum === cotNum)
-  const esperado = { preguntas: [hoy], esperarHasta: sumarDias(hoy, 14), bitacora: [{ fecha: hoy, texto: 'Lo ve con su señora en diciembre' }] }
-  if (JSON.stringify(guardada.seguimiento) !== JSON.stringify(esperado)) throw new Error('Quedó guardado ' + JSON.stringify(guardada.seguimiento))
-  await modulo.getByLabel('Buscar cliente').fill('')
-  await modulo.getByRole('button', { name: /^Esperando · / }).click()
-  await expect(page.getByTestId('lista-clientes').getByTestId('cliente-' + cotNum)).toBeVisible()
+  // Lo que se saco en la simplificacion no esta: bitacora, Respondio, esperas cortas, filtro Esperando,
+  // links sueltos y el mensaje de agendar repetido (queda solo el boton A).
+  await expect(page.getByTestId('ficha-bitacora')).toHaveCount(0)
+  await expect(page.getByTestId('ficha-seguimiento').getByRole('button', { name: /Respondió|2 semanas/ })).toHaveCount(0)
+  await expect(modulo.getByRole('button', { name: /^Esperando · / })).toHaveCount(0)
+  await expect(page.getByTestId('mensaje-link-agendar')).toHaveCount(0)
+  await expect(modulo.getByRole('button', { name: /link para agendar|link de pago/ })).toHaveCount(0)
+  await expect(page.getByTestId('ficha-cliente').getByTestId('copiar-horarios')).toBeVisible()
 
-  // Mis mensajes: con el nombre del cliente.
+  // Pospuso: esperar 1 mes. Sale del "toca preguntar" y se ve en Por confirmar como "Esperando hasta".
+  await page.getByTestId('ficha-seguimiento').getByRole('button', { name: 'Pospuso: esperar 1 mes' }).click()
+  await expect(page.getByTestId('ficha-seguimiento').getByText(/Esperando hasta el/)).toBeVisible()
+  await expect(page.getByTestId('ficha-seguimiento').getByRole('button', { name: 'Quitar espera' })).toBeVisible()
+  await expect.poll(async () => JSON.stringify((await api('get-quotes')).quotes.find(x => x.cotNum === cotNum).seguimiento), { timeout: 8000 })
+    .toBe(JSON.stringify({ preguntas: [hoy], esperarHasta: sumarDias(hoy, 30) }))
+  await modulo.getByLabel('Buscar cliente').fill('')
+  await modulo.getByRole('button', { name: /^Por confirmar · / }).click()
+  await expect(page.getByTestId('lista-clientes').getByTestId('cliente-' + cotNum).getByText(/Esperando hasta/)).toBeVisible()
+
+  // Mis mensajes: plegado; al abrirlo, con el nombre del cliente.
+  await expect(page.getByTestId('mensaje-propio-saludo')).toHaveCount(0)
+  await page.getByRole('button', { name: '▸ Mis mensajes' }).click()
   await expect(page.getByTestId('mensaje-propio-saludo').getByText('Hola Modulo 👋 Te escribo de Repisas Don Maxi.')).toBeVisible()
   await page.screenshot({ path: process.env.SHOT || 'modulo-whatsapp.png' })
 
@@ -87,7 +95,7 @@ try {
   await expect(page.getByTestId('ficha-cliente').getByText(nombre)).toBeVisible()
 
   // Atajos de teclado: / busca, ↓ elige el primero, ? muestra la ayuda, Shift+1 copia el mensaje 1,
-  // R anota que respondió, → cambia de filtro, y desde dentro de WhatsApp Alt+2 deja el mensaje 2 en su chat.
+  // P anota que le preguntó, → cambia de filtro, y desde dentro de WhatsApp Alt+2 deja el mensaje 2 en su chat.
   await page.evaluate(() => document.activeElement?.blur())
   await page.keyboard.press('/')
   await page.keyboard.type(nombre)
@@ -100,8 +108,10 @@ try {
   await expect(page.getByTestId('ayuda-atajos')).toBeHidden()
   await page.keyboard.press('Shift+Digit1')
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('N° ' + cotNum)
-  await page.keyboard.press('r')
-  await expect(page.getByTestId('ficha-seguimiento').getByText(/Respondió el/)).toBeVisible()
+  await page.keyboard.press('r') // la R ya no hace nada
+  await page.keyboard.press('p') // hoy ya estaba anotado: sigue en 1 vez
+  await expect(page.getByTestId('ficha-seguimiento').getByText(/Preguntado 1 vez/)).toBeVisible()
+  await expect(page.getByTestId('ficha-seguimiento').getByText(/Respondió/)).toHaveCount(0)
   await modulo.getByLabel('Buscar cliente').fill('')
   await page.evaluate(() => document.activeElement?.blur())
   const filtroAntes = await modulo.locator('button[aria-pressed=true]').first().textContent()
@@ -149,7 +159,7 @@ try {
   await modulo.getByLabel('Buscar cliente').fill(nombre)
   await page.getByTestId('cliente-' + cotNum).click()
   await page.evaluate(() => document.activeElement?.blur())
-  const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.keyboard.press('d')])
+  const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 100000 }), page.keyboard.press('d')]).catch(async e => { throw new Error(e.message + ' | estado-pdf: ' + await page.getByTestId('estado-pdf').textContent({ timeout: 1000 }).catch(() => '(no hay)')) })
   if (!descarga.suggestedFilename().startsWith('Cotizacion Modulo')) throw new Error('Descargó ' + descarga.suggestedFilename())
   await expect(page.getByTestId('estado-pdf')).toContainText('Lo descargué')
 

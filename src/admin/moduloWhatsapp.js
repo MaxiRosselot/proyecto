@@ -1,7 +1,7 @@
 // Logica de la seccion WhatsApp: que clientes van en cada filtro, que mensajes sirven para cada uno
 // segun en que va, y los mensajes rapidos propios (con {nombre}, {cotizacion}...).
 import { estadoSeguimiento, mensajesSeguimiento, sinWhatsapp } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
-import { telefonoWhatsapp, mensajeConfirmarInstalacion, mensajeCotizacion, mensajeEnvioCotizacion, mensajeInstalacionManana, mensajeRecordatorio } from '../../netlify/functions/lib/mensajes.mjs'
+import { telefonoWhatsapp, mensajeConfirmarInstalacion, mensajeCotizacion, mensajeInstalacionManana, mensajeRecordatorio } from '../../netlify/functions/lib/mensajes.mjs'
 import { mensajeInstalacionDe } from './whatsappInstalacion.js'
 
 export const FILTROS = [
@@ -10,7 +10,6 @@ export const FILTROS = [
   { id: 'agendar', nombre: 'Por agendar', ayuda: 'Confirmadas sin fecha de instalación' },
   { id: 'proximas', nombre: 'Próximas instalaciones', ayuda: 'Instalaciones de hoy en adelante' },
   { id: 'porconfirmar', nombre: 'Por confirmar', ayuda: 'Todas las cotizaciones esperando respuesta' },
-  { id: 'esperando', nombre: 'Esperando', ayuda: 'Clientes que pospusieron hasta una fecha' },
   { id: 'sinwsp', nombre: 'Sin WhatsApp', ayuda: 'Números que WhatsApp dice que no existen: para revisarlos por fuera' },
   { id: 'todos', nombre: 'Todos', ayuda: 'Todas las cotizaciones' },
 ]
@@ -79,8 +78,8 @@ export function mensajesPara(q, hoy, { eventoManana = null, ahora = new Date() }
     lista.push({ id: 'confirmar', grupo: 'Instalación', titulo: 'Confirmar instalación', texto: mensajeConfirmarInstalacion(q, inst, ahora) })
     lista.push({ id: 'vispera', grupo: 'Instalación', titulo: 'Víspera (maestro, patente)', texto: mensajeInstalacionManana(q, inst) })
   }
+  // El mensaje con el link para agendar no va aqui: es el boton "Copiar mensaje de agendamiento" (tecla A).
   if (q.status !== 'rechazada' && !inst) {
-    if (q.linkAgenda) lista.push({ id: 'link-agendar', grupo: 'Cotización', titulo: 'Mensaje + link para agendar', texto: mensajeEnvioCotizacion(q.linkAgenda) })
     lista.push({ id: 'cotizacion', grupo: 'Cotización', titulo: 'Cotización con links', texto: mensajeCotizacion(q) })
   }
   return lista
