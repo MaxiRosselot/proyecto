@@ -192,6 +192,21 @@ try {
   await expect(page.locator('[data-atajo="copiar-agenda"]')).toHaveText('✓ Copiado')
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('Te adjunto la cotización')
 
+  // Chat abierto desde el panel: aunque WhatsApp se quede con el teclado, 1–9 y letras siguen siendo del
+  // panel hasta que hagas clic dentro de WhatsApp; desde ahi escribes normal.
+  await page.evaluate(() => navigator.clipboard.writeText(''))
+  await page.getByTestId('ficha-cliente').getByRole('button', { name: 'Abrir su chat' }).click()
+  const fr = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
+  await expect.poll(() => fr.evaluate(() => !!document.querySelector('#main footer [contenteditable="true"]'))).toBe(true)
+  await page.getByTestId('marco-whatsapp').focus()
+  await fr.evaluate(() => { window.focus(); document.querySelector('#main footer [contenteditable="true"]').focus() })
+  await page.keyboard.press('Shift+Digit1')
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('N° ' + cotNum)
+  if (await fr.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent)) throw new Error('el 1 se escribió en WhatsApp')
+  await marco.locator('#main footer [contenteditable="true"]').click()
+  await page.keyboard.press('Digit1')
+  await expect.poll(() => fr.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent)).toBe('1')
+
   // La ficha sigue al chat que se abre en WhatsApp (la extension lee el numero de sus mensajes o del titulo).
   const otra = (await api('save-quote', { crear: true, nombre: nombre + ' B', telefono: '9 5555 ' + cola, subtotal: 50000, iva: 9500, total: 59500, repisas: [{ largo: 1, prof: .4, alto: 2, niveles: 4, unidades: 1, valor: 50000 }], adicionales: {} })).cotNum
   otraCot = otra

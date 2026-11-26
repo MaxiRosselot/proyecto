@@ -546,7 +546,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
       hacerRef.current(a)
     }
     window.addEventListener('keydown', tecla)
-    const dejar = oirTeclasDelMarco(d => { const a = accionDeTecla(d, 'otro'); if (a) hacerRef.current(a) })
+    const dejar = oirTeclasDelMarco(d => { const a = accionDeTecla(d, d.panel ? '' : 'otro'); if (a) hacerRef.current(a) })
     const dejar2 = oirSinWhatsapp(tel => sinWhatsappRef.current(tel))
     const dejar3 = oirChatAbierto(chat => chatAbiertoRef.current(chat))
     return () => { window.removeEventListener('keydown', tecla); dejar(); dejar2(); dejar3() }

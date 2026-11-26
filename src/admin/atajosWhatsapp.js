@@ -18,6 +18,7 @@ export const ATAJOS = [
   ['?', 'Mostrar u ocultar los atajos'],
 ]
 export const ATAJOS_EN_WHATSAPP = [
+  ['1 … 9, D, A, P, R, C', 'Siguen siendo del panel tras abrir un chat con ↓/↑ o desde la lista, hasta que hagas clic en WhatsApp'],
   ['↓ / ↑', 'Siguiente / anterior cliente, si no estás escribiendo (caja del chat vacía)'],
   ['Alt + ↓ / ↑', 'Siguiente / anterior cliente, aunque estés escribiendo'],
   ['Alt + 1 … 9', 'Escribe ese mensaje en su chat'],

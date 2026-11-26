@@ -48,6 +48,9 @@ if (window.top !== window) {
     if (!PANELES.test(ev.origin) || !d) return
     if (d.dm === 'adjuntar') return adjuntar(d, ev.origin)
     if (d.dm !== 'abrir-chat') return
+    // Chat abierto desde el panel (flechas o clic en la lista): el teclado sigue siendo del panel hasta que
+    // hagas clic dentro de WhatsApp. Con un mensaje escrito (1–9) ya es de WhatsApp: lo revisas y das Enter.
+    window.__dmMandaPanel = !d.texto
     const responder = ok => window.parent.postMessage({ dm: 'chat', id: d.id, ok }, ev.origin)
     const raiz = document.querySelector('#app')
     const tel = String(d.telefono || '').replace(/\D/g, '')
@@ -83,8 +86,18 @@ if (window.top !== window) {
       if (el.matches('#main footer [contenteditable="true"]')) return !(el.textContent || '').trim()
       return false
     }
+    // Clic tuyo dentro de WhatsApp: desde ahi las teclas son de WhatsApp (salvo las de arriba).
+    window.addEventListener('pointerdown', e => { if (e.isTrusted) window.__dmMandaPanel = false }, true)
+    // Atajos del panel que valen sin Alt mientras el panel manda y la caja del chat esta vacia.
+    const DEL_PANEL = /^(Digit|Numpad)[1-9]$|^Key[DAPRC]$/
     window.addEventListener('keydown', e => {
-      if (e.ctrlKey || e.metaKey || (e.shiftKey && !e.altKey)) return // Ctrl+Alt = AltGr (@, #...): de WhatsApp
+      if (e.ctrlKey || e.metaKey) return
+      if (window.__dmMandaPanel && !e.altKey && sinEscribir() && (DEL_PANEL.test(e.code) || e.key === '?')) {
+        e.preventDefault(); e.stopImmediatePropagation()
+        window.parent.postMessage({ dm: 'tecla', key: e.key, code: e.code, altKey: false, shiftKey: e.shiftKey, panel: true }, origen)
+        return
+      }
+      if (e.shiftKey && !e.altKey) return // Ctrl+Alt = AltGr (@, #...): de WhatsApp
       const flecha = e.key === 'ArrowDown' || e.key === 'ArrowUp'
       if (!e.altKey && !(flecha && sinEscribir())) return
       if (!(flecha || /^(Digit|Numpad)[1-9]$/.test(e.code))) return
