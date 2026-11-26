@@ -101,6 +101,14 @@ function pedirAlMarco(mensaje, espera = 1500) {
   })
 }
 export function inicioMarco() { if (marco) marco.src = URL_WHATSAPP_WEB }
+// Lleva el teclado a WhatsApp (queda donde estaba: normalmente escribiendo en el chat abierto).
+export function enfocarMarco() { try { marco?.focus(); marco?.contentWindow?.focus() } catch { /* sin marco */ } }
+// Las teclas con Alt apretadas dentro de WhatsApp (la extension 1.3+ las pasa al panel).
+export function oirTeclasDelMarco(fn) {
+  const oir = ev => { if (marco && ev.source === marco.contentWindow && ev.data?.dm === 'tecla') fn(ev.data) }
+  window.addEventListener('message', oir)
+  return () => window.removeEventListener('message', oir)
+}
 
 // Con la ventana abierta, los botones de WhatsApp del panel no abren otra pestaña: dejan el mensaje
 // listo (y copiado) en la ventana. Si no esta abierta, se abre WhatsApp como siempre.

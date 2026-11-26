@@ -22,3 +22,18 @@ if (window.top !== window) {
     a.remove()
   })
 }
+
+// Atajos del panel desde dentro de WhatsApp: Alt+↓/↑ (cliente siguiente/anterior) y Alt+1…9 (escribir ese
+// mensaje en su chat). Solo se le pasa al panel que tecla fue; WhatsApp no ve esas teclas.
+if (window.top !== window) {
+  const PANEL = /^(https:\/\/(www\.)?repisasdonmaxi\.cl|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/
+  const origen = (location.ancestorOrigins && location.ancestorOrigins[0]) || ''
+  if (PANEL.test(origen)) {
+    window.addEventListener('keydown', e => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return
+      if (!(e.key === 'ArrowDown' || e.key === 'ArrowUp' || /^(Digit|Numpad)[1-9]$/.test(e.code))) return
+      e.preventDefault(); e.stopImmediatePropagation()
+      window.parent.postMessage({ dm: 'tecla', key: e.key, code: e.code, altKey: true, shiftKey: e.shiftKey }, origen)
+    }, true)
+  }
+}

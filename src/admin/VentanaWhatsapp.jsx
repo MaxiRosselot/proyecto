@@ -12,12 +12,12 @@ export const boton = { border: '1px solid ' + C.border, background: 'white', bor
 export const botonVerde = { ...boton, color: VERDE, borderColor: '#86efac' }
 
 // Boton que copia un texto y avisa "✓ Copiado" un momento.
-export function Copiar({ texto, children, estilo = boton, titulo }) {
+export function Copiar({ texto, children, estilo = boton, titulo, ...resto }) {
   const [listo, setListo] = useState(false)
   const copiar = async () => {
     try { await navigator.clipboard.writeText(texto); setListo(true); setTimeout(() => setListo(false), 1500) } catch { /* sin permiso de portapapeles */ }
   }
-  return <button type="button" onClick={copiar} title={titulo} style={estilo}>{listo ? '✓ Copiado' : children}</button>
+  return <button type="button" {...resto} onClick={copiar} title={titulo} style={estilo}>{listo ? '✓ Copiado' : children}</button>
 }
 
 // Lo que mando un boton de WhatsApp del panel (Preguntar, WhatsApp al cliente, recordatorios...):

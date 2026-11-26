@@ -8,7 +8,8 @@ import { mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/l
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
-import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, buscarClientes, extensionInstalada, inicioMarco, telefonoLegible } from './whatsappPanel.js'
+import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, buscarClientes, enfocarMarco, extensionInstalada, inicioMarco, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
+import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
 // Seccion WhatsApp (solo PC): a la izquierda los clientes por filtro, al centro WhatsApp Web (lo usas
@@ -21,6 +22,34 @@ const columna = { display: 'flex', flexDirection: 'column', minHeight: 0, backgr
 const titulo = { fontSize: 11, fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: .8 }
 const bloque = { padding: '12px 14px', borderBottom: '1px solid ' + C.border }
 const mismoTelefono = (a, b) => { const x = telefonoWhatsapp(a), y = telefonoWhatsapp(b); return x.length >= 8 && x === y }
+
+// Una tecla dibujada, para los atajos.
+function Tecla({ children }) {
+  return <kbd style={{ display: 'inline-block', minWidth: 16, padding: '0 4px', marginRight: 5, border: '1px solid ' + C.border, borderBottomWidth: 2, borderRadius: 4, background: '#F8FAFC', fontSize: 10.5, fontWeight: 700, color: C.textSub, textAlign: 'center', fontFamily: 'inherit', lineHeight: '15px' }}>{children}</kbd>
+}
+
+function AyudaAtajos({ onCerrar }) {
+  const fila = ([t, d]) => (
+    <div key={t} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, color: C.text }}>
+      <span style={{ minWidth: 92, whiteSpace: 'nowrap' }}>{t.split(' ').map((x, i) => /^[+…/]$/.test(x) ? <span key={i} style={{ color: C.textMuted, marginRight: 4 }}>{x}</span> : <Tecla key={i}>{x}</Tecla>)}</span>
+      <span style={{ color: C.textSub }}>{d}</span>
+    </div>
+  )
+  return (
+    <div data-testid="ayuda-atajos" style={{ ...bloque, background: '#F8FAFC', display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <span style={titulo}>Atajos de teclado</span>
+        <button type="button" onClick={onCerrar} aria-label="Cerrar atajos" style={{ ...boton, marginLeft: 'auto' }}>✕</button>
+      </div>
+      {ATAJOS.map(fila)}
+      <div style={{ ...titulo, marginTop: 6 }}>Desde dentro de WhatsApp</div>
+      {ATAJOS_EN_WHATSAPP.map(fila)}
+      <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, lineHeight: 1.45 }}>
+        Para ir rápido: <b>Alt+↓</b> (siguiente cliente) → <b>Alt+1</b> (su mensaje) → revisas y <b>Enter</b> en WhatsApp. Nada se envía solo.
+      </div>
+    </div>
+  )
+}
 
 function FilaCliente({ q, hoy, activo, onElegir, extra }) {
   const v = enQueVa(q, hoy)
@@ -56,16 +85,16 @@ function FilaEvento({ e, activo, onElegir }) {
 }
 
 // Un mensaje listo: titulo, vista previa (se despliega) y Copiar / Escribir en su chat.
-function Mensaje({ m, telefono, onUsado }) {
+function Mensaje({ m, telefono, onUsado, numero }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <div data-testid={'mensaje-' + m.id} style={{ border: '1px solid ' + C.border, borderRadius: 9, padding: '7px 9px', background: 'white' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button type="button" onClick={() => setAbierto(v => !v)} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700, color: C.text, textAlign: 'left', flex: 1 }}>
-          {abierto ? '▾' : '▸'} {m.titulo}
+          {numero <= 9 && <Tecla>{numero}</Tecla>}{abierto ? '▾' : '▸'} {m.titulo}
         </button>
-        <Copiar texto={m.texto} titulo="Copiar para pegar en el chat">Copiar</Copiar>
-        {telefono && <button type="button" style={botonVerde} title="Lo deja escrito en su chat, sin enviar: tú lo revisas y das Enter"
+        <Copiar texto={m.texto} titulo={'Copiar para pegar en el chat' + (numero <= 9 ? ` (Shift+${numero})` : '')} data-atajo={numero <= 9 ? 'copiar-' + numero : undefined}>Copiar</Copiar>
+        {telefono && <button type="button" style={botonVerde} data-atajo={numero <= 9 ? 'chat-' + numero : undefined} title={'Lo deja escrito en su chat, sin enviar: tú lo revisas y das Enter' + (numero <= 9 ? ` (tecla ${numero})` : '')}
           onClick={() => { abrirChatEnMarco(telefono, m.texto); onUsado?.(m) }}>En su chat</button>}
       </div>
       <div onClick={() => setAbierto(v => !v)} style={{ fontSize: 12, color: C.textSub, whiteSpace: 'pre-wrap', marginTop: 5, cursor: 'pointer', ...(abierto ? {} : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }) }}>{m.texto}</div>
@@ -74,7 +103,7 @@ function Mensaje({ m, telefono, onUsado }) {
 }
 
 // Mis mensajes: los propios, editables, con {nombre}, {cotizacion}, {total}, {agendar}, {pagar}.
-function MisMensajes({ cliente, telefono }) {
+function MisMensajes({ cliente, telefono, desde = 0 }) {
   const [lista, setLista] = useState(leerRapidos)
   const [editando, setEditando] = useState(false)
   const cambiar = nueva => { setLista(nueva); guardarRapidos(nueva) }
@@ -101,7 +130,7 @@ function MisMensajes({ cliente, telefono }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {lista.map(m => <Mensaje key={m.id} m={{ ...m, id: 'propio-' + m.id, texto: rellenar(m.texto, cliente) }} telefono={telefono} />)}
+          {lista.map((m, i) => <Mensaje key={m.id} numero={desde + i + 1} m={{ ...m, id: 'propio-' + m.id, texto: rellenar(m.texto, cliente) }} telefono={telefono} />)}
           {!lista.length && <div style={{ fontSize: 12, color: C.textMuted }}>No tienes mensajes propios. Toca Editar para agregar.</div>}
         </div>
       )}
@@ -125,8 +154,8 @@ function Seguimiento({ q, hoy, onGuardar, guardando }) {
         {e.yaCompro && <b style={{ color: C.green }}> Ya compró con la N° {e.yaCompro.cotNum}: no hace falta preguntarle por esta.</b>}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button type="button" disabled={guardando} style={boton} onClick={() => onGuardar(registrarPregunta(q.seguimiento, hoy))}>✓ Le pregunté hoy</button>
-        {e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} onClick={() => onGuardar(registrarRespuesta(q.seguimiento, hoy))}>Respondió hoy</button>}
+        <button type="button" disabled={guardando} style={boton} data-atajo="pregunte" title="Tecla P" onClick={() => onGuardar(registrarPregunta(q.seguimiento, hoy))}>✓ Le pregunté hoy</button>
+        {e.veces > 0 && !e.respondio && <button type="button" disabled={guardando} style={boton} data-atajo="respondio" title="Tecla R" onClick={() => onGuardar(registrarRespuesta(q.seguimiento, hoy))}>Respondió hoy</button>}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8, fontSize: 12, color: C.textSub }}>
         <span>Pospuso, esperar:</span>
@@ -172,7 +201,7 @@ function EstadoCotizacion({ q, onEstado, guardando }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
       {q.status === 'por confirmar' && !rechazando && <>
-        <button type="button" disabled={guardando} style={botonVerde} onClick={() => onEstado('confirmada')}>✓ Confirmó</button>
+        <button type="button" disabled={guardando} style={botonVerde} data-atajo="confirmo" title="Tecla C" onClick={() => onEstado('confirmada')}>✓ Confirmó</button>
         <button type="button" disabled={guardando} style={{ ...boton, color: C.red }} onClick={() => setRechazando(true)}>Rechazó…</button>
       </>}
       {rechazando && <>
@@ -217,7 +246,7 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
           {grupos.map(g => (
             <React.Fragment key={g}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, marginTop: 4 }}>{g}</div>
-              {mensajes.filter(m => m.grupo === g).map(m => <Mensaje key={m.id} m={m} telefono={q.telefono} onUsado={usado} />)}
+              {mensajes.map((m, i) => m.grupo === g && <Mensaje key={m.id} numero={i + 1} m={m} telefono={q.telefono} onUsado={usado} />)}
             </React.Fragment>
           ))}
           {q.status !== 'rechazada' && !q.instalacion?.fecha && q.linkAgenda && (
@@ -230,7 +259,7 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
         </div>
       </div>
       <Bitacora q={q} hoy={hoy} onGuardar={onGuardar} guardando={guardando} />
-      <MisMensajes cliente={q} telefono={q.telefono} />
+      <MisMensajes cliente={q} telefono={q.telefono} desde={mensajes.length} />
     </>
   )
 }
@@ -251,9 +280,9 @@ function FichaEvento({ e }) {
       </div>
       <div style={bloque}>
         <div style={{ ...titulo, marginBottom: 8 }}>Mensajes</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{m.map(x => <Mensaje key={x.id} m={x} telefono={e.telefono} />)}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{m.map((x, i) => <Mensaje key={x.id} numero={i + 1} m={x} telefono={e.telefono} />)}</div>
       </div>
-      <MisMensajes cliente={{ nombre: e.cliente }} telefono={e.telefono} />
+      <MisMensajes cliente={{ nombre: e.cliente }} telefono={e.telefono} desde={m.length} />
     </>
   )
 }
@@ -270,6 +299,8 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
   const [envio, setEnvio] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [hayExtension, setHayExtension] = useState(extensionInstalada)
+  const [ayuda, setAyuda] = useState(false)
+  const campoBuscar = React.useRef(null)
 
   const cargar = useCallback(async () => {
     setCargando(true); setError('')
@@ -313,6 +344,64 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
     if (telefono && hayExtension) abrirChatEnMarco(telefono)
   }
 
+  // Atajos de teclado (ver atajosWhatsapp.js). La lista que se ve, en orden, con como elegir a cada uno.
+  const filas = !buscar.trim() && filtro === 'manana'
+    ? eventos.map(e => {
+        const c = e.cotNum && quotes.find(x => String(x.cotNum) === String(e.cotNum))
+        return { testid: 'evento-' + e.id, activo: sel?.evento?.id === e.id || (c && sel?.cotNum === c.cotNum), elegir: () => elegir(c ? { cotNum: c.cotNum } : { evento: e }, c?.telefono || e.telefono) }
+      })
+    : lista.map(c => ({ testid: 'cliente-' + c.cotNum, activo: sel?.cotNum === c.cotNum, elegir: () => elegir({ cotNum: c.cotNum }, c.telefono) }))
+  function hacer(a) {
+    const modulo = document.querySelector('[data-testid=modulo-whatsapp]')
+    if (a.tipo === 'mover') {
+      const i = siguiente(filas.findIndex(f => f.activo), a.paso, filas.length)
+      if (i < 0) return
+      if (document.activeElement === campoBuscar.current) campoBuscar.current.blur()
+      filas[i].elegir()
+      modulo?.querySelector(`[data-testid="${filas[i].testid}"]`)?.scrollIntoView({ block: 'nearest' })
+    } else if (a.tipo === 'filtro') {
+      const i = FILTROS.findIndex(f => f.id === filtro)
+      setFiltro(FILTROS[(i + a.paso + FILTROS.length) % FILTROS.length].id)
+    } else if (a.tipo === 'mensaje') {
+      const b = modulo?.querySelector(`[data-atajo="${a.copiar ? 'copiar' : 'chat'}-${a.n}"]`)
+      if (!b) return
+      b.click()
+      if (!a.copiar) setTimeout(enfocarMarco, 400)
+    } else if (a.tipo === 'clic') {
+      modulo?.querySelector(`[data-atajo="${a.atajo}"]`)?.click()
+    } else if (a.tipo === 'whatsapp') {
+      enfocarMarco()
+    } else if (a.tipo === 'buscar') {
+      campoBuscar.current?.focus(); campoBuscar.current?.select()
+    } else if (a.tipo === 'ayuda') {
+      setAyuda(v => !v)
+    } else if (a.tipo === 'salir') {
+      const el = document.activeElement
+      if (el === campoBuscar.current && buscar) setBuscar('')
+      else if (el && el !== document.body) el.blur()
+      else setAyuda(false)
+    }
+  }
+  const hacerRef = React.useRef(hacer)
+  hacerRef.current = hacer
+  useEffect(() => {
+    const tecla = e => {
+      if (e.defaultPrevented || e.isComposing) return
+      const el = e.target
+      const escribiendo = el?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName)
+      const campo = !escribiendo ? '' : el === campoBuscar.current ? 'buscar' : 'otro'
+      // Enter o espacio sobre un boton lo apreta, como siempre (salvo sobre un cliente de la lista).
+      if (!escribiendo && el?.tagName === 'BUTTON' && !/^(cliente|evento)-/.test(el.dataset.testid || '') && (e.key === 'Enter' || e.key === ' ')) return
+      const a = accionDeTecla(e, campo)
+      if (!a) return
+      e.preventDefault()
+      hacerRef.current(a)
+    }
+    window.addEventListener('keydown', tecla)
+    const dejar = oirTeclasDelMarco(d => { const a = accionDeTecla(d, 'otro'); if (a) hacerRef.current(a) })
+    return () => { window.removeEventListener('keydown', tecla); dejar() }
+  }, [])
+
   // Se ve al instante y se guarda en la planilla por detras (tarda 1–2 s); si falla, se deshace.
   // Los guardados van en fila para que dos anotaciones seguidas no se pisen.
   const cola = React.useRef(Promise.resolve())
@@ -341,7 +430,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
             <span style={titulo}>Clientes</span>
             <button type="button" onClick={cargar} disabled={cargando} style={{ ...boton, marginLeft: 'auto' }}>{cargando ? 'Cargando…' : '↻ Actualizar'}</button>
           </div>
-          <input type="search" value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar: nombre, N°, teléfono…" aria-label="Buscar cliente"
+          <input ref={campoBuscar} type="search" value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar: nombre, N°, teléfono…  ( / )" aria-label="Buscar cliente"
             style={{ ...styles.input, padding: '7px 10px', fontSize: 13 }} />
           {!buscar.trim() && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -358,14 +447,14 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
             </div>
           )}
         </div>
+        <div style={{ padding: '5px 12px', borderBottom: '1px solid ' + C.border, fontSize: 11, color: C.textMuted, background: '#FAFAFA' }}>
+          <Tecla>↓</Tecla><Tecla>↑</Tecla>clientes · <Tecla>1</Tecla>…<Tecla>9</Tecla>mensajes · <Tecla>?</Tecla>más
+        </div>
         <div style={{ flex: 1, overflowY: 'auto' }} data-testid="lista-clientes">
           {error && <div style={{ ...styles.errorBox, margin: 10 }}>{error}</div>}
           {!buscar.trim() && filtro === 'manana'
-            ? eventos.map(e => <FilaEvento key={e.id} e={e} activo={sel?.evento?.id === e.id} onElegir={() => {
-                const c = e.cotNum && quotes.find(x => String(x.cotNum) === String(e.cotNum))
-                elegir(c ? { cotNum: c.cotNum } : { evento: e }, c?.telefono || e.telefono)
-              }} />)
-            : lista.map(c => <FilaCliente key={c.cotNum} q={c} hoy={hoy} activo={sel?.cotNum === c.cotNum} onElegir={() => elegir({ cotNum: c.cotNum }, c.telefono)} />)}
+            ? eventos.map((e, i) => <FilaEvento key={e.id} e={e} activo={filas[i].activo} onElegir={filas[i].elegir} />)
+            : lista.map((c, i) => <FilaCliente key={c.cotNum} q={c} hoy={hoy} activo={filas[i].activo} onElegir={filas[i].elegir} />)}
           {!cargando && !error && (filtro === 'manana' && !buscar.trim() ? !eventos.length : !lista.length) && (
             <div style={{ ...styles.empty, padding: '30px 14px', fontSize: 13 }}>{buscar.trim() ? `Nadie con “${buscar}”.` : 'No hay nadie aquí 🙌'}</div>
           )}
@@ -379,6 +468,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
           <span style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>WhatsApp</span>
           {hayExtension && <button type="button" onClick={inicioMarco} title="Vuelve a la lista de chats" style={boton}>↻ Chats</button>}
           <span style={{ marginLeft: 'auto' }} />
+          <button type="button" onClick={() => setAyuda(v => !v)} aria-pressed={ayuda} title="Atajos de teclado (?)" style={boton}>⌨ Atajos</button>
           {hayExtension && <ControlZoom />}
         </div>
         {hayExtension ? <LugarWhatsapp /> : <SinExtension onReintentar={() => setHayExtension(extensionInstalada())} />}
@@ -386,6 +476,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
 
       {/* Ficha */}
       <section style={{ ...columna, overflowY: 'auto' }} aria-label="Ficha del cliente">
+        {ayuda && <AyudaAtajos onCerrar={() => setAyuda(false)} />}
         {envio && <div style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ParaEnviar envio={envio} onAbrirChat={abrirChatEnMarco} onCerrar={() => setEnvio(null)} /></div>}
         {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion}
               onGuardar={seguimiento => guardarCambios(q.cotNum, { seguimiento })}
