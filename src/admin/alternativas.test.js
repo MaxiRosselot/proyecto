@@ -64,6 +64,11 @@ test('repisas altas: la mas baja pasa de 2,5 m a 2 m (y de 3 a 2,5)', () => {
   assert.match(baja.descripcion, /2 m de alto en vez de 2,5 m/)
   alta.shelving.heightCm = 300; alta.shelving.runs[0].heightCm = 300
   assert.equal(alternativasDe(alta).find(a => a.tipo === 'mas-baja').proyecto.shelving.heightCm, 250)
+  // La general vieja (300) no cuenta si todas las repisas tienen la suya (250): baja a 2 m.
+  alta.shelving.heightCm = 300; alta.shelving.runs[0].heightCm = 250
+  const desdeRuns = alternativasDe(alta).find(a => a.tipo === 'mas-baja')
+  assert.equal(desdeRuns.proyecto.shelving.runs[0].heightCm, 200)
+  assert.match(desdeRuns.descripcion, /2 m de alto en vez de 2,5 m/)
   // De 2 m no hay mas baja.
   assert.equal(alternativasDe(enL).find(a => a.tipo === 'mas-baja'), undefined)
 })

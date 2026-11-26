@@ -109,7 +109,10 @@ const MAS_BAJA = { 300: 250, 250: 200 }
 const metros = cm => `${String(cm / 100).replace('.', ',')} m`
 
 function masBaja(project) {
-  const alturas = [project.shelving.heightCm, ...(project.shelving.runs || []).map(r => r.heightCm)].filter(Boolean)
+  // La altura de cada repisa manda sobre la general (asi la dibuja el visor): si todas tienen la
+  // suya, la general puede ser un valor viejo que no se ve en ninguna parte.
+  const runs = project.shelving.runs || []
+  const alturas = (runs.length ? runs.map(r => r.heightCm ?? project.shelving.heightCm) : [project.shelving.heightCm]).filter(Boolean)
   const alta = Math.max(...alturas)
   const nueva = MAS_BAJA[alta]
   if (!nueva) return null
