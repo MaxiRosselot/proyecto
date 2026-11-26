@@ -97,7 +97,7 @@ export async function abrirChatEnMarco(telefono, texto = '') {
 export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
   if (!marco) return { ok: false, motivo: 'sin-marco' }
   ++ultimoPedido
-  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 35000, 'adjunto')
+  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 90000, 'adjunto')
 }
 function pedirAlMarco(mensaje, espera = 1500, respuesta = 'chat') {
   return new Promise(resolver => {

@@ -95,12 +95,6 @@ const nuevoEditable = antes => [...document.querySelectorAll('[contenteditable="
 function conArchivo(archivo) { const dt = new DataTransfer(); dt.items.add(archivo); return dt }
 
 const MANERAS = {
-  pegar: async (main, archivo) => {
-    const composer = main.querySelector('footer [contenteditable="true"]')
-    if (!composer) return
-    composer.focus()
-    composer.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: conArchivo(archivo) }))
-  },
   soltar: async (main, archivo) => {
     const r = main.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2
     const ev = (tipo, el) => el && el.dispatchEvent(new DragEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: conArchivo(archivo) }))
@@ -109,6 +103,12 @@ const MANERAS = {
     await esperar(400) // WhatsApp pone su zona para soltar encima
     const zona = document.elementFromPoint(x, y) || debajo
     ev('dragover', zona); ev('drop', zona)
+  },
+  pegar: async (main, archivo) => {
+    const composer = main.querySelector('footer [contenteditable="true"]')
+    if (!composer) return
+    composer.focus()
+    composer.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: conArchivo(archivo) }))
   },
   documento: async (main, archivo) => {
     const boton = main.querySelector('footer [data-icon="plus-rounded"], footer [data-icon="plus"], footer [data-icon="clip"], footer [aria-label="Attach"], footer [aria-label="Adjuntar"], footer [title="Attach"], footer [title="Adjuntar"]')
@@ -139,17 +139,17 @@ async function adjuntar(d, origen) {
   const main = await hasta(() => { const m = document.querySelector('#main'); return m && m.querySelector('footer [contenteditable="true"]') ? m : null }, 5000)
   if (!main) return responder(false, avisoInvalido() ? 'sin-whatsapp' : 'sin-chat')
   const archivo = new File([d.archivo], d.nombre || 'Cotizacion.pdf', { type: 'application/pdf' })
-  // Apenas WhatsApp toma el archivo, la caja para escribir del chat desaparece (la tapa la vista previa,
-  // aunque todavia este cargando): eso dice que funciono, y no se prueba otra manera (si no, quedan copias).
-  const composer = main.querySelector('footer [contenteditable="true"]')
-  const tapado = () => !composer.isConnected || !composer.offsetParent
+  // Funciono cuando la vista previa muestra el nombre del archivo (en el WhatsApp real tarda hasta
+  // ~12 s con un PDF de 700 kB). Se prueba UNA manera a la vez y se espera de verdad antes de la
+  // siguiente: si no, quedan copias del PDF.
+  const conNombre = () => { let n = 0; const w = document.createTreeWalker(document.querySelector('#app') || document.body, NodeFilter.SHOW_TEXT); for (let t = w.nextNode(); t; t = w.nextNode()) if ((t.nodeValue || '').includes(archivo.name)) n++; return n }
   for (const [como, hacer] of Object.entries(MANERAS)) {
-    const antes = editables()
+    const antes = editables(), nombres = conNombre()
     try { await hacer(main, archivo) } catch { continue }
-    if (!await hasta(tapado, 3000)) continue
-    // El comentario: el campo de la vista previa, cuando termina de cargar (un PDF grande tarda).
+    if (!await hasta(() => conNombre() > nombres || nuevoEditable(antes), 20000)) continue
+    // El comentario: el campo de la vista previa, cuando termina de cargar.
     if (d.texto) {
-      const campo = await hasta(() => nuevoEditable(antes), 20000)
+      const campo = await hasta(() => nuevoEditable(antes), 15000)
       if (campo) { campo.focus(); document.execCommand('insertText', false, d.texto) }
       return responder(true, campo ? '' : 'sin-comentario', como)
     }

@@ -245,6 +245,7 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
       const nombre = nombrePdf(q.nombre), texto = mensajeEnvioCotizacion(q.linkAgenda)
       setEstado({ texto: 'Dejándolo en su chat… (un PDF grande tarda unos segundos)', tono: '' })
       const res = await adjuntarEnChat(q.telefono, { archivo, nombre, texto })
+      console.info('PDF en su chat:', res) // como lo tomo WhatsApp (soltar / pegar / documento)
       if (res.ok && res.motivo === 'sin-comentario') {
         navigator.clipboard?.writeText(texto).catch(() => {})
         setEstado({ texto: '✓ El PDF quedó en su chat. El mensaje no entró solo: lo copié, pégalo en el comentario (Ctrl+V) y da Enter.', tono: 'verde' }); onEnWhatsapp?.()
