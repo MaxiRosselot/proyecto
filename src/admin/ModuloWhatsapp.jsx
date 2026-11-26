@@ -336,7 +336,7 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
 }
 
 // El chat abierto en WhatsApp no tiene cotizacion en el panel (o no se ve su numero).
-function ChatSinCotizacion({ chat, onBuscar }) {
+function ChatSinCotizacion({ chat, onBuscar, parecidas = [], onElegir }) {
   const esNumero = !chat.titulo || /^\+?[\d\s()-]+$/.test(chat.titulo)
   return (
     <div data-testid="chat-sin-cotizacion" style={{ ...bloque, background: '#F8FAFC' }}>
@@ -344,9 +344,18 @@ function ChatSinCotizacion({ chat, onBuscar }) {
       <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{chat.telefono ? telefonoLegible(chat.telefono) : chat.titulo}</div>
       {!esNumero && chat.telefono && <div style={{ fontSize: 12, color: C.textSub }}>{chat.titulo}</div>}
       <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 6, lineHeight: 1.5 }}>
-        {chat.telefono ? 'Este número no tiene cotizaciones en el panel.' : 'No se ve su número (grupo o contacto guardado).'}
-        {!esNumero && ' Si cotizó con otro número, búscalo por nombre:'}
+        {chat.telefono ? 'Este número no tiene cotizaciones en el panel.' : 'Es un contacto guardado (o un grupo): WhatsApp no muestra su número, así que no sé cuál es su cotización.'}
+        {!esNumero && (parecidas.length ? ' Con ese nombre hay:' : ' Búscalo por nombre:')}
       </div>
+      {parecidas.length > 0 && (
+        <div data-testid="cotizaciones-parecidas" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+          {parecidas.map(p => (
+            <button key={p.cotNum} type="button" onClick={() => onElegir(p.cotNum)} style={{ ...boton, textAlign: 'left' }}>
+              {p.nombre} · N° {p.cotNum}{p.telefono ? ' · ' + telefonoLegible(p.telefono) : ''}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
         {!esNumero && <button type="button" style={boton} onClick={() => onBuscar(chat.titulo)}>Buscar “{chat.titulo}”</button>}
         {chat.telefono && <Copiar texto={telefonoLegible(chat.telefono)}>Copiar número</Copiar>}
@@ -508,7 +517,14 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
   const chatAbiertoRef = React.useRef(null)
   chatAbiertoRef.current = chat => {
     setChatAbierto(chat.telefono || chat.titulo ? chat : null)
-    if (!chat.telefono) return
+    if (!chat.telefono) {
+      // Contacto guardado o grupo: no se ve el numero. Si la ficha es de otra persona, se limpia (y se
+      // sugieren cotizaciones por el nombre del contacto).
+      const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+      const actual = q?.nombre || sel?.evento?.cliente
+      if (chat.titulo && !(actual && norm(actual) === norm(chat.titulo))) setSel(null)
+      return
+    }
     const telActual = q?.telefono || sel?.evento?.telefono
     if (telActual && mismoTelefono(telActual, chat.telefono)) return
     const delNumero = cotizacionesDelNumero(quotes, chat.telefono)
@@ -612,7 +628,8 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
       {/* Ficha */}
       <section style={{ ...columna, overflowY: 'auto' }} aria-label="Ficha del cliente">
         {ayuda && <AyudaAtajos onCerrar={() => setAyuda(false)} />}
-        {chatAbierto && !q && !sel?.evento && <ChatSinCotizacion chat={chatAbierto} onBuscar={t => { setBuscar(t); campoBuscar.current?.focus() }} />}
+        {chatAbierto && !q && !sel?.evento && <ChatSinCotizacion chat={chatAbierto} onBuscar={t => { setBuscar(t); campoBuscar.current?.focus() }}
+          parecidas={chatAbierto.telefono ? [] : buscarClientes(grupos.todos, chatAbierto.titulo, 4)} onElegir={cotNum => setSel({ cotNum })} />}
         {envio && <div style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ParaEnviar envio={envio} onAbrirChat={abrirChatEnMarco} onCerrar={() => setEnvio(null)} /></div>}
         {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion}
               onEnWhatsapp={() => { irAWhatsapp.current = Date.now(); enfocarMarco() }}

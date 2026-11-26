@@ -204,6 +204,13 @@ try {
   await expect(page.getByTestId('otras-cotizaciones')).toContainText('N° ')
   await page.getByTestId('otras-cotizaciones').getByRole('button').first().click()
   await expect(page.getByTestId('ficha-cliente').getByText('N° ' + (await page.getByTestId('ficha-cliente').getByText(/^N° \d+/).first().textContent()).match(/\d+/)[0])).toBeVisible()
+  // Contacto guardado (sin numero a la vista): la ficha se limpia y sugiere por el nombre.
+  await expect(page.getByTestId('ficha-cliente').getByText(nombre, { exact: true })).toBeVisible()
+  await abrirEnWhatsapp(`<header><span dir="auto">${nombre} B</span></header><div data-id="false_123456789012345@lid_3EB0"></div>`)
+  await expect(page.getByTestId('chat-sin-cotizacion')).toBeVisible()
+  await expect(page.getByTestId('ficha-cliente')).toHaveCount(0)
+  await page.getByTestId('cotizaciones-parecidas').getByRole('button', { name: new RegExp('N° ' + otra) }).click()
+  await expect(page.getByTestId('ficha-cliente').getByText(nombre + ' B', { exact: true })).toBeVisible()
   if (errors.length) throw new Error(errors.join('\n'))
 } finally {
   if (api && cotNum) await api('delete-quote', { cotNum }).catch(() => {})
