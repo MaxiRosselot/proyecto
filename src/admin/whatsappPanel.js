@@ -90,11 +90,17 @@ export async function abrirChatEnMarco(telefono, texto = '') {
   const ok = await pedirAlMarco({ dm: 'abrir-chat', telefono: telefonoWhatsapp(telefono), texto })
   if (!ok && marco) marco.src = linkWhatsappWeb(telefono, texto)
 }
-function pedirAlMarco(mensaje, espera = 1500) {
+// Deja el PDF adjunto en su chat con el texto como comentario, sin enviar (extension 1.5+). Devuelve
+// { ok, motivo }. Si no se puede (version vieja, sin sesion), el panel lo descarga para arrastrarlo.
+export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
+  if (!marco) return { ok: false, motivo: 'sin-marco' }
+  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 12000, 'adjunto')
+}
+function pedirAlMarco(mensaje, espera = 1500, respuesta = 'chat') {
   return new Promise(resolver => {
     const id = ++pedidos
-    const listo = ok => { window.removeEventListener('message', oir); clearTimeout(reloj); resolver(ok) }
-    const oir = ev => { if (ev.source === marco?.contentWindow && ev.data?.dm === 'chat' && ev.data.id === id) listo(Boolean(ev.data.ok)) }
+    const listo = (ok, motivo = 'sin-respuesta') => { window.removeEventListener('message', oir); clearTimeout(reloj); resolver(respuesta === 'chat' ? ok : { ok, motivo }) }
+    const oir = ev => { if (ev.source === marco?.contentWindow && ev.data?.dm === respuesta && ev.data.id === id) listo(Boolean(ev.data.ok), ev.data.motivo || '') }
     const reloj = setTimeout(() => listo(false), espera)
     window.addEventListener('message', oir)
     try { marco.contentWindow.postMessage({ ...mensaje, id }, 'https://web.whatsapp.com') } catch { listo(false) }

@@ -522,6 +522,15 @@ const server = http.createServer(async (req, res) => {
     return res.end(fs.readFileSync(file))
   }
 
+  // El PDF de una cotizacion para dejarlo en el chat de WhatsApp (en produccion viene de Drive).
+  if (name === 'pdf-cotizacion' && req.method === 'GET') {
+    const id = url.searchParams.get('id') || ''
+    const file = path.join(here, 'pdfs', `${id}.pdf`)
+    if (!/^[a-f0-9-]{36}$/.test(id) || !fs.existsSync(file)) return send(res, 404, { error: 'PDF no encontrado' })
+    res.writeHead(200, { 'Content-Type': 'application/pdf' })
+    return res.end(fs.readFileSync(file))
+  }
+
   // Links antiguos /pagar → /reserva (el handler de produccion) y el checkout simulado de Mercado Pago.
   if (name === 'pagar' && req.method === 'GET') {
     const r = await (await import('../../netlify/functions/pagar.mjs')).handler({ httpMethod: 'GET', queryStringParameters: Object.fromEntries(url.searchParams) })

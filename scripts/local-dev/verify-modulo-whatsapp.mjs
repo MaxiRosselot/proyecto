@@ -29,7 +29,8 @@ try {
   const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('dm_admin_session')).token)
   api = async (ruta, data) => (await page.request.fetch(base + '/.netlify/functions/' + ruta, { method: data ? 'POST' : 'GET', data, headers: { Authorization: 'Bearer ' + token } })).json()
   const nombre = 'Modulo Whatsapp ' + Date.now().toString(36)
-  cotNum = (await api('save-quote', { crear: true, nombre, telefono: '9 5555 6666', subtotal: 100000, iva: 19000, total: 119000, repisas: [{ largo: 1.2, prof: .45, alto: 2, niveles: 5, unidades: 1, valor: 100000 }], adicionales: {} })).cotNum
+  const cola = String(Date.now() % 10000).padStart(4, '0') // celular distinto en cada corrida
+  cotNum = (await api('save-quote', { crear: true, nombre, telefono: '9 5555 ' + cola, subtotal: 100000, iva: 19000, total: 119000, repisas: [{ largo: 1.2, prof: .45, alto: 2, niveles: 5, unidades: 1, valor: 100000 }], adicionales: {} })).cotNum
   const hoy = ahoraEnZona().fecha
 
   // Abrir la seccion: WhatsApp al centro, cargado dentro (pide el QR), sobre su hueco.
@@ -47,13 +48,13 @@ try {
   await page.getByTestId('cliente-' + cotNum).click()
   const ficha = page.getByTestId('ficha-cliente')
   await expect(ficha.getByText(nombre)).toBeVisible()
-  await expect(ficha.getByText('+56 9 5555 6666')).toBeVisible()
+  await expect(ficha.getByText('+56 9 5555 ' + cola)).toBeVisible()
 
   // "En su chat" con el mensaje de seguimiento: lo deja escrito en su chat y anota la pregunta.
   await page.getByTestId('mensaje-sin-respuesta').getByRole('button', { name: 'En su chat' }).click()
   await expect(page.getByTestId('ficha-seguimiento').getByText(/Preguntado 1 vez/)).toBeVisible()
   const src = await page.getByTestId('marco-whatsapp').getAttribute('src')
-  if (!src.includes('web.whatsapp.com/send?phone=56955556666&text=Hola+Modulo')) throw new Error('No abrió su chat con el mensaje: ' + src)
+  if (!src.includes('web.whatsapp.com/send?phone=5695555' + cola + '&text=Hola+Modulo')) throw new Error('No abrió su chat con el mensaje: ' + src)
 
   // Pospuso: esperar 2 semanas. Sale del "toca preguntar" y aparece en Esperando.
   await page.getByTestId('ficha-seguimiento').getByRole('button', { name: '2 semanas' }).click()
@@ -81,7 +82,7 @@ try {
   if (!await page.evaluate(() => window.__marco === document.querySelector('[data-testid=marco-whatsapp]'))) throw new Error('WhatsApp se volvió a cargar')
 
   // Un boton de WhatsApp de otra parte (aqui, el evento que mandan) elige al cliente y deja el mensaje.
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('dm:whatsapp-para-enviar', { detail: { telefono: '+56955556666', texto: 'Mensaje de prueba', cliente: 'X' } })))
+  await page.evaluate(tel => window.dispatchEvent(new CustomEvent('dm:whatsapp-para-enviar', { detail: { telefono: tel, texto: 'Mensaje de prueba', cliente: 'X' } })), '+5695555' + cola)
   await expect(modulo.getByTestId('whatsapp-para-enviar').getByText('Mensaje de prueba')).toBeVisible()
   await expect(page.getByTestId('whatsapp-para-enviar')).toHaveCount(1)
   await expect(page.getByTestId('ficha-cliente').getByText(nombre)).toBeVisible()
@@ -124,15 +125,58 @@ try {
   await expect(page.getByTestId('ficha-cliente').getByText(nombre)).toBeVisible()
   await expect(async () => {
     const frame = page.frames().find(f => f.parentFrame() === page.mainFrame() && f.url().includes('web.whatsapp.com'))
-    await frame.evaluate(() => window.parent.postMessage({ dm: 'sin-whatsapp', telefono: '56955556666' }, '*'))
+    await frame.evaluate(tel => window.parent.postMessage({ dm: 'sin-whatsapp', telefono: tel }, '*'), '5695555' + cola)
     await expect(page.getByTestId('ficha-sin-whatsapp')).toBeVisible({ timeout: 1000 })
   }).toPass({ timeout: 20000 })
   await expect(page.getByTestId('ficha-sin-whatsapp')).toBeVisible()
   await modulo.getByLabel('Buscar cliente').fill('')
   await expect(modulo.getByRole('button', { name: /^Sin WhatsApp · 1$/ })).toBeVisible()
-  await expect.poll(async () => (await api('get-quotes')).quotes.find(x => x.cotNum === cotNum).seguimiento.sinWhatsapp?.tel).toBe('55556666')
+  await expect.poll(async () => (await api('get-quotes')).quotes.find(x => x.cotNum === cotNum).seguimiento.sinWhatsapp?.tel).toBe('5555' + cola)
   await page.getByTestId('ficha-sin-whatsapp').getByRole('button', { name: 'Sí tiene' }).click()
   await expect(page.getByTestId('ficha-sin-whatsapp')).toBeHidden()
+
+  // PDF en su chat (tecla D). WhatsApp sin sesion: lo descarga y copia el mensaje.
+  const pdf = Buffer.from(['%PDF-1.4', '1 0 obj<<>>endobj', 'trailer<<>>', '%%EOF', ''].join(String.fromCharCode(10)))
+  const { viewUrl } = await api('upload-pdf', { pdfBase64: pdf.toString('base64'), fileName: 'x.pdf', cotNum })
+  await api('save-quote', { cotNum, pdfUrl: viewUrl })
+  await modulo.getByRole('button', { name: '↻ Actualizar' }).click()
+  await modulo.getByLabel('Buscar cliente').fill(nombre)
+  await page.getByTestId('cliente-' + cotNum).click()
+  await page.evaluate(() => document.activeElement?.blur())
+  const [descarga] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.keyboard.press('d')])
+  if (!descarga.suggestedFilename().startsWith('Cotizacion Modulo')) throw new Error('Descargó ' + descarga.suggestedFilename())
+  await expect(page.getByTestId('estado-pdf')).toContainText('Lo descargué')
+
+  // Con sesion (simulada dentro del marco: un chat que recibe lo que se suelta): queda el PDF con su mensaje.
+  await expect(async () => {
+    const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
+    await f.evaluate(() => {
+      if (!document.querySelector('#app')) throw new Error('cargando')
+      document.querySelector('#side') || document.body.append(Object.assign(document.createElement('div'), { id: 'side' }))
+      window.__soltado = null
+      document.addEventListener('click', e => {
+        const a = e.target.closest?.('a[href^="https://wa.me/"]')
+        if (!a) return
+        e.preventDefault()
+        document.querySelector('#main')?.remove()
+        const main = Object.assign(document.createElement('div'), { id: 'main' })
+        main.innerHTML = '<footer><div contenteditable="true"></div></footer>'
+        main.addEventListener('drop', ev => {
+          const archivo = ev.dataTransfer.files[0]
+          window.__soltado = { nombre: archivo.name, tipo: archivo.type, tam: archivo.size, chat: a.href }
+          const comentario = Object.assign(document.createElement('div'), { contentEditable: 'true', id: 'comentario' })
+          document.body.append(comentario); comentario.focus()
+        })
+        document.body.append(main)
+      }, true)
+    })
+  }).toPass({ timeout: 20000 })
+  await page.keyboard.press('d')
+  await expect(page.getByTestId('estado-pdf')).toContainText('Quedó en su chat')
+  const f = page.frames().find(x => x.parentFrame() === page.mainFrame() && x.url().includes('web.whatsapp.com'))
+  const soltado = await f.evaluate(() => ({ ...window.__soltado, comentario: document.querySelector('#comentario')?.textContent }))
+  if (soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || !soltado.comentario.includes('Te adjunto la cotización'))
+    throw new Error('No quedó bien el PDF en el chat: ' + JSON.stringify(soltado))
   if (errors.length) throw new Error(errors.join('\n'))
 } finally {
   if (api && cotNum) await api('delete-quote', { cotNum }).catch(() => {})

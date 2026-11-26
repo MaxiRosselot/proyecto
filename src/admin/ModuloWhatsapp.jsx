@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { C, QUOTE_STATUS_LABELS, apiFetch, fmt, styles } from './utils.js'
+import { C, QUOTE_STATUS_LABELS, adminFetch, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import {
   anotarBitacora, esperarHasta, estadoSeguimiento, marcarSinWhatsapp, marcarYaCompro, quitarDeBitacora, quitarSinWhatsapp, registrarPregunta, registrarRespuesta, sinWhatsapp,
 } from '../../netlify/functions/lib/seguimiento-whatsapp.mjs'
-import { mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
+import { mensajeEnvioCotizacion, mensajeRecordatorio, telefonoWhatsapp } from '../../netlify/functions/lib/mensajes.mjs'
 import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
-import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
+import { EVENTO_PARA_ENVIAR, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
 
@@ -214,7 +214,58 @@ function EstadoCotizacion({ q, onEstado, guardando }) {
   )
 }
 
-function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, onVerCotizacion }) {
+// El id del PDF guardado: de Drive (/d/<id>/view) o del backend local (?id=).
+function idPdf(url) {
+  const m = String(url || '').match(/\/d\/([^/?#]+)/)
+  if (m) return m[1]
+  try { return new URL(url, window.location.href).searchParams.get('id') || '' } catch { return '' }
+}
+const nombrePdf = nombre => `Cotizacion ${(nombre || 'cliente').trim()} - Repisas Don Maxi.pdf`
+function descargar(blob, nombre) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob); a.download = nombre
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+}
+
+// Deja el PDF de la cotizacion en su chat, con el mensaje de envio como comentario. No lo envia:
+// WhatsApp muestra la vista previa y tu das Enter. Si la extension no puede, lo descarga y copia el
+// mensaje para arrastrarlo a mano.
+function PdfEnSuChat({ q, onEnWhatsapp }) {
+  const [estado, setEstado] = useState({ texto: '', tono: '' })
+  const [ocupado, setOcupado] = useState(false)
+  useEffect(() => { setEstado({ texto: '', tono: '' }) }, [q.cotNum])
+  const id = idPdf(q.pdfUrl)
+  async function dejar() {
+    setOcupado(true); setEstado({ texto: 'Trayendo el PDF…', tono: '' })
+    try {
+      const r = await adminFetch('/.netlify/functions/pdf-cotizacion?id=' + encodeURIComponent(id))
+      if (!r.ok) throw new Error((await r.text()).slice(0, 120) || 'error ' + r.status)
+      const archivo = await r.blob()
+      const nombre = nombrePdf(q.nombre), texto = mensajeEnvioCotizacion(q.linkAgenda)
+      setEstado({ texto: 'Dejándolo en su chat…', tono: '' })
+      const res = await adjuntarEnChat(q.telefono, { archivo, nombre, texto })
+      if (res.ok) { setEstado({ texto: '✓ Quedó en su chat: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
+      else if (res.motivo === 'sin-whatsapp') setEstado({ texto: 'WhatsApp dice que este número no existe', tono: 'rojo' })
+      else {
+        descargar(archivo, nombre)
+        try { await navigator.clipboard.writeText(texto) } catch { /* sin permiso */ }
+        setEstado({ texto: 'No pude dejarlo en el chat (¿extensión al día y WhatsApp abierto?). Lo descargué y copié el mensaje: arrástralo al chat.', tono: 'ambar' })
+      }
+    } catch (e) { setEstado({ texto: 'No se pudo traer el PDF: ' + e.message, tono: 'rojo' }) }
+    finally { setOcupado(false) }
+  }
+  if (!q.telefono) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button type="button" data-atajo="pdf" disabled={!id || ocupado} onClick={dejar} title={id ? 'Tecla D' : 'Esta cotización no tiene PDF guardado'}
+        style={{ ...botonVerde, opacity: id ? 1 : .5 }}>📄 {ocupado ? 'Preparando…' : id ? 'PDF en su chat' : 'Sin PDF guardado'}</button>
+      {estado.texto && <div data-testid="estado-pdf" style={{ fontSize: 11.5, marginTop: 4, color: TONOS[estado.tono] || C.textSub }}>{estado.texto}</div>}
+    </div>
+  )
+}
+
+function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, onVerCotizacion, onEnWhatsapp }) {
   const estado = QUOTE_STATUS_LABELS[q.status] || QUOTE_STATUS_LABELS['por confirmar']
   const mensajes = mensajesPara(q, hoy, { eventoManana })
   const grupos = [...new Set(mensajes.map(m => m.grupo))]
@@ -235,6 +286,7 @@ function FichaCliente({ q, hoy, eventoManana, onGuardar, onEstado, guardando, on
           {q.telefono && <Copiar texto={telefonoLegible(q.telefono)}>Copiar</Copiar>}
           {q.telefono && <button type="button" style={botonVerde} onClick={() => abrirChatEnMarco(q.telefono)}>Abrir su chat</button>}
         </div>
+        <PdfEnSuChat q={q} onEnWhatsapp={onEnWhatsapp} />
         {q.telefono && (sinWhatsapp(q)
           ? <div data-testid="ficha-sin-whatsapp" style={{ marginTop: 8, padding: '7px 9px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', fontSize: 12, color: C.red, display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ flex: 1 }}>WhatsApp dice que este número no existe ({fechaCorta(q.seguimiento.sinWhatsapp.fecha)}). Revísalo por fuera: si lo corriges en la cotización, sale solo de esta lista.</span>
@@ -502,6 +554,7 @@ export default function ModuloWhatsapp({ onVerCotizacion }) {
         {ayuda && <AyudaAtajos onCerrar={() => setAyuda(false)} />}
         {envio && <div style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ParaEnviar envio={envio} onAbrirChat={abrirChatEnMarco} onCerrar={() => setEnvio(null)} /></div>}
         {q ? <FichaCliente q={q} hoy={hoy} eventoManana={eventoDe(q)} guardando={false} onVerCotizacion={onVerCotizacion}
+              onEnWhatsapp={() => { irAWhatsapp.current = Date.now(); enfocarMarco() }}
               onGuardar={seguimiento => guardarCambios(q.cotNum, { seguimiento })}
               onEstado={(status, motivo = '') => guardarCambios(q.cotNum, { status, motivoRechazo: motivo })} />
           : sel?.evento ? <FichaEvento e={sel.evento} />

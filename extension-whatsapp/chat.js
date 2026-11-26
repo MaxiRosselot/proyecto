@@ -30,7 +30,9 @@ if (window.top !== window) {
   const PANELES = /^(https:\/\/(www\.)?repisasdonmaxi\.cl|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/
   window.addEventListener('message', ev => {
     const d = ev.data
-    if (!PANELES.test(ev.origin) || !d || d.dm !== 'abrir-chat') return
+    if (!PANELES.test(ev.origin) || !d) return
+    if (d.dm === 'adjuntar') return adjuntar(d, ev.origin)
+    if (d.dm !== 'abrir-chat') return
     const responder = ok => window.parent.postMessage({ dm: 'chat', id: d.id, ok }, ev.origin)
     const raiz = document.querySelector('#app')
     const tel = String(d.telefono || '').replace(/\D/g, '')
@@ -64,4 +66,41 @@ if (window.top !== window) {
       window.parent.postMessage({ dm: 'tecla', key: e.key, code: e.code, altKey: true, shiftKey: e.shiftKey }, origen)
     }, true)
   }
+}
+
+// Dejar un PDF adjunto en el chat de un numero, con su texto, SIN ENVIAR: se abre su chat y se suelta
+// el archivo sobre la conversacion como cuando lo arrastras; WhatsApp muestra la vista previa y tu das
+// Enter. Responde { dm: 'adjunto', id, ok } (ok false: no habia sesion o no aparecio el chat).
+const esperar = ms => new Promise(r => setTimeout(r, ms))
+async function hasta(fn, ms) { const fin = Date.now() + ms; for (;;) { const v = fn(); if (v || Date.now() > fin) return v; await esperar(150) } }
+async function adjuntar(d, origen) {
+  const responder = (ok, motivo = '') => window.parent.postMessage({ dm: 'adjunto', id: d.id, ok, motivo }, origen)
+  const tel = String(d.telefono || '').replace(/\D/g, '')
+  const raiz = document.querySelector('#app')
+  if (!raiz || !tel || !document.querySelector('#side') || !d.archivo) return responder(false, 'sin-sesion')
+  cerrarAvisoInvalido()
+  const antes = document.querySelector('#main')
+  const a = document.createElement('a')
+  a.href = `https://wa.me/${tel}`
+  a.style.display = 'none'
+  let tomado = false
+  const despues = e => { window.removeEventListener('click', despues); tomado = e.defaultPrevented; if (!tomado) e.preventDefault() }
+  window.addEventListener('click', despues)
+  raiz.appendChild(a); a.click(); a.remove()
+  if (!tomado) return responder(false, 'sin-chat') // WhatsApp no tomo el link: que no navegue
+  await esperar(500)
+  if (await hasta(() => avisoInvalido(), 1500)) { cerrarAvisoInvalido(); window.parent.postMessage({ dm: 'sin-whatsapp', telefono: tel }, origen); return responder(false, 'sin-whatsapp') }
+  const main = await hasta(() => { const m = document.querySelector('#main'); return m && (m !== antes || !antes) && m.querySelector('footer') ? m : null }, 6000) || document.querySelector('#main')
+  if (!main) return responder(false, 'sin-chat')
+  const archivo = new File([d.archivo], d.nombre || 'Cotizacion.pdf', { type: 'application/pdf' })
+  const dt = new DataTransfer()
+  dt.items.add(archivo)
+  for (const tipo of ['dragenter', 'dragover', 'drop']) main.dispatchEvent(new DragEvent(tipo, { bubbles: true, cancelable: true, dataTransfer: dt }))
+  // El texto va como comentario del archivo, en la vista previa (si aparece el campo para escribir).
+  if (d.texto) {
+    const composer = main.querySelector('footer [contenteditable="true"]')
+    const campo = await hasta(() => { const el = document.activeElement; return el && el.isContentEditable && el !== composer ? el : null }, 3000)
+    if (campo) document.execCommand('insertText', false, d.texto)
+  }
+  responder(true)
 }
