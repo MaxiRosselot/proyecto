@@ -61,8 +61,8 @@ try {
   if (await page.evaluate(() => navigator.clipboard.readText()) !== '+56 9 3333 4444') throw new Error('No copió el número')
   await page.screenshot({ path: process.env.SHOT || 'whatsapp-panel.png' })
 
-  // Cotizador: recien generada, "PDF + mensaje a su WhatsApp" deja el PDF en su chat (WhatsApp con sesion
-  // simulada dentro del marco) y, al enviarlo, el mensaje para agendar queda escrito. Nada se envia.
+  // Cotizador: recien generada, "PDF a su WhatsApp" deja el PDF en su chat (WhatsApp con sesion simulada
+  // dentro del marco) y "Mensaje para agendar" abre su chat con el mensaje escrito. Nada se envia.
   const cola = String(Date.now() % 10000).padStart(4, '0')
   await page.getByRole('navigation').getByRole('button', { name: 'Cotizar', exact: true }).click()
   await page.getByRole('button', { name: 'Reiniciar' }).click()
@@ -79,6 +79,7 @@ try {
       const a = e.target.closest?.('a[href^="https://wa.me/"]')
       if (!a) return
       e.preventDefault()
+      window.__links = [...(window.__links || []), a.href]
       document.querySelector('#main')?.remove()
       const main = Object.assign(document.createElement('div'), { id: 'main' })
       main.style.cssText = 'position:fixed;top:0;left:0;width:300px;height:300px;z-index:99999;background:white'
@@ -96,11 +97,11 @@ try {
   await expect(page.getByTestId('estado-pdf-al-chat')).toContainText('PDF en su chat', { timeout: 30000 })
   const pegado = await fr.evaluate(() => window.__pegado)
   if (!pegado?.chat.endsWith('/5696666' + cola) || !pegado.nombre.startsWith('Cotizacion Cotizador Chat')) throw new Error('PDF mal dejado: ' + JSON.stringify(pegado))
+  await page.getByTestId('mensaje-al-chat').click()
+  await expect(page.getByTestId('estado-pdf-al-chat')).toContainText('Mensaje escrito en su chat')
+  await expect.poll(() => fr.evaluate(() => decodeURIComponent(window.__links.at(-1)))).toContain('https://wa.me/5696666' + cola + '?text=')
+  if (!(await fr.evaluate(() => decodeURIComponent(window.__links.at(-1)))).includes('Te adjunto la cotización')) throw new Error('El chat no se abrió con el mensaje')
   if (!(await page.evaluate(() => navigator.clipboard.readText())).includes('Te adjunto la cotización')) throw new Error('El mensaje no quedó copiado')
-  await page.waitForTimeout(800)
-  if (await fr.evaluate(() => document.querySelector('#main footer [contenteditable]').textContent)) throw new Error('El mensaje se escribió antes de enviar el PDF')
-  await fr.evaluate(() => { document.querySelector('#vista').remove(); document.querySelector('#main footer').style.display = '' })
-  await expect.poll(() => fr.evaluate(() => document.querySelector('#main footer [contenteditable]').textContent), { timeout: 5000 }).toContain('Te adjunto la cotización')
   const cotChat = Number((await page.getByText(/Cotización N° \d+ guardada/).textContent()).match(/N° (\d+)/)[1])
   await api('delete-quote', { cotNum: cotChat })
 

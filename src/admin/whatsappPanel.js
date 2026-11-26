@@ -134,13 +134,12 @@ export async function abrirChatEnMarco(telefono, texto = '', reintento = false) 
 }
 // Deja el PDF adjunto en su chat con el texto como comentario, sin enviar (extension 1.5+). Devuelve
 // { ok, motivo }. Si no se puede (version vieja, sin sesion), el panel lo descarga para arrastrarlo.
-// despues (extension 1.8+): un mensaje que queda escrito en la caja del chat cuando envias el PDF.
-export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '', despues = '' }) {
+export async function adjuntarEnChat(telefono, { archivo, nombre, texto = '' }) {
   if (!marco) return { ok: false, motivo: 'sin-marco' }
   clearTimeout(relojChat)
   ++ultimoPedido
   anotarPedido(telefono)
-  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto, despues }, 90000, 'adjunto')
+  return pedirAlMarco({ dm: 'adjuntar', telefono: telefonoWhatsapp(telefono), archivo, nombre, texto }, 90000, 'adjunto')
 }
 function pedirAlMarco(mensaje, espera = 1500, respuesta = 'chat') {
   return new Promise(resolver => {

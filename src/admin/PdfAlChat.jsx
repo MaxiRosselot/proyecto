@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { C, styles } from './utils.js'
-import { EVENTO_ABRIR_VENTANA, adjuntarEnChat, enfocarMarco, extensionInstalada, hayMarco, ventanaWhatsappAbierta } from './whatsappPanel.js'
+import { EVENTO_ABRIR_VENTANA, abrirChatEnMarco, adjuntarEnChat, enfocarMarco, extensionInstalada, hayMarco, ventanaWhatsappAbierta } from './whatsappPanel.js'
 
-// Desde el cotizador, recien hecha la cotizacion: deja el PDF en el chat del cliente (WhatsApp de la
-// derecha) y, cuando lo envias, el mensaje de agendamiento queda escrito para el siguiente Enter.
-// Nada se envia solo. El mensaje tambien queda copiado, por si WhatsApp no lo toma.
+// Desde el cotizador, recien hecha la cotizacion, dos botones para el chat del cliente (WhatsApp de la
+// derecha): uno deja el PDF y el otro deja escrito el mensaje para agendar. Nada se envia solo: en
+// cada uno das Enter en WhatsApp.
 const VERDE = '#25D366'
 const TONOS = { verde: '#15803D', ambar: '#B45309', rojo: '#B91C1C' }
 
@@ -21,33 +21,55 @@ export default function PdfAlChat({ blob, telefono, nombre, mensaje, tamano = 13
   useEffect(() => { setEstado({ texto: '', tono: '' }) }, [blob])
   if (!extensionInstalada() || !blob || !telefono) return null
   const archivo = `Cotizacion ${(nombre || 'cliente').trim()} - Repisas Don Maxi.pdf`
+  const estilo = { ...styles.btnSecondary, fontSize: tamano, padding: tamano < 13 ? '6px 14px' : '8px 16px', fontWeight: 700 }
 
-  async function dejar() {
-    if (mensaje) navigator.clipboard?.writeText(mensaje).catch(() => {})
+  // WhatsApp de la derecha listo: si estaba cerrada se abre; si nunca cargo, hay que esperar que cargue.
+  function whatsappListo() {
     if (!ventanaWhatsappAbierta()) window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_VENTANA))
-    if (!hayMarco()) { setEstado({ texto: 'Abrí WhatsApp: cuando cargue, vuelve a tocar el botón.', tono: 'ambar' }); return }
+    if (hayMarco()) return true
+    setEstado({ texto: 'Abrí WhatsApp: cuando cargue, vuelve a tocar el botón.', tono: 'ambar' })
+    return false
+  }
+
+  async function dejarPdf() {
+    if (!whatsappListo()) return
     setOcupado(true); setEstado({ texto: 'Dejándolo en su chat… (un PDF grande tarda unos segundos)', tono: '' })
     try {
-      const res = await adjuntarEnChat(telefono, { archivo: blob, nombre: archivo, despues: mensaje })
+      const res = await adjuntarEnChat(telefono, { archivo: blob, nombre: archivo })
       if (res.ok) {
-        setEstado({ texto: '✓ PDF en su chat: da Enter en WhatsApp y después queda escrito el mensaje para agendar (otro Enter).', tono: 'verde' })
+        setEstado({ texto: '✓ PDF en su chat: da Enter en WhatsApp.' + (mensaje ? ' Después, el botón del mensaje.' : ''), tono: 'verde' })
         enfocarMarco()
       } else if (res.motivo === 'sin-whatsapp') setEstado({ texto: 'WhatsApp dice que este número no existe.', tono: 'rojo' })
       else {
         descargar(blob, archivo)
-        setEstado({ texto: 'No pude dejarlo en el chat (¿WhatsApp abierto y la extensión al día?). Lo descargué y el mensaje quedó copiado.', tono: 'ambar' })
+        setEstado({ texto: 'No pude dejarlo en el chat (¿WhatsApp abierto y la extensión al día?). Lo descargué: arrástralo al chat.', tono: 'ambar' })
       }
     } finally { setOcupado(false) }
   }
 
+  function dejarMensaje() {
+    navigator.clipboard?.writeText(mensaje).catch(() => {}) // por si WhatsApp no lo toma
+    if (!whatsappListo()) return
+    abrirChatEnMarco(telefono, mensaje)
+    setEstado({ texto: '✓ Mensaje escrito en su chat: revísalo y da Enter en WhatsApp.', tono: 'verde' })
+    setTimeout(enfocarMarco, 400)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <button type="button" onClick={dejar} disabled={ocupado} data-testid="pdf-al-chat"
-        title="Deja el PDF en el chat del cliente (WhatsApp de la derecha) y, al enviarlo, el mensaje para agendar escrito. Nada se envía solo."
-        style={{ ...styles.btnSecondary, fontSize: tamano, padding: tamano < 13 ? '6px 14px' : '8px 16px', background: VERDE, borderColor: VERDE, color: 'white', fontWeight: 700 }}>
-        📄 {ocupado ? 'Preparando…' : 'PDF + mensaje a su WhatsApp'}
-      </button>
-      {estado.texto && <span data-testid="estado-pdf-al-chat" style={{ fontSize: 12, maxWidth: 360, color: TONOS[estado.tono] || C.textSub }}>{estado.texto}</span>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" onClick={dejarPdf} disabled={ocupado} data-testid="pdf-al-chat"
+          title="Deja el PDF en el chat del cliente (WhatsApp de la derecha). No se envía: das Enter tú."
+          style={{ ...estilo, background: VERDE, borderColor: VERDE, color: 'white' }}>
+          📄 {ocupado ? 'Preparando…' : 'PDF a su WhatsApp'}
+        </button>
+        {mensaje && <button type="button" onClick={dejarMensaje} data-testid="mensaje-al-chat"
+          title="Deja escrito en su chat el mensaje con el link para agendar. No se envía: das Enter tú."
+          style={{ ...estilo, borderColor: VERDE, color: '#128C7E' }}>
+          💬 Mensaje para agendar a su WhatsApp
+        </button>}
+      </div>
+      {estado.texto && <span data-testid="estado-pdf-al-chat" style={{ fontSize: 12, maxWidth: 420, color: TONOS[estado.tono] || C.textSub }}>{estado.texto}</span>}
     </div>
   )
 }

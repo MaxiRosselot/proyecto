@@ -225,9 +225,9 @@ function PdfEnSuChat({ q, onEnWhatsapp }) {
       const archivo = await r.blob()
       const nombre = nombrePdf(q.nombre)
       setEstado({ texto: 'Dejándolo en su chat… (un PDF grande tarda unos segundos)', tono: '' })
-      const res = await adjuntarEnChat(q.telefono, { archivo, nombre, despues: porAgendar ? mensajeEnvioCotizacion(q.linkAgenda) : '' })
+      const res = await adjuntarEnChat(q.telefono, { archivo, nombre })
       console.info('PDF en su chat:', res) // como lo tomo WhatsApp (soltar / pegar / documento)
-      if (res.ok) { setEstado({ texto: porAgendar ? '✓ El PDF quedó en su chat: da Enter y después queda escrito el mensaje para agendar' : '✓ El PDF quedó en su chat: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
+      if (res.ok) { setEstado({ texto: '✓ El PDF quedó en su chat: revísalo y da Enter en WhatsApp', tono: 'verde' }); onEnWhatsapp?.() }
       else if (res.motivo === 'sin-whatsapp') setEstado({ texto: 'WhatsApp dice que este número no existe', tono: 'rojo' })
       else {
         descargar(archivo, nombre)

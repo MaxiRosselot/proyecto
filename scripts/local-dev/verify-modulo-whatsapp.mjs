@@ -210,12 +210,6 @@ try {
   const soltado = await f.evaluate(() => ({ ...window.__soltado, comentario: document.querySelector('#comentario')?.textContent }))
   if (soltado.veces !== 1 || soltado.tipo !== 'application/pdf' || soltado.tam !== pdf.length || !soltado.chat.endsWith('/5695555' + cola) || soltado.comentario)
     throw new Error('No quedó bien el PDF en el chat: ' + JSON.stringify(soltado))
-  // Al enviar el PDF (se cierra la vista previa), el mensaje para agendar queda escrito en la caja, sin enviar.
-  await page.waitForTimeout(800)
-  if (await f.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent)) throw new Error('El mensaje se escribió antes de enviar el PDF')
-  await f.evaluate(() => { document.querySelector('#comentario').remove(); document.querySelector('#main footer').style.display = '' })
-  await expect.poll(() => f.evaluate(() => document.querySelector('#main footer [contenteditable="true"]').textContent), { timeout: 5000 }).toContain('Te adjunto la cotización')
-  await f.evaluate(() => { document.querySelector('#main footer [contenteditable="true"]').textContent = '' })
   // El mensaje de agendamiento va aparte: boton al lado del PDF (tecla A) que lo copia.
   await page.evaluate(() => { document.activeElement?.blur(); return navigator.clipboard.writeText('') })
   await page.keyboard.press('a')
