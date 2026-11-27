@@ -10,6 +10,12 @@ portal https://eboleta.sii.cl/emitir/. Los scripts están en `scripts/eboleta/`.
 
 ## Reglas
 - **Maxi inicia sesión** en el panel y en el SII. Nunca escribir su clave.
+- **Empresa correcta:** Maxi tiene otras empresas en el SII (Ultraligero). Antes de la prueba leer
+  la barra superior del portal y confirmar `77.386.684-8 DON MAXI SPA`; si muestra otra, pedirle que
+  la cambie (flecha junto al nombre). El script también lo revisa antes de cada boleta y se detiene
+  si el PDF no sale con el RUT 77386684.
+- El SII cierra la sesión a los pocos minutos: si `main` no existe o la URL es `clave.w.sii.cl`,
+  pedirle que vuelva a entrar (y revisar de nuevo la empresa).
 - **Confirmar antes de emitir:** mostrar la lista (N°, cliente, monto) y el total, y esperar su
   "sí". Cada boleta emitida es un documento real (se corrige con nota de crédito).
 - Detalle: `Repisas de madera para bodega - Nombre` (máx. 80). Método: Transferencia Electrónica.

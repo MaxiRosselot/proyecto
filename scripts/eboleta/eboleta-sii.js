@@ -17,6 +17,9 @@
 // compara monto, metodo y detalle con lo pedido: si algo no calza, no emite y el lote se detiene.
 // Despues de emitir lee el folio y el link del PDF (vale hasta 2036) y, si hay correo, lo manda
 // desde la pantalla de la boleta emitida.
+// Maxi tiene mas de una empresa en el SII (p. ej. Ultraligero): solo se emite si la barra superior
+// muestra esta empresa y el PDF sale con su RUT. Si no, se detiene.
+window.__EMPRESA = '77.386.684-8 DON MAXI SPA';
 window.__eb = (() => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const vis = e => { if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
@@ -30,6 +33,7 @@ window.__eb = (() => {
   // Al activar Detalle el campo trae "Monto Total" y su etiqueta desaparece: se reconoce por el contador "/ 80".
   const campoDetalle = root => [...root.querySelectorAll('input[type=text]')].find(i => vis(i) && /\/ 80/.test(i.closest('.v-input')?.innerText || ''));
   const boton = (root, t) => [...root.querySelectorAll('button, .v-btn')].find(b => vis(b) && b.innerText.trim() === t);
+  const empresaOk = () => [...document.querySelectorAll('header, .v-app-bar, .v-toolbar')].some(h => h.innerText.includes(window.__EMPRESA));
 
   async function limpiar() {
     for (let k = 0; k < 3; k++) { const act = activo(); if (!act) return; const b = boton(act, 'CERRAR') || boton(act, 'VOLVER') || boton(act, 'NO'); if (!b) return; b.click(); await sleep(600); }
@@ -37,7 +41,9 @@ window.__eb = (() => {
 
   async function preparar({ monto, detalle }) {
     await limpiar();
+    if (!empresaOk()) throw new Error('empresa activa no es ' + window.__EMPRESA);
     const main = document.querySelector('main');
+    if (!main) throw new Error('portal sin sesion');
     const tecla = t => [...main.querySelectorAll('button')].find(b => b.innerText.trim() === t);
     tecla('delete').click(); await sleep(150);
     for (const d of String(monto)) { tecla(d).click(); await sleep(60); }
@@ -63,6 +69,7 @@ window.__eb = (() => {
     await sleep(400);
     const emitir = boton(d, 'EMITIR');
     return { emitir, estado: {
+      empresa: empresaOk(),
       monto: (d.innerText.match(/\$ ?[\d.]+/) || [''])[0],
       pago: sel.querySelector('.v-select__selection')?.innerText.trim(),
       detalle: campoDetalle(d)?.value,
@@ -85,17 +92,18 @@ window.__eb = (() => {
   async function emitir(b, { dry = false } = {}) {
     const { emitir, estado } = await preparar(b);
     const esperado = '$' + Number(b.monto).toLocaleString('es-CL');
-    const ok = estado.monto.replace(/\s/g, '') === esperado && estado.pago === 'Transferencia Electrónica' && estado.detalle === b.detalle && estado.emitirHabilitado;
+    const ok = estado.empresa && estado.monto.replace(/\s/g, '') === esperado && estado.pago === 'Transferencia Electrónica' && estado.detalle === b.detalle && estado.emitirHabilitado;
     if (dry || !ok) return { ok, dry, esperado, estado };
     emitir.click();
     const a = await until(() => [...document.querySelectorAll('.v-dialog a')].find(a => vis(a) && /folio\d+/.test(a.href)), 25000);
     if (!a) return { ok: false, error: 'sin resultado (revisar a mano si se emitio)', estado };
     const res = { ok: true, folio: Number(a.href.match(/folio(\d+)/)[1]), pdf: a.href.replace(/&X-Amzn-Trace-Id=.*$/, ''), fecha: a.href.match(/_(\d{4}-\d{2}-\d{2})\.pdf/)[1], monto: b.monto, detalle: b.detalle };
+    if (!/\/77386684\//.test(res.pdf)) res.alerta = 'PDF de otro RUT';
     if (b.email) { res.email = b.email; res.correo = await enviarCorreo(b.email); }
     return res;
   }
 
-  return { emitir, limpiar };
+  return { emitir, limpiar, empresaOk };
 })();
 
 window.__res = window.__res || {};
@@ -109,7 +117,7 @@ window.__emitirLote = lote => {
         const r = await window.__eb.emitir({ monto, detalle, email });
         window.__res[cotNum] = r;
         window.__log.push(cotNum + ' ' + (r.ok ? r.folio : 'NO ' + JSON.stringify(r)));
-        if (!r.ok) break;
+        if (!r.ok || r.alerta) break;
       } catch (e) { window.__log.push(cotNum + ' ERR ' + e.message); break; }
     }
     await window.__eb.limpiar();
