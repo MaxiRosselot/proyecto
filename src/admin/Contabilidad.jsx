@@ -198,7 +198,15 @@ function Movimiento({ m, datos, accion, compacto }) {
           )}
           {m.monto > 0 && !m.cotNum && !ligando && <button onClick={() => setLigando(true)} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: C.orangeDark, fontSize: 12, fontWeight: 600 }}>{cotNum ? 'otra cotización…' : 'ligar a cotización…'}</button>}
           {ligando && <LigarCotizacion m={m} datos={datos} accion={accion} onListo={() => setLigando(false)} />}
-          {fijo && <span style={chip('#1D4ED8', '#DBEAFE')}>Costo fijo: {fijo.nombre}</span>}
+          {m.monto < 0 && datos.fijos.length > 0 && (
+            // El costo fijo se puede elegir a mano (F29, Previred, un pago con otro monto…).
+            <select value={m.fijo || ''} onChange={e => hacer(() => accion({ accion: 'clasificar', id: m.id, fijo: e.target.value, ...(e.target.value && !m.categoria ? { categoria: datos.fijos.find(f => f.id === e.target.value)?.categoria || undefined } : {}) }))}
+              aria-label="Costo fijo" title="¿Es el pago de un costo fijo?"
+              style={{ border: '1px solid ' + (fijo ? '#93C5FD' : C.border), background: fijo ? '#DBEAFE' : 'white', color: fijo ? '#1D4ED8' : C.textMuted, borderRadius: 99, fontSize: 11.5, fontWeight: 700, padding: '1px 6px' }}>
+              <option value="">{s.fijo && !m.fijo ? `¿${fijo?.nombre}?` : 'costo fijo…'}</option>
+              {datos.fijos.map(f => <option key={f.id} value={f.id}>Costo fijo: {f.nombre}</option>)}
+            </select>
+          )}
           {!m.confirmado && s.motivo && <span style={{ color: C.textMuted }}>Sugerido: {s.motivo}</span>}
           {m.confirmado && m.nota && <span style={{ color: C.textSub }}>📝 {m.nota}</span>}
         </div>
@@ -220,7 +228,7 @@ function Movimiento({ m, datos, accion, compacto }) {
 }
 
 const ESTADO_CONCILIA = {
-  'no llegó al banco': ['No llegó al banco', '#B91C1C', '#FEE2E2', 'Hay un pago anotado en la cotización, pero no lo encuentro en BCI (o falta ligar el abono).'],
+  'no llegó al banco': ['No está en BCI', '#B45309', '#FEF3C7', 'Hay un pago anotado en la cotización que no encuentro en BCI. Si el cliente pagó a Mercado Pago (link o transferencia a la cuenta MP), llega a BCI junto con otros en un "retiro de Mercado Pago", sin su nombre.'],
   'pago sin registrar': ['Pago sin anotar', '#B45309', '#FEF3C7', 'Llegó al banco pero la cotización no tiene ese pago.'],
   'montos distintos': ['No cuadra', '#B45309', '#FEF3C7', ''],
   'por confirmar': ['Por confirmar', '#1D4ED8', '#DBEAFE', 'Cuadra con lo sugerido: confirma el abono abajo.'],
@@ -255,6 +263,17 @@ function Conciliacion({ datos, onVerCotizacion }) {
           )
         })}
       </div>
+      {(() => {
+        // Lo que entra a Mercado Pago llega a BCI en retiros (con la comisión descontada) y sin nombre.
+        const noEstan = filas.filter(f => f.estado === 'no llegó al banco').reduce((t, f) => t + f.registrado - f.efectivo, 0)
+        const retirosMp = datos.movimientos.filter(m => m.fecha.startsWith(datos.mes) && m.categoriaFinal === 'venta-mp').reduce((t, m) => t + m.monto, 0)
+        return noEstan > 0 && (
+          <div style={{ marginTop: 12, fontSize: 13, color: C.textSub, background: '#FAFAFB', borderRadius: 10, padding: '8px 12px' }}>
+            Pagos anotados que no están en BCI: <b>{fmt(noEstan)}</b>. Retiros de Mercado Pago que llegaron a BCI este mes: <b>{fmt(retirosMp)}</b>.
+            {' '}Si esos clientes pagaron por Mercado Pago, la diferencia ({fmt(Math.abs(noEstan - retirosMp))}) es plata que sigue en MP, comisiones o pagos de otro mes.
+          </div>
+        )
+      })()}
       {sueltos.length > 0 && (
         <div style={{ marginTop: 12, fontSize: 13, color: '#B45309' }}>
           {sueltos.length} transferencia{sueltos.length === 1 ? '' : 's'} recibida{sueltos.length === 1 ? '' : 's'} sin cliente ({fmt(sueltos.reduce((t, m) => t + m.monto, 0))}): anota de quién es (como sale en la app de BCI) o lígala a su cotización en "Por revisar".
