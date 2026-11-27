@@ -175,3 +175,29 @@ test('con el nombre completo de la app de BCI se encuentra al cliente y se recue
   const c = conciliarClientes(s, cots, '2026-11')
   assert.deepEqual(c.filas.map(f => [f.cotNum, f.estado]), [['1601', 'no llegó al banco'], ['1600', 'pago sin registrar']])
 })
+
+test('lo del banco en línea se junta con la cartola: no se repite y le agrega el nombre completo', async () => {
+  const { movimientosDeBancoEnLinea, saldosEncadenan } = await import('./contabilidad.mjs')
+  const cartola = fusionarMovimientos([], [
+    { fecha: '2026-11-25', glosa: 'TRASPASO FONDOS OTRO BANCO EN LINEA', monto: -100000 },
+    { fecha: '2026-11-25', glosa: 'TRANSFER DE P.ROJAS ME', monto: 72000 },
+  ]).todos
+  // Como lo manda la extensión: lo más nuevo arriba, fecha de operación y fecha contable.
+  const web = movimientosDeBancoEnLinea([
+    { fecha: '26/11/26', fechaContable: '26/11/26', descripcion: 'Compra con tarjeta de débito en imperial', monto: -5000, saldo: 967000 },
+    { fecha: '24/11/26', fechaContable: '25/11/26', descripcion: 'Transferencia enviada a Juan  Dueño', monto: -100000, saldo: 972000 },
+    { fecha: '24/11/26', fechaContable: '25/11/26', descripcion: 'Transferencia recibida de Pablo Andrés Rojas Mena', monto: 72000, saldo: 1072000 },
+  ])
+  assert.equal(web[1].fecha, '2026-11-25')
+  assert.equal(web[1].contraparte, 'A Juan Dueño')
+  assert.equal(saldosEncadenan(web), true)
+  assert.equal(saldosEncadenan([web[0], web[2]]), false)
+  const r = fusionarMovimientos(cartola, [...web].reverse(), { origen: 'web' })
+  assert.equal(r.nuevos.length, 1) // solo la compra del 26
+  assert.equal(r.enriquecidos, 2)
+  assert.equal(r.todos.find(m => m.monto === 72000).contraparte, 'De Pablo Andrés Rojas Mena')
+  // y una cartola subida después tampoco repite lo que vino del banco en línea
+  assert.equal(fusionarMovimientos(r.todos, [{ fecha: '2026-11-26', glosa: 'IMPERIAL MAPOCHO 1', monto: -5000 }]).nuevos.length, 0)
+  const s = conSugerencias(r.todos)
+  assert.equal(s.find(m => m.monto === -5000).categoriaFinal, 'materiales')
+})

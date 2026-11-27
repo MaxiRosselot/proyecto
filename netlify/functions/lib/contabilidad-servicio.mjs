@@ -2,7 +2,7 @@
 // Mercado Pago. Los cálculos están en contabilidad.mjs.
 import {
   CATEGORIAS, CATEGORIA, ENCABEZADOS_BANCO, HOJA_BANCO, HOJA_CONFIG, agregarRegla, conSugerencias, descuentosDelMes,
-  conciliarClientes, estadoFijos, filaAMovimiento, fusionarMovimientos, limpiarFijo, movimientoAFila, pareceFijo, parsearCartolaBci,
+  conciliarClientes, estadoFijos, filaAMovimiento, fusionarMovimientos, movimientosDeBancoEnLinea, saldosEncadenan, limpiarFijo, movimientoAFila, pareceFijo, parsearCartolaBci,
   reglaAprendida, resumenMercadoPago, resumenMes,
 } from './contabilidad.mjs'
 import { totalesCotizacion } from './totales.mjs'
@@ -62,6 +62,20 @@ export async function cambiarContabilidad(fuentes, datos, ahora = new Date()) {
     return { carga, errores: leido.errores.slice(0, 5) }
   }
 
+  // Desde la extensión "Don Maxi: BCI al panel" (Mis Movimientos de BCI en línea).
+  if (datos.accion === 'importar-web') {
+    const leidos = movimientosDeBancoEnLinea(datos.movimientos)
+    if (!leidos.length) falla(400, 'No llegaron movimientos de BCI')
+    const cuadra = saldosEncadenan(leidos)
+    const { nuevos, enriquecidos, todos } = fusionarMovimientos(movimientos, [...leidos].reverse(), { origen: 'web', ahora: ahora.toISOString() })
+    if (nuevos.length || enriquecidos) await guardarMovs(todos)
+    const masNuevo = leidos.reduce((x, m) => (!x || m.fecha > x.fecha ? m : x), null)
+    const saldo = masNuevo?.saldo != null && (!config.saldo || masNuevo.fecha >= config.saldo.fecha) ? { monto: masNuevo.saldo, fecha: masNuevo.fecha } : config.saldo
+    const carga = { en: ahora.toISOString(), archivo: 'BCI en línea (extensión)', formato: 'web', leidos: leidos.length, nuevos: nuevos.length, enriquecidos, cuadra, errores: 0 }
+    await almacen.guardarConfig({ ...config, saldo, cargas: [...config.cargas, carga].slice(-50) })
+    return { carga }
+  }
+
   if (datos.accion === 'clasificar' || datos.accion === 'aceptar') {
     const cots = datos.accion === 'aceptar' ? await fuentes.cotizaciones() : []
     const sugeridos = datos.accion === 'aceptar' ? conSugerencias(movimientos, { reglas: config.reglas, cotizaciones: cots, fijos: config.fijos }) : []
@@ -89,8 +103,7 @@ export async function cambiarContabilidad(fuentes, datos, ahora = new Date()) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) falla(400, 'Fecha inválida')
     if (!monto) falla(400, 'Escribe el monto (negativo si es un gasto)')
     const glosa = String(datos.glosa || 'Movimiento manual').slice(0, 120)
-    const { nuevos, todos } = fusionarMovimientos(movimientos, [{ fecha, glosa: `MANUAL ${glosa} ${ahora.getTime()}`, monto }], { origen: 'manual', ahora: ahora.toISOString() })
-    nuevos[0].glosa = glosa
+    const { nuevos, todos } = fusionarMovimientos(movimientos, [{ fecha, glosa, monto }], { origen: 'manual', ahora: ahora.toISOString(), siempreNuevos: true })
     if (datos.categoria && CATEGORIA[datos.categoria]) nuevos[0].categoria = datos.categoria
     await guardarMovs(todos)
     return { movimiento: nuevos[0] }

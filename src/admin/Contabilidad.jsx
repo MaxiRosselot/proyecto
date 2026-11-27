@@ -399,6 +399,39 @@ export default function ContabilidadSection({ onVerCotizacion }) {
   }, [mes])
   useEffect(() => { cargar(mes) }, [mes])
 
+  // Extensión "Don Maxi: BCI al panel": lo que leyó en BCI en línea (Mis Movimientos) entra solo al
+  // abrir Contabilidad, y al volver a esta pestaña del navegador.
+  const extensionBci = typeof document !== 'undefined' && document.documentElement.dataset.bciPanel
+  const [leidoBci, setLeidoBci] = useState(null)
+  const trayendo = useRef(false)
+  const traerDeBci = useCallback(() => {
+    if (!extensionBci || trayendo.current) return
+    trayendo.current = true
+    const oir = async ev => {
+      if (ev.source !== window || ev.data?.dm !== 'bci-movimientos') return
+      window.removeEventListener('message', oir)
+      setLeidoBci(ev.data.leidoEn)
+      try {
+        if (!ev.data.movimientos?.length) return
+        const r = await apiFetch(URL, { method: 'POST', body: JSON.stringify({ accion: 'importar-web', movimientos: ev.data.movimientos }) })
+        if (!r?.ok) throw new Error(r?.error || 'No se pudo traer lo de BCI')
+        window.postMessage({ dm: 'bci-importados' }, location.origin)
+        const c = r.carga
+        setAviso(`BCI en línea: ${c.leidos} movimientos, ${c.nuevos} nuevos${c.enriquecidos ? `, ${c.enriquecidos} con su nombre completo` : ''}${c.cuadra === false ? ' · ⚠ los saldos no encadenan: puede faltar una página en BCI' : ''}`)
+        await cargar(mes)
+      } catch (e) { setError(e.message) } finally { trayendo.current = false }
+    }
+    window.addEventListener('message', oir)
+    window.postMessage({ dm: 'bci-pedir' }, location.origin)
+    setTimeout(() => { window.removeEventListener('message', oir); trayendo.current = false }, 4000)
+  }, [extensionBci, mes, cargar])
+  useEffect(() => {
+    traerDeBci()
+    const alVolver = () => document.visibilityState === 'visible' && traerDeBci()
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [traerDeBci])
+
   async function accion(cuerpo) {
     const r = await apiFetch(URL, { method: 'POST', body: JSON.stringify(cuerpo) })
     if (!r?.ok) { setError(r?.error || 'No se pudo guardar'); throw new Error(r?.error) }
@@ -446,7 +479,9 @@ export default function ContabilidadSection({ onVerCotizacion }) {
         </div>
       </div>
       <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: -6, marginBottom: 12 }}>
-        En BCI: Cuenta corriente → "Movimientos desde última cartola" → descargar PDF. Súbelo cada 2–3 días: lo que ya estaba no se repite.
+        {extensionBci
+          ? <>Abre BCI en línea → Cuentas → <b>Mis Movimientos</b> y vuelve aquí: lo leído entra solo.{leidoBci && ` BCI leído: ${new Date(leidoBci).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`} También sirve subir el PDF.</>
+          : <>En BCI: Cuenta corriente → "Movimientos desde última cartola" → descargar PDF y súbelo (lo repetido no se duplica). Con la extensión "Don Maxi: BCI al panel" entra solo.</>}
         {ultima && ` Última carga: ${new Date(ultima.en).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`}
       </div>
       {aviso && <div style={{ ...styles.card, padding: '10px 14px', marginBottom: 12, background: '#F0FDF4', color: '#166534', fontSize: 13.5 }}>{aviso}</div>}

@@ -62,6 +62,9 @@ export const REGLAS_BASE = [
   { patron: 'STORAGE', categoria: 'bodega' },
   { patron: 'TRANSFER DE DON MAXI SPA', categoria: 'venta-mp' },
   { patron: 'TRANSFER DE M.ROSSELOT', categoria: 'aporte-maxi' },
+  { patron: 'RECIBIDA DE DON MAXI SPA', categoria: 'venta-mp' },
+  { patron: 'RECIBIDA DE MAXIMILIANO ROSSELOT', categoria: 'aporte-maxi' },
+  { patron: 'ENVIADA A MAXIMILIANO ROSSELOT', categoria: 'retiro-maxi' },
   { patron: 'COMISION', categoria: 'comisiones' },
   { patron: 'IMPUESTO', categoria: 'comisiones' },
   { patron: 'PREVIRED', categoria: 'imposiciones' },
@@ -152,27 +155,67 @@ export function parsearCartolaBci(texto) {
   return { formato: null, movimientos: [], errores: ['No parece una cartola de BCI'], saldoInicial: null, saldoFinal: null, fechaSaldo: null, cuadra: null }
 }
 
-const claveDe = (m, n) => `${m.fecha}|${m.monto}|${glosaBase(m.glosa)}|${n}`
-
-// Junta los movimientos leídos con los guardados sin repetirlos. El mismo pago dos veces el mismo
-// día (mismo monto y glosa) cuenta como dos: se numeran en el orden en que aparecen.
-export function fusionarMovimientos(existentes, leidos, { origen = '', ahora = new Date().toISOString() } = {}) {
-  const claves = new Set(existentes.map(m => m.clave))
+// Junta los movimientos leídos con los guardados sin repetirlos. Las fuentes escriben distinto la
+// glosa (cartola "TRANSFER DE N.TAPIA CESPE", banco en línea "Transferencia recibida de Nicolás
+// Tapia Céspedes"), así que el mismo movimiento se reconoce por fecha contable + monto: el 1.º de
+// ese día y monto con el 1.º, el 2.º con el 2.º. Si lo leído trae el nombre completo y el guardado
+// no, se le agrega. Los anotados a mano no cuentan (no están en el banco).
+export function fusionarMovimientos(existentes, leidos, { origen = '', ahora = new Date().toISOString(), siempreNuevos = false } = {}) {
+  const grupos = new Map()
+  for (const m of existentes) {
+    if (m.origen === 'manual') continue
+    const k = `${m.fecha}|${m.monto}`
+    grupos.set(k, [...(grupos.get(k) || []), m])
+  }
   const vistos = new Map()
   const nuevos = []
+  let enriquecidos = 0
   for (const m of leidos) {
-    const base = `${m.fecha}|${m.monto}|${glosaBase(m.glosa)}`
-    const n = (vistos.get(base) || 0) + 1
-    vistos.set(base, n)
-    const clave = claveDe(m, n)
-    if (claves.has(clave)) continue
-    claves.add(clave)
+    const k = `${m.fecha}|${m.monto}`
+    const n = (vistos.get(k) || 0) + 1
+    vistos.set(k, n)
+    const igual = !siempreNuevos && grupos.get(k)?.[n - 1]
+    if (igual) {
+      if (m.contraparte && !igual.contraparte) { igual.contraparte = m.contraparte; enriquecidos++ }
+      continue
+    }
+    const glosa = String(m.glosa).replace(/\s+/g, ' ').trim()
+    const clave = `${k}|${n}|${glosaBase(glosa)}${siempreNuevos ? '|' + ahora : ''}`
     nuevos.push({
-      id: 'b' + hash(clave), fecha: m.fecha, glosa: String(m.glosa).replace(/\s+/g, ' ').trim(), monto: m.monto,
-      categoria: '', cotNum: '', fijo: '', nota: '', origen, clave, agregado: ahora, contraparte: '',
+      id: 'b' + hash(clave), fecha: m.fecha, glosa, monto: m.monto,
+      categoria: '', cotNum: '', fijo: '', nota: '', origen, clave, agregado: ahora, contraparte: m.contraparte || '',
     })
   }
-  return { nuevos, todos: [...existentes, ...nuevos].sort((a, b) => a.fecha.localeCompare(b.fecha)) }
+  return { nuevos, enriquecidos, todos: [...existentes, ...nuevos].sort((a, b) => a.fecha.localeCompare(b.fecha)) }
+}
+
+// Lo que manda la extensión desde "Mis Movimientos" de BCI en línea:
+// { fecha: 'dd/mm/aa', fechaContable: 'dd/mm/aa', descripcion, monto (con signo), saldo }.
+// La fecha que vale es la contable (la misma de la cartola).
+const aIso = f => { const [d, m, a] = String(f).split('/'); return `${a.length === 2 ? '20' + a : a}-${m}-${d}` }
+export function movimientosDeBancoEnLinea(lista) {
+  return (lista || []).filter(x => /^\d\d\/\d\d\/\d{2,4}$/.test(x?.fechaContable || x?.fecha || '') && Number.isFinite(Number(x.monto)) && Number(x.monto))
+    .map(x => {
+      const descripcion = String(x.descripcion || '').replace(/\s+/g, ' ').trim()
+      const rec = descripcion.match(/^transferencia recibida de (.+)$/i)
+      const env = descripcion.match(/^transferencia enviada a (.+)$/i)
+      return {
+        fecha: aIso(x.fechaContable || x.fecha), fechaOperacion: aIso(x.fecha || x.fechaContable), glosa: descripcion, monto: Math.round(Number(x.monto)),
+        saldo: Number.isFinite(Number(x.saldo)) ? Math.round(Number(x.saldo)) : null,
+        contraparte: rec ? 'De ' + rec[1] : env ? 'A ' + env[1] : '',
+      }
+    })
+}
+
+// El banco en línea muestra lo más nuevo arriba y el saldo después de cada movimiento: si cada saldo
+// es el siguiente más su monto, no falta ninguno entre medio.
+export function saldosEncadenan(lista) {
+  for (let i = 0; i + 1 < lista.length; i++) {
+    const a = lista[i], b = lista[i + 1]
+    if (a.saldo == null || b.saldo == null) return null
+    if (b.saldo + a.monto !== a.saldo) return false
+  }
+  return true
 }
 
 function hash(s) {
@@ -194,7 +237,7 @@ export const filaAMovimiento = f => ({
 // "Abono Terceros 11111111-1 M.ARAYA HER" y "TRANSFER DE ALGUNA EMPRESA SPA".
 export function remitente(glosa) {
   const g = normalizarGlosa(glosa)
-  const m = g.match(/^(?:TRANSFER DE|ABONO TERCEROS(?: [\d.]+-[\dK])?|ABONO TRF DESDE OTRO BANCO EN LINEA)\s*(.*)$/)
+  const m = g.match(/^(?:TRANSFERENCIA RECIBIDA DE|TRANSFER DE|ABONO TERCEROS(?: [\d.]+-[\dK])?|ABONO TRF DESDE OTRO BANCO EN LINEA)\s*(.*)$/)
   if (!m || !m[1]) return null
   const texto = m[1].trim()
   const conInicial = texto.match(/^([A-Z])\.(.+)$/)
@@ -317,7 +360,7 @@ export function conSugerencias(movimientos, { reglas = [], cotizaciones = [], fi
     if (!m.categoria && !s.categoria && fijoConf?.categoria) s.categoria = fijoConf.categoria
     // Una transferencia de una persona o empresa que no es la propia: casi siempre es un cliente.
     const deQuien = remitente(m.glosa)?.texto || normalizarGlosa(m.contraparte)
-    if (!m.categoria && !s.categoria && m.monto > 0 && deQuien && !/^(DE )?(DON MAXI|M\.ROSSELOT|MAXIMILIANO ROSSELOT)/.test(deQuien)) {
+    if (!m.categoria && !s.categoria && m.monto > 0 && deQuien && !/^(DE )?(DON MAXI|M\.ROSSELOT|MAXIMILIANO ROSSELOT)/.test(normalizarGlosa(deQuien))) {
       s.categoria = 'venta-transferencia'; s.motivo = 'transferencia recibida: ¿un cliente? (no encontré su cotización)'
     }
     const categoria = m.categoria || s.categoria

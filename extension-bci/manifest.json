@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Don Maxi: BCI al panel",
+  "version": "1.0.0",
+  "description": "Lee \"Mis Movimientos\" de la cuenta corriente en BCI en línea (cuando tú entras) y los deja listos para Admin → Contabilidad de repisasdonmaxi.cl. Solo lee: nunca toca la clave, no hace transferencias ni clics en el banco.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.bci.cl/*"],
+      "js": ["bci.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://repisasdonmaxi.cl/*",
+        "https://www.repisasdonmaxi.cl/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["panel.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": { "128": "icono.png" }
+}
