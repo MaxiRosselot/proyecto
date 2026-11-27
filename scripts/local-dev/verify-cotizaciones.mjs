@@ -48,6 +48,7 @@ try {
     await page.getByRole('button', { name: 'Reiniciar' }).click()
     await page.getByRole('button', { name: 'Ingreso manual' }).click()
     await page.getByPlaceholder('Nombre completo').fill(cliente)
+    await page.getByPlaceholder('+56 9 XXXX XXXX').fill('9 1234 5678')
     await page.getByPlaceholder('correo@ejemplo.com').fill(cliente.toLowerCase().replace(/\W+/g, '.') + '@example.com')
     await expect(page.getByTestId('numero-cotizacion')).toHaveText(/N° \d+/)
 

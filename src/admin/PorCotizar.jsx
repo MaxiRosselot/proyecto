@@ -486,6 +486,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     if (repisas.some(r => r.kind === 'rack' && (!Number.isSafeInteger(r.v) || r.v <= 0))) return setError('Ingresa el precio neto de cada rack completo antes de generar la cotización.')
     if (mode === 'visita' && !selectedVisit) return
     if (mode === 'manual' && !manualCliente.nombre.trim()) return setError('Ingresa el nombre del cliente')
+    // Sin celular no se le puede mandar el PDF ni el mensaje por WhatsApp.
+    if (mode === 'manual' && String(manualCliente.celular || '').replace(/\D/g, '').length < 8) return setError('Ingresa el celular del cliente')
     setGenerating(true); setError(''); setPdfUrl(null); setPdfDrive(''); setAutoSaved(false)
 
     try {
@@ -643,7 +645,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
             {[
               { key: 'nombre',    label: 'Nombre',    full: true, placeholder: 'Nombre completo' },
               { key: 'email',     label: 'Email',     placeholder: 'correo@ejemplo.com' },
-              { key: 'celular',   label: 'Celular',   placeholder: '+56 9 XXXX XXXX' },
+              { key: 'celular',   label: 'Celular *', placeholder: '+56 9 XXXX XXXX' },
               { key: 'direccion', label: 'Direccion', full: true, placeholder: 'Direccion' },
             ].map(({ key, label, full, placeholder }) => (
               <div key={key} style={{ gridColumn: full ? '1 / -1' : undefined }}>

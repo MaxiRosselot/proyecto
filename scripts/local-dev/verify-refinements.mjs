@@ -18,6 +18,7 @@ try {
   await page.getByRole('navigation').getByRole('button',{name:'Cotizar',exact:true}).click();
   await page.getByRole('button',{name:'Ingreso manual'}).click();
   await page.getByPlaceholder('Nombre completo').fill('CLIENTE DE PRUEBA');
+  await page.getByPlaceholder('+56 9 XXXX XXXX').fill('9 1234 5678');
   await page.getByPlaceholder('correo@ejemplo.com').fill('cliente@example.com');
   await page.getByPlaceholder('Direccion',{exact:true}).fill('Dirección de ejemplo');
   const priceRow=page.locator('table tbody tr').first();
