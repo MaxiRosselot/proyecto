@@ -19,3 +19,6 @@ scripts/local-dev/pdfs/
 
 # Lo crea el navegador al cargar la extension en las pruebas
 extension-whatsapp/_metadata/
+
+# Datos financieros reales (el repo es publico): nunca subir
+datos-privados/

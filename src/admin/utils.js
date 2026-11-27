@@ -45,6 +45,7 @@ export const SECTIONS = [
   { id: 'cotizador',     label: 'Cotizar',       icon: 'doc'   },
   { id: 'calendario',    label: 'Calendario',    icon: 'agenda', corto: 'Agenda', barraMovil: 4 },
   { id: 'dte',           label: 'DTE',           icon: 'doc' },
+  { id: 'contabilidad',  label: 'Contabilidad',  icon: 'money', corto: 'Conta.' },
   { id: 'visitas',       label: 'Visitas',       icon: 'calendar', mas: true },
   { id: 'estadisticas',  label: 'Estadísticas',  icon: 'chart', corto: 'Stats', mas: true },
   { id: 'horarios',      label: 'Horarios',      icon: 'clock', mas: true },

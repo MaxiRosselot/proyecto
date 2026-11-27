@@ -12,6 +12,7 @@ import PlanillaSection from './admin/Planilla.jsx'
 import FotosWebSection from './admin/FotosWeb.jsx'
 import UsoPanel from './admin/UsoPanel.jsx'
 import PendientesSection from './admin/Pendientes.jsx'
+import ContabilidadSection from './admin/Contabilidad.jsx'
 import { fijarSeccionUso } from './admin/registroUso.js'
 import VentanaWhatsapp from './admin/VentanaWhatsapp.jsx'
 import MarcoWhatsapp from './admin/MarcoWhatsapp.jsx'
@@ -31,6 +32,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     image:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
     chat:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/></svg>),
     list:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>),
+    money:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
   return icons[name] || null
@@ -106,6 +108,7 @@ function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllV
   if (section === 'web')          return <FotosWebSection />
   if (section === 'uso')          return <UsoPanel onVolver={() => navigateTo('inicio')} />
   if (section === 'pendientes')   return <PendientesSection />
+  if (section === 'contabilidad') return <ContabilidadSection />
   if (section === 'whatsapp')     return <ModuloWhatsapp onVerCotizacion={verCotizacion} onAbrirEnCotizador={abrirCotizacion} />
   return null
 }
@@ -338,7 +341,7 @@ export default function AdminApp() {
         {/* La planilla de instalaciones usa todo el ancho, como el Excel; el resto, una columna legible. */}
         <main style={enModulo
           ? { height: 'calc(100vh - 56px)', width: '100%', minWidth: 0, boxSizing: 'border-box' }
-          : { flex: 1, padding: '28px 32px', maxWidth: ['instalaciones', 'pendientes'].includes(section) ? 'none' : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+          : { flex: 1, padding: '28px 32px', maxWidth: ['instalaciones', 'pendientes'].includes(section) ? 'none' : section === 'contabilidad' ? 1100 : 960, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
           <SectionContent {...contentProps} />
         </main>
       </div>

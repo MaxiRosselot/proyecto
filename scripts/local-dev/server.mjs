@@ -19,6 +19,8 @@ import {
 } from '../../netlify/functions/lib/horarios.mjs'
 import { atenderUso } from '../../netlify/functions/lib/uso.mjs'
 import { cambiarPendientes, listarPendientes } from '../../netlify/functions/lib/pendientes.mjs'
+import { cambiarContabilidad, leerContabilidad } from '../../netlify/functions/lib/contabilidad-servicio.mjs'
+import { createRequire } from 'node:module'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
 import { agendarInstalacion, invitarClienteInstalacion } from '../../netlify/functions/lib/instalaciones.mjs'
 import { eventoParaVista } from '../../netlify/functions/lib/calendario.mjs'
@@ -434,6 +436,32 @@ const routes = {
     if (method !== 'POST') return { ok: true, pendientes: await listarPendientes(almacen, hoy) }
     try { return { ok: true, ...(await cambiarPendientes(almacen, body, hoy)) } }
     catch (e) { if (e.estado) return { status: e.estado, ok: false, error: e.message }; throw e }
+  },
+  // Mismo contrato que netlify/functions/contabilidad.mjs: movimientos y config en data.json, y
+  // Mercado Pago falso (dos pagos del mes con su comision) para ver el bloque de MP.
+  'contabilidad': async (body, params, method) => {
+    const fuentes = {
+      almacen: {
+        async leerMovimientos() { return db.bancoFilas ?? null },
+        async guardarMovimientos(f) { db.bancoFilas = f; saveData(db) },
+        async leerConfig() { return db.contabilidadConfig ?? null },
+        async guardarConfig(c) { db.contabilidadConfig = c; saveData(db) },
+      },
+      cotizaciones: async () => (await listarCotizaciones(cotizaciones)).quotes,
+      pagosMercadoPago: async mes => [
+        { id: 9001, status: 'approved', transaction_amount: 238000, date_approved: `${mes}-05T12:00:00.000-03:00`, fee_details: [{ type: 'mercadopago_fee', amount: 9425 }], transaction_details: { net_received_amount: 228575 }, external_reference: '', payer: { email: 'cliente@example.cl' } },
+        { id: 9002, status: 'approved', transaction_amount: 119000, date_approved: `${mes}-12T12:00:00.000-03:00`, fee_details: [{ type: 'mercadopago_fee', amount: 4712 }], transaction_details: { net_received_amount: 114288 }, external_reference: '', payer: { email: 'otro@example.cl' } },
+      ],
+      leerPdf: async buffer => (await createRequire(import.meta.url)('pdf-parse/lib/pdf-parse.js')(buffer)).text,
+    }
+    const hoy = ahoraEnZona().fecha
+    try {
+      if (method !== 'POST') {
+        const mes = /^\d{4}-\d{2}$/.test(params.get('mes') || '') ? params.get('mes') : hoy.slice(0, 7)
+        return { ok: true, hoy, ...(await leerContabilidad(fuentes, mes, hoy)) }
+      }
+      return { ok: true, ...(await cambiarContabilidad(fuentes, body)) }
+    } catch (e) { if (e.estado) return { status: e.estado, ok: false, error: e.message }; throw e }
   },
   // Mismo contrato que netlify/functions/uso.mjs, con las filas en data.json.
   'uso': async (body, params, method) => {
