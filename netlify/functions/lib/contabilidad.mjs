@@ -312,7 +312,9 @@ function reglaPara(mov, reglas) {
   const g = normalizarGlosa(mov.glosa)
   const quien = normalizarGlosa(mov.contraparte || '')
   const lado = mov.monto < 0 ? 'cargo' : 'abono'
-  const aplica = r => (r.campo === 'contraparte' ? quien && quien === normalizarGlosa(r.patron) : g.includes(normalizarGlosa(r.patron))) && (!r.lado || r.lado === lado) && (r.monto == null || r.monto === Math.abs(mov.monto))
+  const sinPrefijo = x => x.replace(/^(DE|A)\s+/, '')
+  // Por persona: la misma aunque BCI escriba el nombre más o menos completo ("Felipe Chacon Jerez" / "Felipe Mauricio Chacon Jerez").
+  const aplica = r => (r.campo === 'contraparte' ? quien && (quien === normalizarGlosa(r.patron) || nombresCalzan(sinPrefijo(quien), sinPrefijo(normalizarGlosa(r.patron)))) : g.includes(normalizarGlosa(r.patron))) && (!r.lado || r.lado === lado) && (r.monto == null || r.monto === Math.abs(mov.monto))
   // Las aprendidas con monto son las más precisas, luego las aprendidas, luego las de partida.
   return reglas.find(r => r.monto != null && aplica(r)) || reglas.find(r => r.monto == null && aplica(r)) || REGLAS_BASE.find(aplica) || null
 }

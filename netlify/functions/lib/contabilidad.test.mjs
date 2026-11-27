@@ -208,3 +208,15 @@ test('BCI en línea escribe los días sin cero ("4/11/26")', async () => {
   assert.equal(m.fecha, '2026-11-05')
   assert.equal(m.fechaOperacion, '2026-11-04')
 })
+
+test('"recordar" por persona reconoce el nombre escrito más o menos completo', () => {
+  const movs = fusionarMovimientos([], [
+    { fecha: '2026-11-09', glosa: 'Transferencia enviada a Juan Pérez Soto', monto: -500000, contraparte: 'A Juan Pérez Soto' },
+    { fecha: '2026-11-23', glosa: 'Transferencia enviada a Juan Andrés Pérez Soto', monto: -15000, contraparte: 'A Juan Andrés Pérez Soto' },
+    { fecha: '2026-11-24', glosa: 'Transferencia enviada a Juan Gómez', monto: -15000, contraparte: 'A Juan Gómez' },
+  ]).todos
+  const reglas = [reglaAprendida(movs[0], 'sueldos')]
+  const s = conSugerencias(movs, { reglas })
+  assert.equal(s[1].categoriaFinal, 'sueldos')
+  assert.equal(s[2].categoriaFinal, '')
+})
