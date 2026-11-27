@@ -105,6 +105,23 @@ try {
   const cotChat = Number((await page.getByText(/Cotización N° \d+ guardada/).textContent()).match(/N° (\d+)/)[1])
   await api('delete-quote', { cotNum: cotChat })
 
+  // Sin celular (p. ej. desde una visita que no lo tiene) los botones igual salen, con un campo para
+  // escribirlo que parte con el número del chat abierto en WhatsApp.
+  await page.getByRole('button', { name: 'Reiniciar' }).click()
+  await page.getByRole('button', { name: 'Ingreso manual' }).click()
+  await page.getByPlaceholder('Nombre completo').fill('Sin Celular ' + cola)
+  await page.getByRole('button', { name: /Generar Cotizacion PDF/ }).click()
+  await expect(page.getByText(/Cotización N° \d+ guardada/)).toBeVisible({ timeout: 120000 })
+  const celular = page.getByLabel('Celular para WhatsApp')
+  await expect(page.getByTestId('pdf-al-chat')).toBeVisible()
+  await celular.fill('')
+  await page.getByTestId('mensaje-al-chat').click()
+  await expect(page.getByTestId('estado-pdf-al-chat')).toContainText('Escribe el celular')
+  await celular.fill('9 5555 ' + cola)
+  await page.getByTestId('mensaje-al-chat').click()
+  await expect.poll(() => fr.evaluate(() => decodeURIComponent(window.__links.at(-1)))).toContain('https://wa.me/5695555' + cola + '?text=')
+  await api('delete-quote', { cotNum: Number((await page.getByText(/Cotización N° \d+ guardada/).textContent()).match(/N° (\d+)/)[1]) })
+
   // Instalaciones: en la ficha de una venta instalada y sin pagar, "En su chat" junto al cobro y a la
   // reseña deja el mensaje escrito en su chat. La ficha queda a la izquierda de WhatsApp, sin taparlo.
   await api('planilla', { accion: 'actualizar', cotNum: q.cotNum, cambios: { fecha: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }), inicio: '10:00', fin: '12:00' } })

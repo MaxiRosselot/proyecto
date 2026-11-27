@@ -877,7 +877,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
               <p style={{ fontSize: 13, color: C.textSub, margin: 0 }}>Total: {fmt(totalInfo.total)}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-              {autoSaved && <PdfAlChat blob={pdfBlob} telefono={cliente.celular || cliente.telefono} nombre={cliente.nombre} mensaje={linkAgendaCot ? mensajeEnvioCotizacion(linkAgendaCot) : ''} />}
+              {autoSaved && <PdfAlChat blob={pdfBlob} telefono={cliente.celular || cliente.telefono || cotGuardada?.telefono || ''} nombre={cliente.nombre} mensaje={linkAgendaCot ? mensajeEnvioCotizacion(linkAgendaCot) : ''} />}
               <button onClick={handleDescargar} style={styles.btnSecondary}>Descargar</button>
               {autoSaved && <CopiarMensajeAgenda link={linkAgendaCot} tamano={13} />}
               <a href={pdfUrl} target="_blank" rel="noreferrer"
