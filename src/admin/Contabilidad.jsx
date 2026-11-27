@@ -389,9 +389,14 @@ export default function ContabilidadSection({ onVerCotizacion }) {
 
   useEffect(() => { const fn = () => setCompacto(window.innerWidth < 900); window.addEventListener('resize', fn); return () => window.removeEventListener('resize', fn) }, [])
 
+  // Solo vale la respuesta del último pedido: si una lectura lenta llega después de otra más nueva
+  // (por ejemplo la de al abrir, después de traer lo de BCI), no la pisa.
+  const pedido = useRef(0)
   const cargar = useCallback(async (m = mes) => {
+    const n = ++pedido.current
     try {
       const r = await apiFetch(URL + (m ? `?mes=${m}` : ''))
+      if (n !== pedido.current) return
       if (!r?.ok) throw new Error(r?.error || 'No se pudo cargar')
       setDatos(r); setError('')
       if (!m) setMes(r.mes)
