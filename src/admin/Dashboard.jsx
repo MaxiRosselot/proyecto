@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { armarPorCotizar, ORIGEN as ORIGEN_POR_COTIZAR } from './porCotizar.js'
 import { C, apiFetch, fmt, fmtDate, fmtTime, styles, VISIT_STATUS_LABELS } from './utils.js'
 import { VISITA_VIGENTE, horarioVisita } from './listaVisitas.js'
 import AvisosTelegram from './AvisosTelegram.jsx'
@@ -60,9 +61,10 @@ export default function DashboardSection({ navigateTo }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [visitRes, cotRes] = await Promise.all([
+      const [visitRes, cotRes, porCotizarRes] = await Promise.all([
         apiFetch('/.netlify/functions/get-visits').catch(() => ({ ok: false, visits: [] })),
         apiFetch('/.netlify/functions/get-quotes').catch(() => ({ ok: false, quotes: [] })),
+        apiFetch('/.netlify/functions/por-cotizar').catch(() => ({ ok: false })),
       ])
 
       const now   = new Date()
@@ -84,8 +86,11 @@ export default function DashboardSection({ navigateTo }) {
         return VISITA_VIGENTE.includes(s) && new Date(v.start) < now
       })
 
-      // Realizadas sin cotizar
-      const realizadasSinCotizar = visits.filter(v => v.status === 'realizada')
+      // Por cotizar: visitas realizadas, fotos de la web, WhatsApp, Instagram y cotizaciones automaticas
+      const realizadasSinCotizar = armarPorCotizar({
+        anotadas: porCotizarRes.anotadas || [], carpetas: porCotizarRes.carpetas || [], visitas: visits, cotizaciones: quotes,
+        hoy: now.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }),
+      }).pendientes
 
       // Cotizaciones
       const porConfirmar = quotes.filter(q => q.status === 'por confirmar')
@@ -209,16 +214,16 @@ export default function DashboardSection({ navigateTo }) {
         </SectionCard>
 
         {/* Realizadas sin cotizar */}
-        <SectionCard title="Realizadas sin cotizar" action={() => navigateTo('cotizador')} actionLabel="Cotizar">
+        <SectionCard title={'Por cotizar (' + realizadasSinCotizar.length + ')'} action={() => navigateTo('por-cotizar')} actionLabel="Ver todas">
           {realizadasSinCotizar.length === 0
-            ? <div style={{ fontSize: 13, color: C.textMuted, padding: '10px 0' }}>Todas cotizadas.</div>
+            ? <div style={{ fontSize: 13, color: C.textMuted, padding: '10px 0' }}>Nada por cotizar.</div>
             : realizadasSinCotizar.slice(0, 5).map(v => (
-                <Row key={v.id}
-                  left={v.nombre}
-                  right={fmtDate(v.start)}
-                  sub={v.direccion || ''}
-                  accent={C.green}
-                  onClick={() => navigateTo('cotizador')}
+                <Row key={v.clave}
+                  left={(ORIGEN_POR_COTIZAR[v.origen]?.icono || '') + ' ' + (v.nombre || (v.instagram ? '@' + v.instagram : 'Sin nombre'))}
+                  right={v.dias === 0 ? 'Hoy' : 'Hace ' + v.dias + (v.dias === 1 ? ' día' : ' días')}
+                  sub={ORIGEN_POR_COTIZAR[v.origen]?.etiqueta + (v.direccion ? ' · ' + v.direccion : '')}
+                  accent={v.dias >= 3 ? C.red : C.green}
+                  onClick={() => navigateTo('por-cotizar')}
                 />
               ))
           }

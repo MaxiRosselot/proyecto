@@ -13,6 +13,7 @@ import FotosWebSection from './admin/FotosWeb.jsx'
 import UsoPanel from './admin/UsoPanel.jsx'
 import PendientesSection from './admin/Pendientes.jsx'
 import ContabilidadSection from './admin/Contabilidad.jsx'
+import PorCotizarLista from './admin/PorCotizarLista.jsx'
 import { fijarSeccionUso } from './admin/registroUso.js'
 import VentanaWhatsapp from './admin/VentanaWhatsapp.jsx'
 import MarcoWhatsapp from './admin/MarcoWhatsapp.jsx'
@@ -33,6 +34,7 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
     chat:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/></svg>),
     list:     (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>),
     money:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg>),
+    inbox:    (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>),
     logout:   (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   }
   return icons[name] || null
@@ -98,6 +100,7 @@ function LoginScreen({ onLogin }) {
 function SectionContent({ section, statuses, onStatusChange, navigateTo, setAllVisits: handleVisitsLoaded, allVisits, visitaParaCotizar, onVisitCotizada, cotizacionParaAbrir, abrirCotizacion, cotizacionEnfocada, verCotizacion }) {
   if (section === 'inicio')       return <DashboardSection navigateTo={navigateTo} />
   if (section === 'visitas')      return <VisitasSection statuses={statuses} onStatusChange={onStatusChange} navigateTo={navigateTo} onVisitsLoaded={handleVisitsLoaded} />
+  if (section === 'por-cotizar')  return <PorCotizarLista navigateTo={navigateTo} onAbrirEnCotizador={abrirCotizacion} />
   if (section === 'cotizador')    return <PorCotizarSection statuses={statuses} visitaSeleccionada={visitaParaCotizar} cotizacionAbierta={cotizacionParaAbrir} allVisits={allVisits} onVisitCotizada={onVisitCotizada} />
   if (section === 'cotizaciones') return <CotizacionesSection onAbrirEnCotizador={abrirCotizacion} enfocar={cotizacionEnfocada} />
   if (section === 'calendario')   return <CalendarioSection onVerCotizacion={verCotizacion} />

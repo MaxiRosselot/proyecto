@@ -9,6 +9,7 @@ import { LugarWhatsapp } from './MarcoWhatsapp.jsx'
 import { ControlZoom, Copiar, ParaEnviar, SinExtension, boton, botonVerde } from './VentanaWhatsapp.jsx'
 import { CopiarHorarios } from './EnviarCotizacion.jsx'
 import { hayBorradorSinGuardar } from './PorCotizar.jsx'
+import { anotarPorCotizar } from './PorCotizarLista.jsx'
 import { EVENTO_PARA_ENVIAR, abrirChatPronto, pedidosRecientes, recordarContacto, telefonoDeContacto, abrirChatEnMarco, adjuntarEnChat, buscarClientes, enfocarMarco, esMarco, extensionInstalada, inicioMarco, chatAbiertoAhora, oirChatAbierto, oirSinWhatsapp, oirTeclasDelMarco, telefonoLegible } from './whatsappPanel.js'
 import { ATAJOS, ATAJOS_EN_WHATSAPP, accionDeTecla, siguiente } from './atajosWhatsapp.js'
 import { FILTROS, clasificar, cotizacionesDelNumero, enQueVa, fechaCorta, guardarRapidos, leerRapidos, mensajesPara, rellenar } from './moduloWhatsapp.js'
@@ -353,6 +354,35 @@ function ChatSinCotizacion({ chat, onBuscar, parecidas = [], onElegir }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
         {!esNumero && <button type="button" style={boton} onClick={() => onBuscar(chat.titulo)}>Buscar “{chat.titulo}”</button>}
         {chat.telefono && <Copiar texto={telefonoLegible(chat.telefono)}>Copiar número</Copiar>}
+      </div>
+      <AnotarPorCotizar key={chat.telefono || chat.titulo} nombre={esNumero ? '' : chat.titulo} telefono={chat.telefono || ''} />
+    </div>
+  )
+}
+
+// Llegaron medidas o fotos por este chat: queda en Admin → Por cotizar para no perderle el rastro.
+function AnotarPorCotizar({ nombre, telefono }) {
+  const [abierto, setAbierto] = useState(false)
+  const [detalle, setDetalle] = useState('')
+  const [estado, setEstado] = useState('')
+  async function guardar() {
+    setEstado('guardando')
+    try {
+      const r = await anotarPorCotizar({ origen: 'whatsapp', nombre, telefono, detalle })
+      setEstado(r.item?.yaEstaba ? 'yaEstaba' : 'ok'); setAbierto(false); setDetalle('')
+    } catch (e) { setEstado(''); alert(e.message) }
+  }
+  if (estado === 'ok' || estado === 'yaEstaba') {
+    return <div data-testid="anotada-por-cotizar" style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: '#15803d' }}>✓ {estado === 'ok' ? 'Anotada' : 'Ya estaba: le sumé la nota'} en Por cotizar</div>
+  }
+  if (!abierto) return <button type="button" data-testid="anotar-desde-chat" onClick={() => setAbierto(true)} style={{ ...boton, marginTop: 8 }}>📝 Anotar por cotizar</button>
+  return (
+    <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+      <textarea value={detalle} onChange={e => setDetalle(e.target.value)} autoFocus rows={3} placeholder="Qué quiere / medidas (ej.: bodega 2,4 x 1,2, mandó fotos)"
+        style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '6px 8px', borderRadius: 8, border: '1px solid ' + C.border, fontFamily: 'inherit', resize: 'vertical' }} />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button type="button" onClick={guardar} disabled={estado === 'guardando'} style={{ ...boton, background: C.orange, borderColor: C.orange, color: 'white' }}>{estado === 'guardando' ? 'Anotando…' : 'Anotar'}</button>
+        <button type="button" onClick={() => setAbierto(false)} style={boton}>Cancelar</button>
       </div>
     </div>
   )

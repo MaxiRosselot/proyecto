@@ -42,6 +42,7 @@ export const SECTIONS = [
   { id: 'cotizaciones',  label: 'Cotizaciones',  icon: 'files', corto: 'Cotiz.', barraMovil: 3 },
   { id: 'whatsapp',      label: 'WhatsApp',      icon: 'chat', soloPc: true },
   { id: 'instalaciones', label: 'Instalaciones', icon: 'table', corto: 'Instal.', barraMovil: 2 },
+  { id: 'por-cotizar',   label: 'Por cotizar',   icon: 'inbox' },
   { id: 'cotizador',     label: 'Cotizar',       icon: 'doc'   },
   { id: 'calendario',    label: 'Calendario',    icon: 'agenda', corto: 'Agenda', barraMovil: 4 },
   { id: 'dte',           label: 'DTE',           icon: 'doc' },

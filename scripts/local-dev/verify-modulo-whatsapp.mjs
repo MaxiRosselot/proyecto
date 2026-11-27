@@ -249,6 +249,14 @@ try {
   await abrirEnWhatsapp('<header><span dir="auto">+56 9 4000 ' + cola + '</span></header>') // numero que no tiene nadie
   await expect(page.getByTestId('chat-sin-cotizacion')).toContainText('+56 9 4000 ' + cola + '')
   await expect(page.getByTestId('ficha-cliente')).toHaveCount(0)
+  // Mandó medidas por este chat: se anota en Admin → Por cotizar.
+  await page.getByTestId('anotar-desde-chat').click()
+  await page.getByPlaceholder(/Qué quiere \/ medidas/).fill('Bodega 2 x 1, mandó fotos ' + cola)
+  await page.getByTestId('chat-sin-cotizacion').getByRole('button', { name: 'Anotar', exact: true }).click()
+  await expect(page.getByTestId('anotada-por-cotizar')).toBeVisible()
+  const anotada = (await api('por-cotizar')).anotadas.find(a => a.detalle.includes('mandó fotos ' + cola))
+  if (!anotada || anotada.origen !== 'whatsapp' || !anotada.telefono.endsWith(cola)) throw new Error('no quedó anotada por cotizar: ' + JSON.stringify(anotada))
+  await api('por-cotizar', { accion: 'borrar', id: anotada.id })
   await abrirEnWhatsapp(`<header><span dir="auto">Cliente guardado</span></header><div data-id="false_5695555${cola}@c.us_3EB0ABC"></div>`)
   await expect(page.getByTestId('ficha-cliente')).toBeVisible()
   await expect(page.getByTestId('chat-sin-cotizacion')).toHaveCount(0)

@@ -238,6 +238,8 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   // Cuantos soportes tenia el modelo la ultima vez (ver el efecto de soportes3d, mas abajo).
   const soportesPrevios = useRef(saved?.project3d?.soportes?.length ?? 0)
   const frame3dRef = useRef(null)
+  // De que pendiente de Admin → Por cotizar viene esta cotizacion: al generarla se marca hecha.
+  const porCotizarRef = useRef(null)
   const [generating, setGenerating] = useState(false)
   const [pdfUrl, setPdfUrl]         = useState(null)
   const [pdfBlob, setPdfBlob]       = useState(null)
@@ -256,7 +258,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
   // Cotizar una visita desde la agenda es siempre una cotizacion nueva: si habia una guardada
   // abierta, generar la habria sobrescrito con el cliente de la visita.
   useEffect(() => {
-    if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada); setCotGuardada(null) }
+    if (visitaSeleccionada) { setMode('visita'); setSelectedVisit(visitaSeleccionada); setCotGuardada(null); porCotizarRef.current = null }
   }, [visitaSeleccionada])
 
   // Reabre una cotizacion guardada con su proyecto 3D, tal como quedo. Con comoNueva ('blanco' o
@@ -265,6 +267,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     if (!cotizacionAbierta) return
     const q = cotizacionAbierta
     const blanco = q.comoNueva === 'blanco'
+    porCotizarRef.current = q.porCotizar || null
     setMode('manual')
     setSelectedVisit(null)
     setManualCliente({ nombre: q.nombre || '', email: q.email || '', celular: q.telefono || '', direccion: q.direccion || '' })
@@ -273,7 +276,7 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
     setProject3d(blanco ? null : q.proyecto3d || null)
     soportesPrevios.current = blanco ? 0 : q.proyecto3d?.soportes?.length ?? 0
     setCotGuardada(q.comoNueva ? null : { cotNum: String(q.cotNum), fechaVisita: q.fechaVisita || '', nombre: q.nombre || '', telefono: q.telefono || '' })
-    setNuevaDesde(q.comoNueva ? { cotNum: String(q.origenCotNum || q.cotNum), nombre: q.nombre || '' } : null)
+    setNuevaDesde(q.comoNueva && (q.origenCotNum || q.cotNum) ? { cotNum: String(q.origenCotNum || q.cotNum), nombre: q.nombre || '' } : null)
     setTotalInfo(blanco ? { subtotal: 0, iva: 0, total: 0 } : { subtotal: Number(q.subtotal) || 0, iva: Number(q.iva) || 0, total: Number(q.total) || 0 })
     setAlternativas(blanco ? [] : (q.alternativas || []).map(a => ({ ...a, base: firmaProyecto(q.proyecto3d || null) })))
     setPdfUrl(null); setPdfBlob(null); setPdfDrive(''); setAutoSaved(false); setError('')
@@ -583,6 +586,18 @@ export default function PorCotizarSection({ statuses, visitaSeleccionada, cotiza
           })
           onVisitCotizada?.(selectedVisit.id, 'realizada_cotizada')
         } catch (e) { console.warn('No se pudo actualizar estado de visita:', e.message) }
+      }
+
+      // Si vino de Admin → Por cotizar, sale de la lista (sin esperar: si falla, igual la saca su celular).
+      const pc = porCotizarRef.current
+      if (pc) {
+        porCotizarRef.current = null
+        apiFetch('/.netlify/functions/por-cotizar', {
+          method: 'POST',
+          body: JSON.stringify(pc.id
+            ? { accion: 'estado', id: pc.id, estado: 'cotizada', cotNum: numero }
+            : { accion: 'estado', origen: pc.origen, ref: pc.ref, nombre: pc.nombre, telefono: pc.telefono, creado: pc.creado, estado: 'cotizada', cotNum: numero }),
+        }).catch(e => console.warn('No se marcó en Por cotizar:', e.message))
       }
 
       setAutoSaved(true)

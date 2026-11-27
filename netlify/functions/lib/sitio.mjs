@@ -316,6 +316,16 @@ export function almacenSolicitudesDrive(drive, auth) {
       } catch { return null }
     },
     async marcarAvisada(id) { await drive.files.update({ fileId: id, requestBody: { appProperties: { avisada: '1' } } }) },
+    // Las solicitudes que terminaron de subir (se aviso por correo) desde una fecha: Admin → Por cotizar.
+    async listarAvisadas(desde) {
+      const q = [
+        "mimeType='application/vnd.google-apps.folder'", 'trashed=false',
+        "appProperties has { key='solicitudWeb' and value='1' }", "appProperties has { key='avisada' and value='1' }",
+        desde ? `createdTime >= '${desde}T00:00:00'` : '',
+      ].filter(Boolean).join(' and ')
+      const r = await drive.files.list({ q, fields: 'files(id,name,createdTime,webViewLink,description)', orderBy: 'createdTime desc', pageSize: 200, spaces: 'drive' })
+      return r.data.files || []
+    },
     async archivos(id) {
       const r = await drive.files.list({ q: `'${id}' in parents and trashed=false`, fields: 'files(name,size)', spaces: 'drive' })
       return (r.data.files || []).map(f => ({ nombre: f.name, tamano: Number(f.size) || 0 }))
@@ -371,6 +381,9 @@ export function almacenSolicitudesMemoria() {
     },
     async carpeta(id) { const c = carpetas.get(id); return c ? { id, url: `https://drive.google.com/drive/folders/${id}`, datos: c.datos, avisada: Boolean(c.avisada) } : null },
     async marcarAvisada(id) { carpetas.get(id).avisada = true },
+    async listarAvisadas() {
+      return [...carpetas.values()].filter(c => c.avisada).map(c => ({ id: c.id, name: c.nombre, createdTime: c.creado || new Date().toISOString(), webViewLink: `https://drive.google.com/drive/folders/${c.id}`, description: JSON.stringify(c.datos) }))
+    },
     async archivos(id) { return (carpetas.get(id)?.archivos || []).map(({ nombre, tamano }) => ({ nombre, tamano })) },
   }
 }

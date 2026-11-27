@@ -19,6 +19,7 @@ import {
 } from '../../netlify/functions/lib/horarios.mjs'
 import { atenderUso } from '../../netlify/functions/lib/uso.mjs'
 import { cambiarPendientes, listarPendientes } from '../../netlify/functions/lib/pendientes.mjs'
+import { cambiarPorCotizar, carpetaAPendiente, listarPorCotizar } from '../../netlify/functions/lib/por-cotizar.mjs'
 import { cambiarContabilidad, leerContabilidad } from '../../netlify/functions/lib/contabilidad-servicio.mjs'
 import { createRequire } from 'node:module'
 import { procesarCotizacionWeb } from '../../netlify/functions/lib/cotizacion-web.mjs'
@@ -435,6 +436,14 @@ const routes = {
     const hoy = ahoraEnZona().fecha
     if (method !== 'POST') return { ok: true, pendientes: await listarPendientes(almacen, hoy) }
     try { return { ok: true, ...(await cambiarPendientes(almacen, body, hoy)) } }
+    catch (e) { if (e.estado) return { status: e.estado, ok: false, error: e.message }; throw e }
+  },
+  // Mismo contrato que netlify/functions/por-cotizar.mjs: anotadas en data.json, carpetas de la web en memoria.
+  'por-cotizar': async (body, _params, method) => {
+    const almacen = { async leerFilas() { return db.porCotizarFilas ?? null }, async guardarFilas(f) { db.porCotizarFilas = f; saveData(db) } }
+    const hoy = ahoraEnZona().fecha
+    if (method !== 'POST') return { ok: true, anotadas: await listarPorCotizar(almacen, hoy), carpetas: (await solicitudesWeb.listarAvisadas()).map(carpetaAPendiente) }
+    try { return { ok: true, ...(await cambiarPorCotizar(almacen, body, hoy)) } }
     catch (e) { if (e.estado) return { status: e.estado, ok: false, error: e.message }; throw e }
   },
   // Mismo contrato que netlify/functions/contabilidad.mjs: movimientos y config en data.json, y
