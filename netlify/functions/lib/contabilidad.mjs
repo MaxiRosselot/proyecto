@@ -192,9 +192,9 @@ export function fusionarMovimientos(existentes, leidos, { origen = '', ahora = n
 // Lo que manda la extensión desde "Mis Movimientos" de BCI en línea:
 // { fecha: 'dd/mm/aa', fechaContable: 'dd/mm/aa', descripcion, monto (con signo), saldo }.
 // La fecha que vale es la contable (la misma de la cartola).
-const aIso = f => { const [d, m, a] = String(f).split('/'); return `${a.length === 2 ? '20' + a : a}-${m}-${d}` }
+const aIso = f => { const [d, m, a] = String(f).split('/'); return `${a.length === 2 ? '20' + a : a}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` }
 export function movimientosDeBancoEnLinea(lista) {
-  return (lista || []).filter(x => /^\d\d\/\d\d\/\d{2,4}$/.test(x?.fechaContable || x?.fecha || '') && Number.isFinite(Number(x.monto)) && Number(x.monto))
+  return (lista || []).filter(x => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(x?.fechaContable || x?.fecha || '') && Number.isFinite(Number(x.monto)) && Number(x.monto))
     .map(x => {
       const descripcion = String(x.descripcion || '').replace(/\s+/g, ' ').trim()
       const rec = descripcion.match(/^transferencia recibida de (.+)$/i)

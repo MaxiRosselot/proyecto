@@ -201,3 +201,10 @@ test('lo del banco en línea se junta con la cartola: no se repite y le agrega e
   const s = conSugerencias(r.todos)
   assert.equal(s.find(m => m.monto === -5000).categoriaFinal, 'materiales')
 })
+
+test('BCI en línea escribe los días sin cero ("4/11/26")', async () => {
+  const { movimientosDeBancoEnLinea } = await import('./contabilidad.mjs')
+  const [m] = movimientosDeBancoEnLinea([{ fecha: '4/11/26', fechaContable: '5/11/26', descripcion: 'Transferencia enviada a Juan Pérez', monto: -5770, saldo: 1306294 }])
+  assert.equal(m.fecha, '2026-11-05')
+  assert.equal(m.fechaOperacion, '2026-11-04')
+})
