@@ -105,6 +105,27 @@ try {
   const cotChat = Number((await page.getByText(/Cotización N° \d+ guardada/).textContent()).match(/N° (\d+)/)[1])
   await api('delete-quote', { cotNum: cotChat })
 
+  // Instalaciones: en la ficha de una venta instalada y sin pagar, "En su chat" junto al cobro y a la
+  // reseña deja el mensaje escrito en su chat. La ficha queda a la izquierda de WhatsApp, sin taparlo.
+  await api('planilla', { accion: 'actualizar', cotNum: q.cotNum, cambios: { fecha: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }), inicio: '10:00', fin: '12:00' } })
+  await api('planilla', { accion: 'actualizar', cotNum: q.cotNum, cambios: { instalada: true } })
+  await page.getByRole('navigation').getByRole('button', { name: 'Instalaciones', exact: true }).click()
+  await page.getByRole('button', { name: /^Todas/ }).click()
+  await page.getByRole('button', { name: nombre, exact: true }).first().click()
+  const ficha = page.getByRole('dialog', { name: nombre })
+  const acciones = ficha.getByTestId('acciones-venta')
+  await expect(acciones.getByText('⭐ Copiar pedido de reseña')).toBeVisible()
+  const [cajaFicha, cajaVentana] = [await ficha.boundingBox(), await ventana.boundingBox()]
+  if (cajaFicha.x + cajaFicha.width > cajaVentana.x + 1) throw new Error('La ficha tapa la ventana de WhatsApp')
+  const ultimoLink = () => fr.evaluate(() => decodeURIComponent(window.__links.at(-1)))
+  await acciones.getByTestId('en-su-chat').first().click()
+  await expect(acciones.getByText('✓ En su chat: da Enter')).toBeVisible()
+  await expect.poll(ultimoLink).toContain('https://wa.me/56933334444?text=')
+  if (!(await ultimoLink()).includes('Total a pagar')) throw new Error('El cobro no quedó en su chat: ' + await ultimoLink())
+  await acciones.getByTestId('en-su-chat').nth(1).click()
+  await expect.poll(ultimoLink).toContain('reseña en Google')
+  await ficha.getByRole('button', { name: 'Cerrar' }).click()
+
   // Cerrar: el panel vuelve a todo el ancho y queda el boton para abrirla otra vez.
   await ventana.getByRole('button', { name: 'Cerrar WhatsApp' }).click()
   await expect(ventana).toBeHidden()

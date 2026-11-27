@@ -11,7 +11,7 @@
 // Sin Google: todo lo de afuera llega en deps (ver bot-servicios.mjs y scripts/local-dev/server.mjs).
 import { createHash } from 'node:crypto'
 import { MAESTRO, MARCA } from './marca.mjs'
-import { linkWhatsapp } from './mensajes.mjs'
+import { linkWhatsapp, mensajeResena } from './mensajes.mjs'
 import { MEDIOS_PAGO, resumenPagos } from './pagos-resumen.mjs'
 import { HORARIO_INSTALACIONES, aHHMM, aMinutos, ahoraEnZona, rangosDelDia, sumarDias } from './horarios.mjs'
 import { BLOQUE_MIN, disponibilidadAgenda, duracionTexto, horasDelDia, ocupadosAgenda } from './agenda-horas.mjs'
@@ -87,9 +87,7 @@ export function buscarClientes(quotes, texto) {
 export function mensajeCobroSaldo(q, saldo, linkPago = '') {
   return `${hola(q.nombre)} ¡Gracias por confiar en Repisas Don Maxi! Su instalación quedó lista ✅\n\nEl saldo pendiente es de ${pesos(saldo)}. Puede transferir a:\n${MARCA.razonSocial} · RUT ${MARCA.rut}\n${MARCA.banco} · Cta. ${MARCA.tipoCuenta} ${MARCA.numeroCuenta}\n${MARCA.correo}${linkPago ? `\n\nO pagar con tarjeta aquí: ${linkPago}` : ''}\n\n¡Muchas gracias! 🙏`
 }
-export function mensajeResena(q) {
-  return `${hola(q.nombre)} ¡Gracias por elegir Repisas Don Maxi! 😊 Si quedó contento con sus repisas, nos ayudaría muchísimo con una reseña en Google (toma 1 minuto): ${MARCA.googleResenas} ⭐🙏`
-}
+export { mensajeResena }
 
 // Despues de instalar: cobrar el saldo, pedir la reseña y registrar el pago.
 export function postInstalacion(q, { linkPago = '' } = {}) {

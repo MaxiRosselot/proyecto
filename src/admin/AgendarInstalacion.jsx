@@ -208,7 +208,7 @@ export function ResumenInstalacion({ quote, onReagendar, onInvitado }) {
         Duración {duracion(inst.inicio, inst.fin)} · {inst.invitado ? `Invitación enviada a ${inst.invitado}` : 'Sin invitación por correo'}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <CopiarMensaje texto={mensajeInstalacionDe(quote, inst)} etiqueta="📋 Copiar mensaje de agendamiento" />
+        <CopiarMensaje texto={mensajeInstalacionDe(quote, inst)} etiqueta="📋 Copiar mensaje de agendamiento" telefono={quote.telefono} />
         {inst.link && <a href={inst.link} target="_blank" rel="noreferrer" style={boton}>Ver en Calendar</a>}
         <button onClick={onReagendar} style={boton}>Reagendar</button>
       </div>

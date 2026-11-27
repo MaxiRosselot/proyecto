@@ -406,7 +406,7 @@ export default function VisitasSection({ statuses, onStatusChange, navigateTo, o
                           style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: reagendando === visit.id ? C.orangeLight : C.surface, color: C.textSub }}>📅 Reagendar</button>
                         <button onClick={() => cancelar(visit)} disabled={isUpdating}
                           style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1.5px solid ' + C.border, background: C.surface, color: C.red }}>✕ Cancelar</button>
-                        {status !== 'confirmada' && <CopiarMensaje texto={mensajeConfirmarVisita(visit)} etiqueta="📋 Copiar mensaje de confirmación" />}
+                        {status !== 'confirmada' && <CopiarMensaje texto={mensajeConfirmarVisita(visit)} etiqueta="📋 Copiar mensaje de confirmación" telefono={visit.celular} />}
                       </div>
                     )}
                     {tab === 'calendly' && (

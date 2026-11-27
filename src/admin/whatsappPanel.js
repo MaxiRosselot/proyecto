@@ -182,3 +182,15 @@ export function abrirWhatsapp(telefono, texto, cliente = '') {
   window.open(`https://wa.me/${telefonoWhatsapp(telefono)}?text=${encodeURIComponent(texto || '')}`, '_blank')
 }
 export const ventanaWhatsappAbierta = () => ventanaAbierta
+
+// Deja un mensaje escrito en el chat de ese cliente, sin enviar (el Enter lo das tu en WhatsApp). Si la
+// ventana de la derecha esta cerrada la abre; si WhatsApp nunca habia cargado, espera a que el marco
+// exista y lo abre ya con su chat. Devuelve false si no hay marco (sin extension).
+export async function dejarEnSuChat(telefono, texto) {
+  if (!ventanaAbierta) window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_VENTANA))
+  for (let i = 0; !marco && i < 30; i++) await new Promise(r => setTimeout(r, 100))
+  if (!marco) return false
+  await abrirChatEnMarco(telefono, texto)
+  setTimeout(enfocarMarco, 400)
+  return true
+}

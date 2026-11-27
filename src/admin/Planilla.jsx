@@ -3,7 +3,7 @@ import { C, apiFetch, fmt, styles } from './utils.js'
 import { ahoraEnZona, diaSemana, sumarDias } from '../../netlify/functions/lib/horarios.mjs'
 import { SERVICIOS } from '../../netlify/functions/lib/marca.mjs'
 import { CODIGOS_DOCUMENTO, porEmitir, sugerirDocumento } from '../../netlify/functions/lib/documentos.mjs'
-import { mensajeCobro, mensajeConfirmarInstalacion, mensajeInstalacion, nombreRepisaCobro } from '../../netlify/functions/lib/mensajes.mjs'
+import { mensajeCobro, mensajeConfirmarInstalacion, mensajeInstalacion, mensajeResena, nombreRepisaCobro } from '../../netlify/functions/lib/mensajes.mjs'
 import CopiarMensaje from './CopiarMensaje.jsx'
 import FichaMaestro from './FichaMaestro.jsx'
 import { textoMateriales, ventasPorInstalar } from './materiales.js'
@@ -282,7 +282,7 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion, on
   const boton = { ...styles.btnSecondary, fontSize: 12, padding: '7px 12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }
   return (
     <div role="dialog" aria-modal="true" aria-label={q.nombre} onClick={e => e.target === e.currentTarget && onCerrar()}
-      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(17,24,39,.35)', display: 'flex', justifyContent: 'flex-end' }}>
+      style={{ position: 'fixed', inset: 0, right: 'var(--ancho-whatsapp, 0px)', zIndex: 200, background: 'rgba(17,24,39,.35)', display: 'flex', justifyContent: 'flex-end' }}>
       <div style={{ width: 'min(480px, 100%)', height: '100%', background: 'white', overflowY: 'auto', padding: 20, paddingTop: 'max(20px, env(safe-area-inset-top))', boxShadow: '-12px 0 40px rgba(0,0,0,.18)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
           <div>
@@ -294,7 +294,8 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion, on
         {/* Lo que mas se usa (registro de uso): la ficha del maestro y el cobro, arriba. */}
         <div data-testid="acciones-venta" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
           {inst.fecha && inst.origen !== 'excel' && <FichaMaestro q={q} />}
-          {pago.saldo > 0 && <CopiarMensaje texto={textoCobro(q)} etiqueta="📋 Copiar mensaje de cobro" />}
+          {pago.saldo > 0 && <CopiarMensaje texto={textoCobro(q)} etiqueta="📋 Copiar mensaje de cobro" telefono={q.telefono} />}
+          {inst.instalada && <CopiarMensaje texto={mensajeResena(q)} etiqueta="⭐ Copiar pedido de reseña" telefono={q.telefono} />}
           <button type="button" onClick={onReagendar} style={boton}>📅 {inst.fecha ? 'Reagendar' : 'Agendar'}</button>
           {inst.instalada && <button type="button" onClick={onReagendar} style={{ ...boton, color: C.red }}>↩️ No se realizó · reagendar</button>}
         </div>
@@ -322,8 +323,8 @@ function Detalle({ q, onCerrar, onActualizar, onCambioLocal, onVerCotizacion, on
 
         <div style={titulo}>Otras acciones</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {inst.fecha && <CopiarMensaje texto={mensajeInstalacion(q, inst, pago)} etiqueta="📋 Copiar mensaje de agendamiento" />}
-          {inst.fecha && inst.inicio && <CopiarMensaje texto={mensajeConfirmarInstalacion(q, inst)} etiqueta="📋 Copiar mensaje de confirmación" />}
+          {inst.fecha && <CopiarMensaje texto={mensajeInstalacion(q, inst, pago)} etiqueta="📋 Copiar mensaje de agendamiento" telefono={q.telefono} />}
+          {inst.fecha && inst.inicio && <CopiarMensaje texto={mensajeConfirmarInstalacion(q, inst)} etiqueta="📋 Copiar mensaje de confirmación" telefono={q.telefono} />}
           {inst.link && <a href={inst.link} target="_blank" rel="noreferrer" style={boton}>Ver en Calendar</a>}
           {q.pdfUrl && <a href={q.pdfUrl} target="_blank" rel="noreferrer" style={boton}>Ver PDF</a>}
           {onVerCotizacion && inst.origen !== 'excel' && <button onClick={() => onVerCotizacion(q.cotNum)} style={boton}>Ver cotización</button>}
@@ -679,7 +680,7 @@ export default function PlanillaSection({ onVerCotizacion }) {
                 <span><strong style={{ color: porEmitir(f.documento) ? C.red : C.textSub }}>{f.documento || (f.sugerido ? f.sugerido + '?' : '—')}</strong> · {f.pago.estado === 'pagada' ? <span style={{ color: C.green }}>Pagada</span> : f.pago.pagado ? `${f.pago.porcentaje}%` : <span style={{ color: f.instalada ? C.red : C.textMuted }}>Sin pago</span>}</span>
               </div>
               {f.inst.nota && <div style={{ fontSize: 12, color: '#92400E', marginTop: 4 }}>📝 {f.inst.nota}</div>}
-              {f.porCobrar && <div style={{ marginTop: 6 }}><CopiarMensaje compacto texto={textoCobro(f.q)} etiqueta={`📋 Cobro ${fmt(f.pago.saldo)}`} estilo={{ padding: '4px 10px' }} /></div>}
+              {f.porCobrar && <div style={{ marginTop: 6 }}><CopiarMensaje compacto texto={textoCobro(f.q)} etiqueta={`📋 Cobro ${fmt(f.pago.saldo)}`} estilo={{ padding: '4px 10px' }} telefono={f.q.telefono} /></div>}
             </div>
             ))}
             </React.Fragment>

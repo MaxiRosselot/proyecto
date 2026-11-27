@@ -52,7 +52,7 @@ function Detalle({ evento, onCerrar, onVerCotizacion }) {
   useEffect(() => { const f = e => e.key === 'Escape' && onCerrar(); window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f) }, [onCerrar])
   return (
     <div onClick={e => e.target === e.currentTarget && onCerrar()} role="dialog" aria-modal="true" aria-label={evento.cliente || evento.titulo}
-      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(17,24,39,.35)', display: 'flex', justifyContent: 'flex-end' }}>
+      style={{ position: 'fixed', inset: 0, right: 'var(--ancho-whatsapp, 0px)', zIndex: 200, background: 'rgba(17,24,39,.35)', display: 'flex', justifyContent: 'flex-end' }}>
       <div style={{ width: 'min(420px, 100%)', height: '100%', background: 'white', boxShadow: '-12px 0 40px rgba(0,0,0,.18)', padding: 24, paddingTop: 'max(24px, env(safe-area-inset-top))', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ ...styles.badge(t.color) }}>{t.nombre}</span>
@@ -87,10 +87,10 @@ function Detalle({ evento, onCerrar, onVerCotizacion }) {
             </a>
           )}
           {evento.tipo === 'instalacion' && (
-            <CopiarMensaje texto={mensajeInstalacion({ nombre: evento.cliente, direccion: evento.ubicacion }, evento)} etiqueta="📋 Copiar mensaje de agendamiento" estilo={{ padding: '9px 12px' }} />
+            <CopiarMensaje texto={mensajeInstalacion({ nombre: evento.cliente, direccion: evento.ubicacion }, evento)} etiqueta="📋 Copiar mensaje de agendamiento" estilo={{ padding: '9px 12px' }} telefono={evento.telefono} />
           )}
           {evento.tipo === 'instalacion' && (
-            <CopiarMensaje texto={mensajeConfirmarInstalacion({ nombre: evento.cliente, direccion: evento.ubicacion }, evento)} etiqueta="📋 Copiar mensaje de confirmación" estilo={{ padding: '9px 12px' }} />
+            <CopiarMensaje texto={mensajeConfirmarInstalacion({ nombre: evento.cliente, direccion: evento.ubicacion }, evento)} etiqueta="📋 Copiar mensaje de confirmación" estilo={{ padding: '9px 12px' }} telefono={evento.telefono} />
           )}
           {evento.cotNum && <button onClick={() => onVerCotizacion(evento.cotNum)} style={boton}>Ver cotización y pagos</button>}
           {evento.link && <a href={evento.link} target="_blank" rel="noreferrer" style={boton}>Abrir en Google Calendar</a>}

@@ -377,3 +377,9 @@ export function correoSeguimientoCotizacion(q, { dias, linkAgenda = '' }) {
     ].join('\n'),
   }
 }
+
+// Despues de instalar: pedir la reseña en Google (boton del bot y del panel).
+export function mensajeResena(q) {
+  const n = primerNombre(q.nombre)
+  return `¡Hola${n ? ' ' + n : ''}! 👋 ¡Gracias por elegir Repisas Don Maxi! 😊 Si quedó contento con sus repisas, nos ayudaría muchísimo con una reseña en Google (toma 1 minuto): ${MARCA.googleResenas} ⭐🙏`
+}

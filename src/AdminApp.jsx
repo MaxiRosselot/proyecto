@@ -132,6 +132,11 @@ export default function AdminApp() {
   function alternarWhatsapp(v) { setWhatsapp(v); guardarAbierto(v); if (v) setWhatsappMontado(true) }
   useEffect(() => { if (enModulo) setWhatsappMontado(true) }, [enModulo])
   useEffect(() => { marcarVentanaAbierta(hayWhatsapp) }, [hayWhatsapp])
+  // Las fichas que se abren a la derecha (instalacion, evento del calendario) quedan a la izquierda de
+  // WhatsApp, para ver el chat mientras usas sus botones "En su chat".
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ancho-whatsapp', whatsappVisible ? anchoWhatsapp + 'px' : '0px')
+  }, [whatsappVisible, anchoWhatsapp])
   useEffect(() => {
     const abrir = () => alternarWhatsapp(true)
     window.addEventListener(EVENTO_ABRIR_VENTANA, abrir)
