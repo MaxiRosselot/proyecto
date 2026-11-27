@@ -150,3 +150,28 @@ test('el costo fijo se liga al cargo de monto más parecido, no al primero del m
   assert.equal(s[0].sugerencia.fijo, '')
   assert.equal(s[1].sugerencia.fijo, 'f1')
 })
+
+test('con el nombre completo de la app de BCI se encuentra al cliente y se recuerda a la persona', async () => {
+  const { nombresCalzan, conciliarClientes } = await import('./contabilidad.mjs')
+  assert.ok(nombresCalzan('Pablo Andrés Rojas Mena', 'Pablo Rojas'))
+  assert.ok(nombresCalzan('Pablo Rojas', 'Pablo Andrés Rojas Mena'))
+  assert.ok(!nombresCalzan('Pablo Rojas', 'Pedro Rojas'))
+  const movs = fusionarMovimientos([], [
+    { fecha: '2026-11-24', glosa: 'TRANSFER DE P.ROJAS ME', monto: 72000 },
+    { fecha: '2026-11-25', glosa: 'TRASPASO FONDOS OTRO BANCO EN LINEA', monto: -100000 },
+    { fecha: '2026-11-26', glosa: 'TRASPASO FONDOS OTRO BANCO EN LINEA', monto: -35000 },
+  ]).todos
+  movs[0].contraparte = 'De Pablo Andrés Rojas Mena'
+  movs[1].contraparte = 'A Juan Dueño'
+  movs[2].contraparte = 'A Juan Dueño'
+  const cots = [
+    { cotNum: '1600', nombre: 'Pablo Rojas', total: 144000, pagos: [] },
+    { cotNum: '1601', nombre: 'Ana Soto', total: 50000, pagos: [{ id: 'p', fecha: '2026-11-10', monto: 50000, medio: 'Transferencia' }] },
+  ]
+  const reglas = [reglaAprendida(movs[1], 'retiro-maxi')]
+  const s = conSugerencias(movs, { cotizaciones: cots, reglas })
+  assert.equal(s[0].sugerencia.cotNum, '1600') // 50 % de 144.000
+  assert.equal(s[2].categoriaFinal, 'retiro-maxi') // misma persona, otro monto
+  const c = conciliarClientes(s, cots, '2026-11')
+  assert.deepEqual(c.filas.map(f => [f.cotNum, f.estado]), [['1601', 'no llegó al banco'], ['1600', 'pago sin registrar']])
+})

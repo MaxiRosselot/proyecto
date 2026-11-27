@@ -107,6 +107,52 @@ function CostosFijos({ datos, accion }) {
   )
 }
 
+// El nombre como sale en la app de BCI ("De Nicolás Tapia Céspedes", "A Juan Pérez"): la cartola lo
+// corta o no lo trae, y con él se encuentra al cliente o se recuerda a quién se le paga.
+function Contraparte({ m, accion }) {
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState(m.contraparte)
+  useEffect(() => setTexto(m.contraparte), [m.contraparte])
+  const guardar = async () => { setEditando(false); if (texto.trim() !== m.contraparte) await accion({ accion: 'clasificar', id: m.id, contraparte: texto.trim() }) }
+  if (editando) return (
+    <input autoFocus value={texto} onChange={e => setTexto(e.target.value)} onBlur={guardar} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setTexto(m.contraparte); setEditando(false) } }}
+      placeholder={m.monto < 0 ? 'A quién (como sale en la app de BCI)' : 'De quién (como sale en la app de BCI)'} aria-label="De o para quién"
+      style={{ ...styles.input, padding: '3px 8px', fontSize: 12.5, width: 260 }} />
+  )
+  return m.contraparte
+    ? <button onClick={() => setEditando(true)} title="Cambiar" style={{ ...chip('#374151', '#F3F4F6'), border: 'none', cursor: 'pointer' }}>👤 {m.contraparte}</button>
+    : <button onClick={() => setEditando(true)} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: C.textMuted, fontSize: 12, textDecoration: 'underline dotted' }}>+ {m.monto < 0 ? 'para quién' : 'de quién'}</button>
+}
+
+// Ligar el abono a una cotización a mano: se busca por N° o nombre.
+function LigarCotizacion({ m, datos, accion, onListo }) {
+  const [texto, setTexto] = useState('')
+  const opciones = useMemo(() => {
+    const q = normalizarGlosa(texto)
+    if (q.length < 2) return []
+    return datos.cotizaciones.filter(c => c.cotNum.includes(q) || normalizarGlosa(c.nombre).includes(q)).slice(0, 8)
+  }, [texto, datos.cotizaciones])
+  const ligar = async c => { await accion({ accion: 'clasificar', id: m.id, cotNum: c.cotNum, categoria: m.categoria || 'venta-transferencia' }); onListo() }
+  return (
+    <div style={{ position: 'relative' }}>
+      <input autoFocus value={texto} onChange={e => setTexto(e.target.value)} onKeyDown={e => e.key === 'Escape' && onListo()} placeholder="N° o nombre del cliente" aria-label="Buscar cotización" style={{ ...styles.input, padding: '5px 8px', fontSize: 12.5, width: 230 }} />
+      {opciones.length > 0 && (
+        <div style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, marginTop: 4, background: 'white', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 300 }}>
+          {opciones.map(c => {
+            const saldo = c.total - c.pagado
+            return (
+              <button key={c.cotNum} onClick={() => ligar(c)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #F3F4F6' }}>
+                <b>N° {c.cotNum}</b> · {c.nombre}
+                <div style={{ fontSize: 11.5, color: C.textSub }}>total {fmt(c.total)} · pagado {fmt(c.pagado)}{saldo > 0 ? ` · saldo ${fmt(saldo)}` : ' · pagada'}{[c.total, Math.round(c.total / 2), saldo].includes(m.monto) ? ' · ✓ calza el monto' : ''}</div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Un movimiento con su categoría (confirmada o sugerida), su cotización y su costo fijo.
 function Movimiento({ m, datos, accion, compacto }) {
   const s = m.sugerencia
@@ -114,19 +160,23 @@ function Movimiento({ m, datos, accion, compacto }) {
   const [recordar, setRecordar] = useState(true)
   const [ocupado, setOcupado] = useState(false)
   const [nota, setNota] = useState(m.nota)
+  const [ligando, setLigando] = useState(false)
   useEffect(() => { setCategoria(m.categoria || s.categoria || ''); setNota(m.nota) }, [m.id, m.categoria, s.categoria, m.nota])
   const lado = m.monto < 0 ? 'cargo' : 'abono'
   const cotNum = m.cotNum || s.cotNum
   const fijo = datos.fijos.find(f => f.id === (m.fijo || s.fijo))
+  // ¿El pago de este abono ya está anotado en su cotización? (mismo monto en ese mes)
+  const fila = cotNum && datos.conciliacion.filas.find(f => f.cotNum === cotNum)
+  const pagoAnotado = m.cotNum ? Boolean(fila?.pagos.some(p => p.monto === m.monto)) : s.registrado !== false
   const hacer = async f => { setOcupado(true); try { await f() } finally { setOcupado(false) } }
   const confirmar = () => hacer(() => accion({
     accion: 'clasificar', id: m.id, categoria, nota, recordar: recordar && !cotNum,
-    ...(s.cotNum && !m.cotNum ? { cotNum: s.cotNum } : {}), ...(s.fijo && !m.fijo ? { fijo: s.fijo } : {}),
+    ...(s.cotNum && !m.cotNum && !s.dudoso ? { cotNum: s.cotNum } : {}), ...(s.fijo && !m.fijo ? { fijo: s.fijo } : {}),
   }))
   const registrarPago = () => hacer(async () => {
-    const r = await apiFetch('/.netlify/functions/pagos', { method: 'POST', body: JSON.stringify({ accion: 'registrar', cotNum, monto: m.monto, medio: 'Transferencia', fecha: m.fecha, nota: 'BCI: ' + normalizarGlosa(m.glosa) }) })
+    const r = await apiFetch('/.netlify/functions/pagos', { method: 'POST', body: JSON.stringify({ accion: 'registrar', cotNum, monto: m.monto, medio: 'Transferencia', fecha: m.fecha, nota: 'BCI: ' + (m.contraparte || normalizarGlosa(m.glosa)) }) })
     if (!r?.ok) throw new Error(r?.error || 'No se pudo registrar el pago')
-    await accion({ accion: 'clasificar', id: m.id, categoria: 'venta-transferencia', cotNum })
+    await accion({ accion: 'clasificar', id: m.id, categoria: m.categoria || 'venta-transferencia', cotNum })
   })
   const cambio = categoria !== (m.categoria || '') || nota !== m.nota || (!m.confirmado && categoria)
   return (
@@ -138,12 +188,16 @@ function Movimiento({ m, datos, accion, compacto }) {
           {monto(m.monto)}
           {m.origen === 'manual' && <span style={chip('#6B7280', '#F3F4F6')}>a mano</span>}
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 5, fontSize: 12 }}>
-          {cotNum && (
-            <span style={chip(m.cotNum || s.registrado ? '#15803d' : '#B45309', m.cotNum || s.registrado ? '#DCFCE7' : '#FEF3C7')}>
-              Cot. N° {cotNum}{(m.nombreCot || s.nombre) ? ` · ${m.nombreCot || s.nombre}` : ''}{!m.cotNum && s.registrado === false ? ' · pago sin registrar' : ''}{s.dudoso && !m.cotNum ? ' · ¿seguro?' : ''}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 5, fontSize: 12 }}>
+          <Contraparte m={m} accion={accion} />
+          {cotNum && !ligando && (
+            <span style={chip(m.cotNum && pagoAnotado ? '#15803d' : '#B45309', m.cotNum && pagoAnotado ? '#DCFCE7' : '#FEF3C7')}>
+              {m.cotNum ? '' : '¿'}Cot. N° {cotNum}{(m.nombreCot || s.nombre) ? ` · ${m.nombreCot || s.nombre}` : ''}{m.cotNum ? '' : '?'}{!pagoAnotado ? ' · pago sin anotar en la cotización' : ''}{s.dudoso && !m.cotNum ? ' · monto distinto' : ''}
+              {m.cotNum && <button onClick={() => hacer(() => accion({ accion: 'clasificar', id: m.id, cotNum: '' }))} aria-label="Desligar cotización" title="Desligar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', padding: '0 0 0 6px', fontWeight: 800 }}>×</button>}
             </span>
           )}
+          {m.monto > 0 && !m.cotNum && !ligando && <button onClick={() => setLigando(true)} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: C.orangeDark, fontSize: 12, fontWeight: 600 }}>{cotNum ? 'otra cotización…' : 'ligar a cotización…'}</button>}
+          {ligando && <LigarCotizacion m={m} datos={datos} accion={accion} onListo={() => setLigando(false)} />}
           {fijo && <span style={chip('#1D4ED8', '#DBEAFE')}>Costo fijo: {fijo.nombre}</span>}
           {!m.confirmado && s.motivo && <span style={{ color: C.textMuted }}>Sugerido: {s.motivo}</span>}
           {m.confirmado && m.nota && <span style={{ color: C.textSub }}>📝 {m.nota}</span>}
@@ -153,15 +207,60 @@ function Movimiento({ m, datos, accion, compacto }) {
         <SelectCategoria value={categoria} onChange={setCategoria} lado={lado} style={{ width: 190 }} />
         {!m.confirmado && <input value={nota} onChange={e => setNota(e.target.value)} placeholder="Nota (opcional)" aria-label="Nota" style={{ ...styles.input, padding: '6px 8px', fontSize: 13, width: 130 }} />}
         {!m.confirmado && !cotNum && categoria && (
-          <label title="La próxima vez que aparezca este movimiento (o este mismo monto en un traspaso) se clasifica igual" style={{ fontSize: 11.5, color: C.textSub, display: 'flex', alignItems: 'center', gap: 3 }}>
+          <label title={m.contraparte ? `La próxima vez que aparezca "${m.contraparte}" se clasifica igual` : 'La próxima vez que aparezca este movimiento (o este mismo monto en un traspaso) se clasifica igual'} style={{ fontSize: 11.5, color: C.textSub, display: 'flex', alignItems: 'center', gap: 3 }}>
             <input type="checkbox" checked={recordar} onChange={e => setRecordar(e.target.checked)} />recordar
           </label>
         )}
-        {cotNum && !m.cotNum && s.registrado === false && !s.dudoso && <button disabled={ocupado} onClick={registrarPago} style={{ ...styles.btnSecondary, padding: '6px 10px', fontSize: 12.5 }}>Registrar pago en N° {cotNum}</button>}
+        {cotNum && !pagoAnotado && !s.dudoso && <button disabled={ocupado} onClick={registrarPago} style={{ ...styles.btnSecondary, padding: '6px 10px', fontSize: 12.5 }}>Anotar pago en N° {cotNum}</button>}
         {cambio && <button disabled={ocupado || !categoria} onClick={confirmar} style={{ ...styles.btnPrimary, padding: '6px 12px', fontSize: 13 }}>{m.confirmado ? 'Guardar' : '✓'}</button>}
         {m.origen === 'manual' && <button onClick={() => window.confirm('¿Borrar este movimiento anotado a mano?') && hacer(() => accion({ accion: 'borrar', id: m.id }))} aria-label="Borrar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: C.textMuted, fontSize: 16 }}>×</button>}
       </div>
     </div>
+  )
+}
+
+const ESTADO_CONCILIA = {
+  'no llegó al banco': ['No llegó al banco', '#B91C1C', '#FEE2E2', 'Hay un pago anotado en la cotización, pero no lo encuentro en BCI (o falta ligar el abono).'],
+  'pago sin registrar': ['Pago sin anotar', '#B45309', '#FEF3C7', 'Llegó al banco pero la cotización no tiene ese pago.'],
+  'montos distintos': ['No cuadra', '#B45309', '#FEF3C7', ''],
+  'por confirmar': ['Por confirmar', '#1D4ED8', '#DBEAFE', 'Cuadra con lo sugerido: confirma el abono abajo.'],
+  cuadra: ['Cuadra', '#15803d', '#DCFCE7', ''],
+}
+
+function Conciliacion({ datos, onVerCotizacion }) {
+  const { filas, sinCotizacion } = datos.conciliacion
+  const [verTodas, setVerTodas] = useState(false)
+  const problemas = filas.filter(f => f.estado !== 'cuadra')
+  const visibles = verTodas ? filas : problemas
+  const sueltos = datos.movimientos.filter(m => sinCotizacion.includes(m.id))
+  return (
+    <section style={{ ...styles.card, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Clientes: lo anotado vs. lo que llegó a BCI</h3>
+        <span style={{ fontSize: 13, color: C.textSub }}>{filas.length - problemas.length} de {filas.length} cuadran{filas.length > problemas.length && <> · <button onClick={() => setVerTodas(v => !v)} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: C.orangeDark, fontSize: 13 }}>{verTodas ? 'ver solo lo pendiente' : 'ver todos'}</button></>}</span>
+      </div>
+      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>Cotizaciones con pagos anotados este mes (sin Mercado Pago) o con abonos ligados. Los pagos en efectivo no se esperan en el banco.</div>
+      {!filas.length && <p style={{ color: C.textSub, fontSize: 13.5, margin: 0 }}>No hay pagos de clientes este mes.</p>}
+      <div style={{ display: 'grid', gap: 6 }}>
+        {visibles.map(f => {
+          const [txt, color, fondo, ayuda] = ESTADO_CONCILIA[f.estado]
+          return (
+            <div key={f.cotNum} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 10px', borderRadius: 10, background: '#FAFAFB' }}>
+              <span style={chip(color, fondo)} title={ayuda}>{txt}</span>
+              <button onClick={() => onVerCotizacion?.(f.cotNum)} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontWeight: 700, fontSize: 13.5, color: C.text, flex: '1 1 180px', textAlign: 'left' }}>N° {f.cotNum} · {f.nombre}</button>
+              <span style={{ fontSize: 12.5, color: C.textSub }}>anotado {fmt(f.registrado)}{f.efectivo ? ` (${fmt(f.efectivo)} en efectivo)` : ''}</span>
+              <span style={{ fontSize: 12.5, color: C.textSub }}>en BCI {fmt(f.enBanco)}</span>
+              {f.diferencia !== 0 && <span style={{ fontSize: 12.5, fontWeight: 700, color }}>{f.diferencia > 0 ? '+' : '−'}{fmt(Math.abs(f.diferencia))}</span>}
+            </div>
+          )
+        })}
+      </div>
+      {sueltos.length > 0 && (
+        <div style={{ marginTop: 12, fontSize: 13, color: '#B45309' }}>
+          {sueltos.length} transferencia{sueltos.length === 1 ? '' : 's'} recibida{sueltos.length === 1 ? '' : 's'} sin cliente ({fmt(sueltos.reduce((t, m) => t + m.monto, 0))}): anota de quién es (como sale en la app de BCI) o lígala a su cotización en "Por revisar".
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -276,7 +375,7 @@ function MovimientoManual({ accion, onListo }) {
   )
 }
 
-export default function ContabilidadSection() {
+export default function ContabilidadSection({ onVerCotizacion }) {
   const [mes, setMes] = useState(null)
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
@@ -325,7 +424,7 @@ export default function ContabilidadSection() {
   const delMes = useMemo(() => (datos ? datos.movimientos.filter(m => m.fecha.startsWith(datos.mes)).sort((a, b) => b.fecha.localeCompare(a.fecha)) : []), [datos])
   const porRevisar = delMes.filter(m => !m.confirmado)
   const conSugerencia = porRevisar.filter(m => m.sugerencia.categoria && !m.sugerencia.dudoso && (m.sugerencia.registrado !== false))
-  const confirmados = delMes.filter(m => m.confirmado && (!filtro || normalizarGlosa(m.glosa).includes(normalizarGlosa(filtro)) || CATEGORIA[m.categoria]?.nombre.toUpperCase().includes(filtro.toUpperCase()) || m.cotNum.includes(filtro)))
+  const confirmados = delMes.filter(m => m.confirmado && (!filtro || normalizarGlosa(m.glosa).includes(normalizarGlosa(filtro)) || CATEGORIA[m.categoria]?.nombre.toUpperCase().includes(filtro.toUpperCase()) || m.cotNum.includes(filtro) || normalizarGlosa(m.contraparte).includes(normalizarGlosa(filtro))))
 
   if (error && !datos) return <div style={{ ...styles.card, color: '#B91C1C' }}>{error} <button onClick={() => cargar(mes)} style={styles.btnSecondary}>Reintentar</button></div>
   if (!datos) return <div style={{ color: C.textSub }}>Cargando la contabilidad…</div>
@@ -369,6 +468,7 @@ export default function ContabilidadSection() {
         </div>
       </section>
 
+      <Conciliacion datos={datos} onVerCotizacion={onVerCotizacion} />
       <MercadoPago datos={datos} />
       <PorCategoria datos={datos} sinIva={sinIva} />
 

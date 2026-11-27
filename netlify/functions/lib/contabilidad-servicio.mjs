@@ -2,7 +2,7 @@
 // Mercado Pago. Los cálculos están en contabilidad.mjs.
 import {
   CATEGORIAS, CATEGORIA, ENCABEZADOS_BANCO, HOJA_BANCO, HOJA_CONFIG, agregarRegla, conSugerencias, descuentosDelMes,
-  estadoFijos, filaAMovimiento, fusionarMovimientos, limpiarFijo, movimientoAFila, pareceFijo, parsearCartolaBci,
+  conciliarClientes, estadoFijos, filaAMovimiento, fusionarMovimientos, limpiarFijo, movimientoAFila, pareceFijo, parsearCartolaBci,
   reglaAprendida, resumenMercadoPago, resumenMes,
 } from './contabilidad.mjs'
 import { totalesCotizacion } from './totales.mjs'
@@ -32,6 +32,12 @@ export async function leerContabilidad({ almacen, cotizaciones, pagosMercadoPago
     mp, errorMp, mpConectado: Boolean(pagosMercadoPago),
     descuentos: descuentosDelMes(cots, mes, c => totalesCotizacion(c.repisas || [], c.adicionales || {})),
     reglas: cfg.reglas.length,
+    conciliacion: conciliarClientes(movimientos, cots, mes),
+    // Para ligar a mano: las cotizaciones que no están rechazadas, lo justo para buscarlas.
+    cotizaciones: cots.filter(c => c.status !== 'rechazada').map(c => ({
+      cotNum: String(c.cotNum), nombre: c.nombre, total: Math.round(Number(c.total) || 0),
+      pagado: (c.pagos || []).reduce((s2, p) => s2 + (Number(p.monto) || 0), 0),
+    })),
   }
 }
 
@@ -69,6 +75,7 @@ export async function cambiarContabilidad(fuentes, datos, ahora = new Date()) {
       if (c.cotNum !== undefined) m.cotNum = String(c.cotNum || '').replace(/\D/g, '')
       if (c.fijo !== undefined) { if (c.fijo && !config.fijos.some(f => f.id === c.fijo)) falla(400, 'No existe ese costo fijo'); m.fijo = c.fijo }
       if (c.nota !== undefined) m.nota = String(c.nota || '').slice(0, 200)
+      if (c.contraparte !== undefined) m.contraparte = String(c.contraparte || '').replace(/\s+/g, ' ').trim().slice(0, 80)
       if (c.recordar && m.categoria) reglas = agregarRegla(reglas, reglaAprendida(m, m.categoria))
     }
     await guardarMovs(movimientos)
@@ -159,10 +166,10 @@ export function almacenContabilidadSheets(sheets, spreadsheetId) {
     }
   }
   return {
-    async leerMovimientos() { return leer(`${HOJA_BANCO}!A2:K`) },
+    async leerMovimientos() { return leer(`${HOJA_BANCO}!A2:L`) },
     async guardarMovimientos(filas) {
       await asegurarHoja(HOJA_BANCO)
-      await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${HOJA_BANCO}!A:K` })
+      await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${HOJA_BANCO}!A:L` })
       await sheets.spreadsheets.values.update({ spreadsheetId, range: `${HOJA_BANCO}!A1`, valueInputOption: 'RAW', requestBody: { values: [ENCABEZADOS_BANCO, ...filas] } })
     },
     async leerConfig() {

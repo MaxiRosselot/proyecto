@@ -12,7 +12,7 @@
 // Sin dependencias de Node: lo usan las funciones, el servidor local y los tests.
 
 export const HOJA_BANCO = 'Banco'
-export const ENCABEZADOS_BANCO = ['Id', 'Fecha', 'Glosa', 'Monto', 'Categoría', 'Cot N°', 'Costo fijo', 'Nota', 'Origen', 'Clave', 'Agregado']
+export const ENCABEZADOS_BANCO = ['Id', 'Fecha', 'Glosa', 'Monto', 'Categoría', 'Cot N°', 'Costo fijo', 'Nota', 'Origen', 'Clave', 'Agregado', 'De / para']
 export const HOJA_CONFIG = 'Contabilidad'
 
 // tipo: ingreso | gasto | traspaso (se mueve plata pero no es ganancia ni gasto: no entra al resultado).
@@ -169,7 +169,7 @@ export function fusionarMovimientos(existentes, leidos, { origen = '', ahora = n
     claves.add(clave)
     nuevos.push({
       id: 'b' + hash(clave), fecha: m.fecha, glosa: String(m.glosa).replace(/\s+/g, ' ').trim(), monto: m.monto,
-      categoria: '', cotNum: '', fijo: '', nota: '', origen, clave, agregado: ahora,
+      categoria: '', cotNum: '', fijo: '', nota: '', origen, clave, agregado: ahora, contraparte: '',
     })
   }
   return { nuevos, todos: [...existentes, ...nuevos].sort((a, b) => a.fecha.localeCompare(b.fecha)) }
@@ -181,11 +181,11 @@ function hash(s) {
   return (h >>> 0).toString(36)
 }
 
-export const movimientoAFila = m => [m.id, m.fecha, m.glosa, m.monto, m.categoria, m.cotNum, m.fijo, m.nota, m.origen, m.clave, m.agregado]
+export const movimientoAFila = m => [m.id, m.fecha, m.glosa, m.monto, m.categoria, m.cotNum, m.fijo, m.nota, m.origen, m.clave, m.agregado, m.contraparte || '']
 export const filaAMovimiento = f => ({
   id: String(f[0] || ''), fecha: String(f[1] || ''), glosa: String(f[2] || ''), monto: Number(f[3]) || 0,
   categoria: CATEGORIA[f[4]] ? f[4] : '', cotNum: String(f[5] || ''), fijo: String(f[6] || ''), nota: String(f[7] || ''),
-  origen: String(f[8] || ''), clave: String(f[9] || ''), agregado: String(f[10] || ''),
+  origen: String(f[8] || ''), clave: String(f[9] || ''), agregado: String(f[10] || ''), contraparte: String(f[11] || ''),
 })
 
 // ---------- Sugerencias ----------
@@ -222,21 +222,39 @@ export function nombreCalza(rem, nombre) {
   return w.every((p, i) => p.length >= 2 && contiene(p, 0, i === w.length - 1))
 }
 
+// El nombre completo que se anota a mano desde la app de BCI ("Nicolás Antonio Tapia Céspedes"):
+// calza si comparten el primer nombre y un apellido, o si todas las palabras de uno están en el otro.
+const RELLENO = ['DE', 'DEL', 'LA', 'LAS', 'LOS', 'Y']
+export function nombresCalzan(a, b) {
+  const x = palabrasNombre(a).filter(p => p.length > 1 && !RELLENO.includes(p))
+  const y = palabrasNombre(b).filter(p => p.length > 1 && !RELLENO.includes(p))
+  if (!x.length || !y.length) return false
+  const [corto, largo] = x.length <= y.length ? [x, y] : [y, x]
+  if (corto.length >= 2 && corto.every(p => largo.includes(p))) return true
+  return x[0] === y[0] && x.slice(1).some(p => y.slice(1).includes(p))
+}
+
+// ¿Esta cotización es de quien hizo el movimiento? Con el nombre anotado a mano, por ese; si no, por la glosa.
+export function esDeQuien(mov, nombre) {
+  const quien = String(mov.contraparte || '').replace(/^\s*(de|a)\s+/i, '')
+  return quien ? nombresCalzan(quien, nombre) : nombreCalza(remitente(mov.glosa), nombre)
+}
+
 const diasEntre = (a, b) => Math.abs((Date.parse(a) - Date.parse(b)) / 86400000)
 
 // Abonos de clientes: busca la cotización. Primero un pago registrado del mismo monto (±4 días);
 // si no, un cliente con ese nombre que deba ese monto (total, 50 % o saldo).
 export function cotizacionDelAbono(mov, cotizaciones) {
   if (mov.monto <= 0) return null
-  const rem = remitente(mov.glosa)
+  const rem = remitente(mov.glosa) || (mov.contraparte ? {} : null)
   const pagos = []
   for (const c of cotizaciones) for (const p of c.pagos || []) pagos.push({ c, p })
   const mismoMonto = pagos.filter(({ p }) => Math.round(Number(p.monto)) === mov.monto && p.fecha && diasEntre(p.fecha, mov.fecha) <= 4 && p.medio !== 'Mercado Pago')
-  const porNombre = mismoMonto.filter(({ c }) => nombreCalza(rem, c.nombre))
+  const porNombre = mismoMonto.filter(({ c }) => esDeQuien(mov, c.nombre))
   const elegido = porNombre[0] || (mismoMonto.length === 1 ? mismoMonto[0] : null)
   if (elegido) return { cotNum: elegido.c.cotNum, nombre: elegido.c.nombre, registrado: true, pagoId: elegido.p.id, motivo: porNombre[0] ? 'pago registrado, mismo nombre y monto' : 'pago registrado del mismo monto' }
   if (!rem) return null
-  const candidatos = cotizaciones.filter(c => nombreCalza(rem, c.nombre) && c.status !== 'rechazada')
+  const candidatos = cotizaciones.filter(c => esDeQuien(mov, c.nombre) && c.status !== 'rechazada')
   for (const c of candidatos) {
     const total = Math.round(Number(c.total) || 0)
     const pagado = (c.pagos || []).reduce((s, p) => s + (Number(p.monto) || 0), 0)
@@ -249,8 +267,9 @@ export function cotizacionDelAbono(mov, cotizaciones) {
 
 function reglaPara(mov, reglas) {
   const g = normalizarGlosa(mov.glosa)
+  const quien = normalizarGlosa(mov.contraparte || '')
   const lado = mov.monto < 0 ? 'cargo' : 'abono'
-  const aplica = r => g.includes(normalizarGlosa(r.patron)) && (!r.lado || r.lado === lado) && (r.monto == null || r.monto === Math.abs(mov.monto))
+  const aplica = r => (r.campo === 'contraparte' ? quien && quien === normalizarGlosa(r.patron) : g.includes(normalizarGlosa(r.patron))) && (!r.lado || r.lado === lado) && (r.monto == null || r.monto === Math.abs(mov.monto))
   // Las aprendidas con monto son las más precisas, luego las aprendidas, luego las de partida.
   return reglas.find(r => r.monto != null && aplica(r)) || reglas.find(r => r.monto == null && aplica(r)) || REGLAS_BASE.find(aplica) || null
 }
@@ -297,7 +316,8 @@ export function conSugerencias(movimientos, { reglas = [], cotizaciones = [], fi
     }
     if (!m.categoria && !s.categoria && fijoConf?.categoria) s.categoria = fijoConf.categoria
     // Una transferencia de una persona o empresa que no es la propia: casi siempre es un cliente.
-    if (!m.categoria && !s.categoria && m.monto > 0 && remitente(m.glosa)?.texto && !/^(DON MAXI|M\.ROSSELOT)/.test(remitente(m.glosa).texto)) {
+    const deQuien = remitente(m.glosa)?.texto || normalizarGlosa(m.contraparte)
+    if (!m.categoria && !s.categoria && m.monto > 0 && deQuien && !/^(DE )?(DON MAXI|M\.ROSSELOT|MAXIMILIANO ROSSELOT)/.test(deQuien)) {
       s.categoria = 'venta-transferencia'; s.motivo = 'transferencia recibida: ¿un cliente? (no encontré su cotización)'
     }
     const categoria = m.categoria || s.categoria
@@ -309,14 +329,50 @@ export function conSugerencias(movimientos, { reglas = [], cotizaciones = [], fi
 // sola no dice nada, como "TRASPASO FONDOS OTRO BANCO EN LINEA").
 const GLOSAS_GENERICAS = /^(TRASPASO FONDOS OTRO BANCO|CARGO POR TRANSF|TRANSFERENCIA DE FONDOS|ABONO TRF DESDE OTRO BANCO|TRANSFER A$)/
 export function reglaAprendida(mov, categoria) {
+  // Con el nombre anotado ("A Maximiliano Rosselot"), se recuerda por esa persona, cualquier monto.
+  if (mov.contraparte) return { patron: normalizarGlosa(mov.contraparte), campo: 'contraparte', categoria, lado: mov.monto < 0 ? 'cargo' : 'abono', monto: null, aprendida: true }
   const patron = normalizarGlosa(mov.glosa).replace(/\d[\d-]*/g, ' ').replace(/\s+/g, ' ').trim()
   const generica = GLOSAS_GENERICAS.test(patron)
   return { patron, categoria, lado: mov.monto < 0 ? 'cargo' : 'abono', monto: generica ? Math.abs(mov.monto) : null, aprendida: true }
 }
 
 export function agregarRegla(reglas, nueva) {
-  const igual = r => r.patron === nueva.patron && r.lado === nueva.lado && (r.monto ?? null) === (nueva.monto ?? null)
+  const igual = r => r.patron === nueva.patron && (r.campo || '') === (nueva.campo || '') && r.lado === nueva.lado && (r.monto ?? null) === (nueva.monto ?? null)
   return [nueva, ...reglas.filter(r => !igual(r))].slice(0, 300)
+}
+
+// ---------- Conciliación por cliente ----------
+
+// Para el mes: cada cotización con pagos (fuera de Mercado Pago) o con abonos ligados en el banco,
+// lo registrado contra lo que llegó. Y los abonos que parecen de clientes sin cotización.
+export function conciliarClientes(movs, cotizaciones, mes) {
+  const delMes = movs.filter(m => m.fecha.startsWith(mes) && m.monto > 0)
+  const ligados = new Map()
+  for (const m of delMes) {
+    const n = m.cotNum || (m.sugerencia?.cotNum && !m.sugerencia.dudoso ? m.sugerencia.cotNum : '')
+    if (n) ligados.set(n, [...(ligados.get(n) || []), m])
+  }
+  const filas = []
+  for (const c of cotizaciones) {
+    const pagos = (c.pagos || []).filter(p => String(p.fecha || '').startsWith(mes) && p.medio !== 'Mercado Pago')
+    const movsC = ligados.get(String(c.cotNum)) || []
+    if (!pagos.length && !movsC.length) continue
+    const registrado = pagos.reduce((s, p) => s + Math.round(Number(p.monto) || 0), 0)
+    const efectivo = pagos.filter(p => /efectivo/i.test(p.medio)).reduce((s, p) => s + Math.round(Number(p.monto) || 0), 0)
+    const enBanco = movsC.reduce((s, m) => s + m.monto, 0)
+    const porConfirmar = movsC.some(m => !m.cotNum)
+    const diferencia = enBanco - (registrado - efectivo)
+    filas.push({
+      cotNum: String(c.cotNum), nombre: c.nombre, total: Math.round(Number(c.total) || 0),
+      registrado, efectivo, enBanco, diferencia, porConfirmar,
+      estado: diferencia === 0 ? (porConfirmar ? 'por confirmar' : 'cuadra') : !movsC.length ? 'no llegó al banco' : registrado - efectivo === 0 ? 'pago sin registrar' : 'montos distintos',
+      pagos: pagos.map(p => ({ fecha: p.fecha, monto: Math.round(Number(p.monto) || 0), medio: p.medio })),
+      movimientos: movsC.map(m => ({ id: m.id, fecha: m.fecha, monto: m.monto, confirmado: Boolean(m.cotNum) })),
+    })
+  }
+  const sinCotizacion = delMes.filter(m => !m.cotNum && !m.sugerencia?.cotNum && ['venta-transferencia', 'venta-otra', ''].includes(m.categoriaFinal || ''))
+  const orden = { 'no llegó al banco': 0, 'pago sin registrar': 1, 'montos distintos': 2, 'por confirmar': 3, cuadra: 4 }
+  return { filas: filas.sort((a, b) => orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre)), sinCotizacion: sinCotizacion.map(m => m.id) }
 }
 
 // ---------- Costos fijos ----------
